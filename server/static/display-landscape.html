@@ -1,0 +1,1191 @@
+﻿<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Display</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <style>
+      :root {
+        --bg: #800000;
+        --panel: #1c1c1c;
+        --line: #333;
+        --text: #fff;
+        --uiScale: 1;
+        --rhythm: clamp(8px, 1.0vh, 12px);  /* ONE token to rule vertical spacing */
+        --gap: var(--rhythm);              /* keep existing code working */
+        --tile: clamp(88px, 10.5vh, 150px);   /* waiting-tile square size */
+        --serveMinH: clamp(140px, 18vh, 260px); /* Now Serving minimum height */
+
+        /* Label sizes */
+        /* Height-based scaling (uses vh, not vw) */
+        --labelSize: clamp(16px, 2.4vh, 40px);
+        --basePx: clamp(14px, 1.5vh, 22px);
+        --calledSize: clamp(220px, 22vh, 420px);
+
+        /* Now Serving panel (same as root bg @ 75% opacity) */
+        --servePanelBg: rgba(128, 0, 0, 0.75);
+        --servePanelBorder: rgba(255, 255, 255, 0.22);
+
+        /* Priority waiting tile color */
+        --priorityTileBg: #007a3f;
+
+        --topbarH: 64px;
+      }
+
+      html {
+        font-size: calc(var(--basePx) * var(--uiScale));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, sans-serif;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      header {
+        display: none;
+      }
+
+
+      footer {
+        padding: 0.7rem 1rem;
+        font-size: 0.85rem;
+        opacity: 0.6;
+        border-top: 1px solid var(--line);
+        background: #111;
+      }
+
+  .layout {
+  display: grid;
+  height: 100vh;
+}
+
+
+
+      /* ===== Hybrid middle container (Queue + Video) ===== */
+      .mid {
+  /* fill the remaining viewport below the top bar */
+  height: calc(100vh - var(--topbarH));
+
+  /* uniform spacing token */
+  padding: var(--gap);
+
+  min-height: 0;
+  display: grid;
+  gap: var(--gap);
+  align-items: stretch;
+
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+
+      .mid,
+      .wrap,
+      .videoWrap,
+      .videoBox {
+        min-height: 0;
+      }
+
+      .cell {
+        min-height: 0;
+      }
+
+      /* ===== Queue grid ===== */
+      .wrap {
+        height: 100%;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: var(--gap);
+        overflow: hidden;
+
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+      }
+
+      /* ===== Card base ===== */
+      .cell {
+        border-radius: 18px;
+        padding: var(--rhythm);
+        text-align: center;
+        overflow: hidden;
+
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(252, 243, 218, 0.35);
+        color: #000;
+
+        display: flex;
+        flex-direction: column;
+        padding: var(--rhythm);
+        min-height: 0;
+
+      }
+
+      /* ===== Top split area (Group | Now Serving) ===== */
+      .topSplit {
+        display: grid;
+        grid-template-columns: 1fr 1.35fr;
+        gap: 12px;
+        align-items: stretch;
+
+        flex: 0 0 42%;
+        min-height: 0;
+      }
+
+      .groupBox {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        min-height: 0;
+      }
+
+      .group {
+        font-size: clamp(24px, 3.4vw, 64px);
+        font-weight: 950;
+        letter-spacing: 0.4px;
+        opacity: 0.9;
+        line-height: 1.05;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .serveBox {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        align-items: center;
+        justify-items: center;
+        min-height: 0;
+
+        padding: 10px 12px;
+        border-radius: 14px;
+
+        background: var(--servePanelBg);
+        border: 1px solid var(--servePanelBorder);
+        color: #fff;
+        overflow: hidden;
+        flex: 1 1 auto;
+      }
+
+      /* Match portrait behavior: called priority uses green hero background. */
+      .serveBox.isPriorityCalled {
+        background: var(--priorityTileBg) !important;
+        border-color: rgba(255, 255, 255, 0.45) !important;
+      }
+
+      .serveLabel {
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        text-transform: none;
+        opacity: 0.95;
+        font-size: clamp(24px, 2.5vw, 35px) !important;
+        line-height: 1.15;
+        margin: 0;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        align-self: start;
+        padding-bottom: 0.18em;   /* prevents â€œgâ€ clipping */
+      }
+
+      /* === NEW: Now Serving becomes the big middle block === */
+.serveBox.serveMain{
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  padding: calc(var(--gap) * 0.6);
+  padding-top: calc(var(--gap) * 1.6); /* space for label */
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.serveMainLabel{
+  position: absolute;
+  top: calc(var(--gap) * 0.6);
+  left: 50%;
+  transform: translateX(-50%);
+
+  font-size: clamp(12px, 1.3vh, 20px);
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  opacity: 0.9;
+
+  pointer-events: none;
+}
+
+
+
+.serveMainValue{
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: clamp(300px, 30vh, 600px);
+  font-weight: 950;
+  line-height: 0.85;
+  letter-spacing: 1px;
+
+  transform: translateY(4%); /* optical centering */
+}
+
+
+
+      .big.calledBig {
+        flex: 1; /* fill the red tile */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-size: var(--calledSize);
+        font-weight: 950;
+        line-height: 0.82;
+        letter-spacing: 2px;
+
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .guestName {
+        font-size: var(--nameSize);
+        font-weight: 700;
+        opacity: 0.95;
+        margin-top: 4px;
+        max-width: 100%;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        align-self: end;
+      }
+
+      .dash {
+        opacity: 0.25;
+      }
+
+      /* ===== Waiting header row ===== */
+      .waitHeader {
+  margin-top: 12px;
+  padding: 0; /* remove extra padding */
+  display: block;
+}
+
+
+      .countRow {
+        width: 100%;
+        background: #000;
+        color: #fff;
+        padding: 0.65rem 0.9rem;
+        border-radius: 12px;
+        font-size: clamp(15px, 1.8vw, 34px); /* slightly smaller */
+        font-weight: 900;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .countRow strong {
+        color: #fff;
+        font-weight: 950;
+      }
+
+      /* === NEW: [PAX | WAITING] header row === */
+.countRow.countSplit{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.55rem 0.9rem; /* uniform top/bottom */
+}
+
+
+.countRow .paxLabel{
+  text-align: left;
+  font-weight: 950;
+  letter-spacing: 0.4px;
+}
+
+.countRow .waitLabel{
+  text-align: right;
+  font-weight: 950;
+}
+
+      /* ===== WAITING list: 4 columns (P + 3 regular) ===== */
+     .queueList {
+  margin-top: var(--rhythm);
+  
+  padding: 0;
+
+  flex: 0 0 auto;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--rhythm);
+
+   /* force a single row of 4 square tiles */
+  grid-auto-rows: var(--tile);
+  align-content: start;
+
+  align-content: start;
+  justify-content: stretch;
+  place-items: stretch;
+
+  overflow: hidden;
+}
+
+
+      .queueList .qItem,
+.queueList .qEmpty {
+  width: 100%;
+   height: var(--tile);
+  aspect-ratio: 1 / 1;  /* makes them square */
+
+  min-height: 0;
+  border-radius: 16px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+}
+
+
+      /* 2-line ticket format: group on top, number at bottom */
+      .queueList .qGroup {
+        font-weight: 900;
+        font-size: clamp(22px, 2.7vmin, 56px);
+        line-height: 1;
+      }
+
+      .queueList .qNum {
+        font-weight: 950;
+        font-size: clamp(44px, 5.2vmin, 90px);
+        line-height: 1;
+      }
+
+      .queueList .qItem {
+        background: #000;
+        color: #fff;
+      }
+
+      .queueList .qItem.priority {
+        background: var(--priorityTileBg);
+        color: #fff;
+      }
+
+      .queueList .qEmpty {
+        background: rgba(0, 0, 0, 0.08);
+        border: 3px dashed rgba(0, 0, 0, 0.55);
+        color: rgba(0, 0, 0, 0.45);
+      }
+
+      /* First slot is always Priority slot (green accent even if empty) */
+      .queueList .prioritySlot {
+        background: rgba(0, 122, 63, 0.1);
+        border-color: rgba(0, 122, 63, 0.55);
+      }
+
+      .queueList .qItem.ellipsis {
+        opacity: 0.75;
+      }
+
+      /* ===== Video area ===== */
+      .videoWrap {
+        height: 100%;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+      }
+
+      .videoBox {
+        height: 100%;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #000;
+        border: 1px solid var(--line);
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #000;
+      }
+      .videoBox { position: relative; }
+
+.adVid{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+
+  opacity: 0;
+  transition: opacity 180ms linear;
+}
+
+.adVid.isActive{
+  opacity: 1;
+}
+
+
+      @keyframes cardFlash {
+        0% {
+          box-shadow:
+            0 0 0 rgba(255, 255, 255, 0),
+            inset 0 0 0 rgba(255, 255, 255, 0);
+          transform: scale(1);
+        }
+        30% {
+          box-shadow:
+            0 0 22px rgba(255, 255, 255, 0.18),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+          transform: scale(1.015);
+        }
+        100% {
+          box-shadow:
+            0 0 0 rgba(255, 255, 255, 0),
+            inset 0 0 0 rgba(255, 255, 255, 0);
+          transform: scale(1);
+        }
+      }
+
+      .cell.flash {
+        animation: cardFlash 1.2s ease-out;
+      }
+
+      /* ===== Top Overlay Bar (Settings left, window controls right) ===== */
+      .topOverlay {
+        position: fixed;
+        top: var(--gap);
+        left: var(--gap);
+        right: var(--gap);
+
+        /* internal padding so right controls never touch screen edge */
+        padding: 0 var(--gap);
+
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+
+        pointer-events: auto;
+        -webkit-app-region: no-drag;
+        height: var(--topbarH);
+
+      }
+      .topOverlay .leftTools,
+      .topOverlay .rightTools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+
+        justify-content: flex-end;
+      }
+
+      /* ===== Top bar center title ===== */
+      .topOverlay{
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+      }
+
+      /* Centered branch name */
+      .centerTitle{
+        justify-self: center;
+        text-align: center;
+
+        font-weight: 900;
+        font-size: clamp(18px, 2.2vw, 36px);
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        pointer-events: none; /* title should not block buttons */
+      }
+
+
+      /* ===== Settings UI ===== */
+      .settingsBtn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #fff;
+        font-size: 16px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        opacity: 0.6;
+        z-index: 9999;
+        -webkit-app-region: no-drag;
+      }
+
+      .settingsBtn:hover {
+        opacity: 1;
+      }
+
+      /* Settings panel must be clickable and above everything */
+      .settingsPanel {
+        position: fixed;
+        top: calc(var(--gap) * 6); /* below header/title */
+        left: var(--gap);
+
+        display: none; /* default closed; JS toggles */
+        width: 260px;
+
+        padding: 14px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        color: #fff;
+
+        pointer-events: auto;
+        z-index: 1000001;
+        -webkit-app-region: no-drag;
+      }
+
+      .settingsTitle {
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+
+      .toggleRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        font-size: 14px;
+      }
+
+      .settingsClose {
+        width: 100%;
+        padding: 8px;
+        border-radius: 10px;
+        border: 1px solid #444;
+        background: #111;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      .settingsClose:hover {
+        background: #222;
+      }
+
+      /* Top bar padding fix */
+      .kioskRightBar {
+        margin-right: 0;
+      }
+
+      .kioskRightBar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        -webkit-app-region: no-drag;
+      }
+
+      .kioskRightBar button {
+        -webkit-app-region: no-drag;
+      }
+
+      .kioskDrag {
+        width: 26px;
+        height: 18px;
+        border-radius: 10px;
+        border: 1px dashed rgba(255, 255, 255, 0.25);
+        opacity: 0.55;
+        margin-right: 2px;
+        -webkit-app-region: drag;
+      }
+
+      .kbtn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #fff;
+        font-size: 14px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        opacity: 0.85;
+      }
+
+      .kbtn:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .kbtn.danger {
+        border-color: rgba(255, 80, 80, 0.4);
+      }
+
+      .closeBtn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #fff;
+        font-size: 14px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        opacity: 0.6;
+      }
+
+      .closeBtn:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.18);
+      }
+
+      body.mode-grid .mid {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+      }
+
+      body.mode-grid .videoWrap {
+        display: none !important;
+      }
+      body.mode-video .videoWrap {
+        display: block !important;
+      }
+
+      body.mode-video.orient-landscape .mid {
+        grid-template-columns: 2fr 1fr;
+        grid-template-rows: 1fr;
+        grid-template-areas: "queue video";
+      }
+
+      body.mode-video.orient-landscape .wrap {
+        grid-area: queue;
+      }
+      body.mode-video.orient-landscape .videoWrap {
+        grid-area: video;
+      }
+
+      body.mode-video.orient-portrait .mid {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 2fr;
+        grid-template-areas: "queue" "video";
+      }
+
+      body.mode-video.orient-portrait .wrap {
+        grid-area: queue;
+      }
+      body.mode-video.orient-portrait .videoWrap {
+        grid-area: video;
+      }
+
+      body.mode-video.orient-portrait .wrap {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-rows: minmax(0, 1fr) !important;
+        gap: 10px;
+        overflow: hidden;
+      }
+
+      body.mode-video.orient-portrait .cell {
+        padding: 10px;
+        border-radius: 16px;
+      }
+
+      body.mode-video.orient-portrait .topSplit {
+        grid-template-columns: 1fr 1.2fr;
+        gap: 8px;
+        flex: 0 0 46%;
+      }
+
+      body.mode-video.orient-portrait .groupBox {
+        padding: 8px;
+      }
+
+      body.mode-video.orient-portrait .group {
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      body.mode-video.orient-portrait .serveLabel {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+      body.mode-video.orient-portrait .big.calledBig {
+        font-size: clamp(40px, 4vw, 64px);
+      }
+      body.mode-video.orient-portrait .guestName {
+        display: none;
+      }
+      body.mode-video.orient-portrait .waitHeader {
+        margin-top: 8px;
+      }
+      body.mode-video.orient-portrait .queueList {
+        gap: 10px;
+        align-content: center;
+      }
+
+      body.mode-video.orient-portrait .queueList .qItem,
+      body.mode-video.orient-portrait .queueList .qEmpty {
+        font-size: clamp(18px, 2.4vw, 44px);
+      }
+
+      body.mode-video.orient-portrait header {
+        font-size: 24px;
+        padding: 14px 16px;
+      }
+
+      /* =============================
+         CLICK FIX: TOP UI MUST WIN
+         ============================= */
+      header,
+      #nowServingHeader,
+      .topOverlay,
+      .kioskRightBar {
+        position: relative;
+        z-index: 1000000;
+        pointer-events: auto;
+      }
+
+      .mid,
+      .wrap,
+      .videoWrap,
+      .videoBox {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Make each grid slot a real box */
+      .queueList {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--gap);
+        place-items: stretch; /* IMPORTANT: children stretch */
+      }
+
+      /* Slot items (empty + filled) must stretch to fill the grid cell */
+      .queueList .qItem,
+      .queueList .qEmpty {
+        width: 100%;
+        height: 100%;
+        aspect-ratio: 1 / 1; /* keep square */
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 16px;
+
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        margin: 0; /* IMPORTANT: kill any default margins */
+        padding: 0; /* IMPORTANT: don't shrink the box */
+        box-sizing: border-box;
+      }
+
+      /* FILLED: the BLACK should be the whole tile */
+      .queueList .qItem {
+        background: #000;
+        color: #fff;
+      }
+
+      /* Priority filled tile (green) */
+      .queueList .qItem.priority,
+      .queueList .qItem.prioritySlot {
+        background: var(--priorityTileBg);
+        color: #fff;
+      }
+
+      /* EMPTY tiles should also fill the whole slot */
+      .queueList .qEmpty {
+        background: rgba(255, 255, 255, 0.1);
+        border: 3px dashed rgba(0, 0, 0, 0.55);
+        color: rgba(0, 0, 0, 0.55);
+      }
+
+      /* Two-line layout scales inside the tile without overflow */
+      .queueList .qGroup {
+        font-weight: 950;
+        line-height: 1;
+        font-size: clamp(22px, 2.8vmin, 40px);
+        margin: 0;
+      }
+      .queueList .qNum {
+        font-weight: 950;
+        line-height: 1;
+        font-size: clamp(48px, 5.8vmin, 96px);
+        margin: 0;
+      }
+
+      /* NOW SERVING number â€“ large, single-line */
+      /* NOW SERVING â€“ big, dominant */
+      .nowServingValue {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-weight: 900;
+        font-size: clamp(64px, 8.5vmin, 160px);
+        line-height: 0.82;
+        letter-spacing: 2px;
+
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      /* Remove any secondary text spacing */
+      .nowServingValue + * {
+        display: none;
+      }
+
+      /* === PATCH: Priority reserved slot must be green (even if empty) === */
+      .queueList .prioritySlot {
+        background: var(--priorityTileBg) !important;
+        border-color: rgba(255, 255, 255, 0.45) !important;
+        color: #fff !important;
+      }
+      .queueList .prioritySlot.qEmpty {
+        background: var(--priorityTileBg) !important;
+        border: 3px dashed rgba(255, 255, 255, 0.55) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+
+      /* === DEBUG OVERLAY (remove in prod) === */
+      #qsysDbgWrap {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        width: min(720px, calc(100vw - 24px));
+        max-height: 38vh;
+        z-index: 99999;
+        background: rgba(0, 0, 0, 0.78);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 12px;
+        overflow: hidden;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        display: none;
+      }
+      #qsysDbgTop {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      #qsysDbgTitle {
+        font-weight: 800;
+        font-size: 12px;
+        opacity: 0.95;
+      }
+      #qsysDbgBtns {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+      }
+      #qsysDbgBtns button {
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        cursor: pointer;
+      }
+      #qsysDbgBody {
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.25;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #qsysDbgPill {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 99998;
+        background: rgba(0, 0, 0, 0.65);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        cursor: pointer;
+        user-select: none;
+      }
+      video {
+        opacity: 1;
+        transition: opacity 140ms linear;
+      }
+
+      video.isLoading {
+        opacity: 0;
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <div class="topOverlay">
+      <div class="leftTools">
+        <button class="settingsBtn" onclick="toggleSettings()" type="button">Settings</button>
+      </div>
+
+      <!-- CENTER: Branch Name -->
+      <div class="centerTitle" id="branchTitle">
+        Yakiniku Like SM Mall of Asia
+      </div>
+
+      <div class="rightTools">
+        <div class="kioskRightBar">
+          <div class="kioskDrag"></div>
+          <button id="btnMove" class="kbtn" type="button">Move</button>
+          <button id="btnFull" class="kbtn" type="button">Fullscreen</button>
+          <button
+            class="closeBtn kbtn danger"
+            onclick="closeKiosk()"
+            type="button"
+          >
+            X Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settingsPanel" id="settingsPanel">
+      <div class="settingsTitle">Display Settings</div>
+      <label class="toggleRow">
+        <span>Video Sound</span>
+        <input type="checkbox" id="videoSoundToggle" />
+      </label>
+      <label class="toggleRow" style="gap: 10px">
+        <span>Text Size</span>
+        <input id="uiScaleRange" type="range" min="0.9" max="1.8" step="0.05" />
+      </label>
+      <div
+        id="uiScaleLabel"
+        style="font-size: 12px; opacity: 0.7; margin: -6px 0 10px"
+      >
+        Scale: 1.00x
+      </div>
+      <button class="settingsClose" onclick="toggleSettings()">Close</button>
+    </div>
+
+    <div class="layout">
+      <header id="nowServingHeader">Now Serving</header>
+
+      <div class="mid">
+        <!-- Queue -->
+        <div class="wrap">
+          <div class="cell" id="cell-A">
+            <!-- Row 1: [ PAX | WAITING ] -->
+              <div class="waitHeader">
+                <div class="countRow countSplit">
+                  <span class="paxLabel">1 Pax</span>
+                  <span class="waitLabel">WAITING: <strong id="wait-A">0</strong></span>
+                </div>
+              </div>
+
+              <!-- Row 2: NOW SERVING (big, centered) -->
+              <div class="serveBox serveMain">
+                <div class="serveLabel serveMainLabel">Now Serving</div>
+                <div class="big calledBig serveMainValue" id="called-A">â€”</div>
+              </div>
+
+              <!-- Row 3: waiting tiles -->
+              <div class="queueList" id="list-A"></div>
+              </div>
+
+          <div class="cell" id="cell-B">
+            <!-- Row 1: [ PAX | WAITING ] -->
+            <div class="waitHeader">
+              <div class="countRow countSplit">
+                <span class="paxLabel">2-3 Pax</span>
+                <span class="waitLabel">WAITING: <strong id="wait-B">0</strong></span>
+              </div>
+            </div>
+
+            <!-- Row 2: NOW SERVING (big, centered) -->
+            <div class="serveBox serveMain">
+              <div class="serveLabel serveMainLabel">Now Serving</div>
+              <div class="big calledBig serveMainValue" id="called-B">â€”</div>
+            </div>
+
+            <!-- Row 3: waiting tiles -->
+            <div class="queueList" id="list-B"></div>
+            </div>
+
+          <div class="cell" id="cell-C">
+            <!-- Row 1: [ PAX | WAITING ] -->
+              <div class="waitHeader">
+                <div class="countRow countSplit">
+                  <span class="paxLabel">4-5 Pax</span>
+                  <span class="waitLabel">WAITING: <strong id="wait-C">0</strong></span>
+                </div>
+              </div>
+
+              <!-- Row 2: NOW SERVING (big, centered) -->
+              <div class="serveBox serveMain">
+                <div class="serveLabel serveMainLabel">Now Serving</div>
+                <div class="big calledBig serveMainValue" id="called-C">â€”</div>
+              </div>
+
+              <!-- Row 3: waiting tiles -->
+              <div class="queueList" id="list-C"></div>
+              </div>
+
+          <div class="cell" id="cell-D">
+           <!-- Row 1: [ PAX | WAITING ] -->
+              <div class="waitHeader">
+                <div class="countRow countSplit">
+                  <span class="paxLabel">6++ Pax</span>
+                  <span class="waitLabel">WAITING: <strong id="wait-D">0</strong></span>
+                </div>
+              </div>
+
+              <!-- Row 2: NOW SERVING (big, centered) -->
+              <div class="serveBox serveMain">
+                <div class="serveLabel serveMainLabel">Now Serving</div>
+                <div class="big calledBig serveMainValue" id="called-D">â€”</div>
+              </div>
+
+              <!-- Row 3: waiting tiles -->
+              <div class="queueList" id="list-D"></div>
+              </div>
+              </div>
+        <!-- Video -->
+        <div class="videoWrap">
+          <div class="videoBox">
+  <video id="adPlayerA" class="adVid isActive" autoplay playsinline preload="auto"></video>
+  <video id="adPlayerB" class="adVid" autoplay playsinline preload="auto"></video>
+          </div>
+        </div>
+    </div>
+
+    <div id="status" style="position:fixed;left:10px;bottom:10px;font-size:12px;opacity:.6;color:#fff;z-index:999999">Startingâ€¦</div>
+
+    <audio id="chime" src="/static/chime.mp3" preload="auto"></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/static/js/display-ui-landscape.js?v=DISPLAY_UI_2026_01_24_B"></script>
+    <script src="/static/js/display-core.js"></script>
+    <script>
+      // === QSys Debug Logger (overlay + console) ===
+      (function () {
+        const pill = document.getElementById("qsysDbgPill");
+        const wrap = document.getElementById("qsysDbgWrap");
+        const body = document.getElementById("qsysDbgBody");
+        const btnCopy = document.getElementById("qsysDbgCopy");
+        const btnClear = document.getElementById("qsysDbgClear");
+        const btnHide = document.getElementById("qsysDbgHide");
+
+        const MAX = 300;
+        const lines = [];
+
+        function ts() {
+          const d = new Date();
+          return d.toLocaleTimeString();
+        }
+
+        function render() {
+          if (!body) return;
+          body.textContent = lines.join("\n");
+          body.scrollTop = body.scrollHeight;
+        }
+
+        function show() {
+          if (wrap) wrap.style.display = "block";
+          if (pill) pill.style.display = "none";
+          render();
+        }
+
+        function hide() {
+          if (wrap) wrap.style.display = "none";
+          if (pill) pill.style.display = "block";
+        }
+
+        function log(msg, obj) {
+          const line = `[${ts()}] ${msg}` + (obj ? " " + safe(obj) : "");
+          lines.push(line);
+          while (lines.length > MAX) lines.shift();
+          try {
+            console.log("%c[qsys-dbg]", "color:#7CFC00", msg, obj || "");
+          } catch {}
+          render();
+        }
+
+        function safe(o) {
+          try {
+            return JSON.stringify(o);
+          } catch {
+            return String(o);
+          }
+        }
+
+        window.qsysDbg = { log, show, hide, _lines: lines };
+
+        pill && pill.addEventListener("click", show);
+        btnHide && btnHide.addEventListener("click", hide);
+        btnClear &&
+          btnClear.addEventListener("click", () => {
+            lines.length = 0;
+            render();
+          });
+        btnCopy &&
+          btnCopy.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(lines.join("\n"));
+              log("Copied debug log to clipboard.");
+            } catch (e) {
+              log("Copy failed (clipboard blocked).", {
+                err: String(e?.message || e),
+              });
+            }
+          });
+
+        // Show overlay automatically if URL has ?debug=1
+        try {
+          const u = new URL(location.href);
+          if (u.searchParams.get("debug") === "1") show();
+        } catch {}
+      })();
+    </script>
+  </body>
+</html>
+
+
+
+

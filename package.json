@@ -1,0 +1,60 @@
+{
+  "name": "qsys-standalone",
+  "version": "1.0.0",
+  "description": "QSys Standalone Offline Queueing System",
+  "main": "electron/main.js",
+  "author": "One Gourmet Foods Inc.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "electron .",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-builder install-app-deps",
+    "dist": "electron-builder",
+    "seed:today": "node server/seed-demo-today.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.5.0",
+    "dayjs": "^1.11.13",
+    "express": "^4.21.2",
+    "express-session": "^1.18.2",
+    "node-fetch": "^3.3.2",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.2",
+    "socket.io-client": "^4.8.2"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9"
+  },
+  "overrides": {
+    "qs": "^6.14.1"
+  },
+  "build": {
+    "appId": "com.onegourmet.qsyslocal",
+    "productName": "QSys Local",
+    "copyright": "Copyright © One Gourmet Foods Inc.",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "server/public/assets/icons/Yakiniku-Like-logo.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "server/public/assets/icons/Yakiniku-Like-logo.ico",
+      "uninstallerIcon": "server/public/assets/icons/Yakiniku-Like-logo.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QSys Local"
+    }
+  }
+}

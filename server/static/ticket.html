@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your Queue Number</title>
+
+  <style>
+    :root{
+      /* spacing token */
+      --sp: 12px;
+
+      /* brand palette */
+      --brand:#590e0e;
+      --primary:#e49424;
+      --secondary:#ec9c34;
+      --priority:#22c55e;
+
+      /* dark UI */
+      --bg:#1a0f0f;
+      --card:#2b1414;
+      --panel:#3b1c1c;
+      --text:#ffffff;
+      --muted:rgba(255,255,255,.70);
+      --line:rgba(255,255,255,.10);
+
+      --radius:18px;
+      --shadow:0 25px 60px rgba(0,0,0,.45);
+    }
+
+    *{ box-sizing:border-box }
+
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 700px at 20% -20%, rgba(228,148,36,.14), transparent 60%),
+        radial-gradient(900px 650px at 110% 10%, rgba(34,197,94,.10), transparent 55%),
+        linear-gradient(180deg, #1a0f0f 0%, #2b1414 100%);
+    }
+
+    .container{
+      max-width:520px;
+      margin:0 auto;
+      padding: calc(var(--sp) * 2);
+    }
+
+    .ticket-card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      padding: calc(var(--sp) * 2.2);
+      box-shadow:var(--shadow);
+      text-align:center;
+      overflow:hidden;
+    }
+
+    .topStripe{
+      height: 8px;
+      margin: calc(var(--sp) * -2.2) calc(var(--sp) * -2.2) calc(var(--sp) * 1.3);
+      background: linear-gradient(90deg, var(--brand), #3b1c1c, var(--primary));
+    }
+
+    .check{
+      width:42px;height:42px;border-radius:999px;
+      margin:0 auto calc(var(--sp) * 0.8);
+      border:2px solid var(--primary);
+      color:var(--primary);
+      display:flex;align-items:center;justify-content:center;
+      font-weight:900;
+    }
+
+    .title{
+      margin: calc(var(--sp) * 0.4) 0 calc(var(--sp) * 1.2);
+      font-size:32px;
+      letter-spacing:.2px;
+      font-weight:950;
+      color: var(--primary);
+    }
+
+    .ticket-box{
+      background: linear-gradient(180deg, #3b1c1c, #2b1414);
+      border:2px solid var(--primary);
+      border-radius:18px;
+      padding: calc(var(--sp) * 2.2) calc(var(--sp) * 1.3);
+      margin: calc(var(--sp) * 1.2) 0 calc(var(--sp) * 1.2);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+
+    .ticket-code{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      line-height:1;
+    }
+
+    .ticket-code .code{
+      font-size:44px;
+      font-weight:900;
+      letter-spacing:0.08em;
+      color:var(--primary);
+      margin-bottom: calc(var(--sp) * 0.5);
+    }
+
+    .ticket-code .num{
+      font-size:96px;
+      font-weight:950;
+      letter-spacing:0.02em;
+      color:var(--primary);
+      line-height:0.95;
+    }
+
+    .for{
+      margin: calc(var(--sp) * 1.2) 0 calc(var(--sp) * 0.8);
+      font-size:16px;
+      color: rgba(255,255,255,.92);
+    }
+
+    .ticket-meta{
+      margin-top: calc(var(--sp) * 0.6);
+      font-size:13px;
+      color: rgba(255,255,255,.86);
+    }
+    .ticket-meta p{ margin: calc(var(--sp) * 0.25) 0 }
+
+    .ticket-group-tag{
+      display:inline-block;
+      margin-top: calc(var(--sp) * 0.7);
+      padding: 6px 14px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      background:#3b1c1c;
+      color:#fff;
+      border:1px solid rgba(255,255,255,.10);
+    }
+
+    .ticket-group-tag.priority{
+      background:var(--priority);
+      color:#081c0e;
+      border:none;
+    }
+
+    .btn{
+      display:block;
+      margin: calc(var(--sp) * 1.5) 0 calc(var(--sp) * 0.8);
+      padding: calc(var(--sp) * 1.1) calc(var(--sp) * 1.2);
+      border-radius:14px;
+      border:none;
+      background: linear-gradient(180deg, var(--primary), var(--secondary));
+      color:#140909;
+      text-decoration:none;
+      font-weight:900;
+    }
+
+    .note{
+      margin: calc(var(--sp) * 0.9) 0 0;
+      font-size:12.5px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+
+    .note em{ color: rgba(255,255,255,.88) }
+
+    @media (max-width: 420px){
+      .ticket-code .num{ font-size:86px; }
+      .ticket-code .code{ font-size:40px; }
+      .title{ font-size:28px; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <div class="ticket-card">
+      <div class="topStripe"></div>
+
+      <div class="check">✓</div>
+      <h1 class="title">Queue Number</h1>
+
+      <div class="ticket-box">
+        <div class="ticket-code">
+          <div class="code" id="ticketCodePrefix">—</div>
+          <div class="num" id="ticketCodeNum">—</div>
+        </div>
+      </div>
+
+      <p class="for">
+        For: <strong id="guestName">—</strong>
+      </p>
+
+      <div class="ticket-meta">
+        <p>Branch: <strong id="branchName">—</strong></p>
+        <p>Party size: <strong><span id="pax">—</span> pax</strong></p>
+        <p>
+          Group:
+          <span id="groupBadge" class="ticket-group-tag">—</span>
+        </p>
+      </div>
+
+      <a href="#" class="btn" id="backToRegister">Thank you for registering!</a>
+
+      <p class="note">
+        When your queue number is called, please present this screen to our staff.<br>
+        <em>You may take a screenshot of your queue number or simply keep this page open while you wait.</em><br><br>
+        Please stay within the vicinity of the restaurant. If you miss your turn, you may be moved down the queue
+        or asked to re-register.
+      </p>
+    </div>
+  </main>
+
+  <script>
+    function qs(name){
+      return new URL(window.location.href).searchParams.get(name) || "";
+    }
+
+    function setText(id, v){
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = (v === undefined || v === null || v === "") ? "—" : String(v);
+    }
+
+    function setGroupBadge(group){
+      var badge = document.getElementById("groupBadge");
+      if (!badge) return;
+
+      var g = String(group || "").toUpperCase();
+      var isPriority = g.startsWith("P") && g.length === 2;
+
+      badge.className = "ticket-group-tag" + (isPriority ? " priority" : "");
+      badge.textContent = isPriority
+        ? ("GROUP " + g + " – PRIORITY")
+        : ("GROUP " + g);
+    }
+
+    function setTicketCode(code){
+      if (!code) return;
+
+      var parts = String(code).split("-");
+      setText("ticketCodePrefix", parts[0] || "—");
+      setText("ticketCodeNum", parts[1] || "—");
+    }
+
+    var ticketId = qs("id");
+    if (!ticketId) alert("Missing ticket id.");
+
+    async function boot(){
+      try{
+        var res = await fetch("/api/guest/ticket?id=" + encodeURIComponent(ticketId));
+        if (!res.ok) throw new Error("ticket fetch failed");
+
+        var data = await res.json();
+        if (!data || !data.ok || !data.ticket) throw new Error("bad payload");
+
+        var t = data.ticket;
+
+        setTicketCode(t.code);
+        setText("guestName", t.name);
+        setText("branchName", t.branchName || t.branchCode);
+        setText("pax", t.pax);
+        setGroupBadge(t.group);
+
+        var back = document.getElementById("backToRegister");
+        if (back) back.href = "/static/guest.html";
+      }catch(e){
+        console.error(e);
+        alert("Unable to load ticket info.");
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>

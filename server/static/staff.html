@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QSys Staff</title>
+
+  <style>
+    :root{
+      /* Parchment Light Theme (Staff) */
+      --bg:#f3eadc;
+      --panel:#faf6ee;
+      --panel2:#f0e6d6;
+      --card:#ffffff;
+      --line:rgba(0,0,0,.08);
+      --text:#1f2933;
+      --muted:rgba(31,41,51,.65);
+
+      /* Brand + states */
+      --accent:#e10600;
+      --good:#16a34a;
+      --bad:#dc2626;
+      --warn:#f59e0b;
+
+      /* Effects */
+      --shadow: 0 14px 34px rgba(0,0,0,.10);
+      --radius: 18px;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      background: radial-gradient(1200px 600px at 18% -10%, rgba(225,6,0,.06), transparent 58%),
+                  radial-gradient(1000px 600px at 80% 0%, rgba(245,158,11,.10), transparent 60%),
+                  linear-gradient(180deg, #f7f0e4 0%, #f3eadc 100%);
+      color:var(--text);
+      min-height:100vh;
+    }
+
+    /* Top bar */
+    .topbar{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter: blur(10px);
+      background: rgba(251,247,240,.92);
+      border-bottom:1px solid var(--line);
+    }
+    .topbar-inner{
+      max-width: 1220px;
+      margin:0 auto;
+      padding:14px 18px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+    }
+    .brand{
+      display:flex; align-items:center; gap:12px;
+      min-width: 220px;
+    }
+    .dot{
+      width:12px; height:12px; border-radius:999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 6px rgba(245,158,11,.12);
+    }
+    .brand h1{
+      font-size:16px; margin:0;
+      letter-spacing:.2px;
+    }
+    .sub{
+      margin:2px 0 0 0;
+      font-size:12px; color:var(--muted);
+    }
+
+    .who{
+      display:flex; align-items:center; gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      text-align:right;
+    }
+    .pill{
+      border:1px solid var(--line);
+      background: var(--panel);
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12.5px;
+      color:var(--muted);
+      display:flex; align-items:center; gap:8px;
+      white-space:nowrap;
+    }
+    .pill strong{ color:var(--text); font-weight:800; }
+
+    .roleTag{
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.08em;
+      padding:5px 9px;
+      border-radius:999px;
+      text-transform:uppercase;
+      border:1px solid rgba(245,158,11,.35);
+      color: var(--accent);
+      background: rgba(245,158,11,.10);
+    }
+
+    /* Server status badge */
+    .statusPill{
+      border:1px solid var(--line);
+      background: var(--panel);
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12.5px;
+      display:flex; align-items:center; gap:8px;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    .statusDot{
+      width:10px; height:10px; border-radius:999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 6px rgba(245,158,11,.12);
+    }
+    .statusPill.ok .statusDot{
+      background: var(--good);
+      box-shadow: 0 0 0 6px rgba(34,197,94,.12);
+    }
+    .statusPill.bad .statusDot{
+      background: var(--bad);
+      box-shadow: 0 0 0 6px rgba(220,38,38,.12);
+    }
+
+    .btn{
+      border:1px solid var(--line);
+      background: var(--panel);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:800;
+      cursor:pointer;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(245,158,11,.35); }
+    .btn:disabled{
+      background: #f3e6cf;
+      color: #6b5e4a;
+      border-color: #e2d3b8;
+      opacity:1;
+      cursor:not-allowed;
+      transform:none;
+    }
+    .btn.primary{
+      border-color: rgba(225,6,0,.35);
+      background: rgba(225,6,0,.10);
+      color: var(--accent);
+    }
+    .btn.danger{
+      border-color: rgba(239,68,68,.45);
+      background: rgba(239,68,68,.10);
+    }
+
+    /* Layout */
+    .wrap{
+      max-width:1220px;
+      margin:0 auto;
+      padding:18px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.3fr .7fr;
+      gap:16px;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+      .who{ justify-content:flex-start; text-align:left; }
+      .brand{ min-width:auto; }
+    }
+
+    /* Cards */
+    .card{
+      background: linear-gradient(180deg, rgba(251,247,240,.98), rgba(246,239,228,.92));
+      border:1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .card-h{
+      padding:14px 16px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .card-h h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.2px;
+      color: var(--text);
+      white-space:nowrap;
+    }
+    .card-b{ padding:14px 16px 16px 16px; }
+
+    .kv{
+      display:flex; gap:10px; flex-wrap:wrap;
+      color: var(--muted);
+      font-size:12.5px;
+      justify-content:flex-end;
+    }
+    .kv strong{ color:var(--text); }
+
+    /* Queue */
+    .groups{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap:10px;
+    }
+    @media (max-width: 980px){
+      .groups{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    .gcard{
+      border:1px solid rgba(0,0,0,.14);
+      background: #6f7378;
+      border-radius: 16px;
+      padding:12px;
+    }
+    .ghead{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:10px;
+      margin-bottom:8px;
+    }
+    .gname{
+      font-weight:900;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-size:12px;
+      color: rgba(255,255,255,.88);
+    }
+    .big{
+      font-size:28px;
+      font-weight:950;
+      letter-spacing:.5px;
+      color:#fff;
+    }
+    .called{
+      margin-top:8px;
+      border-top: 1px dashed rgba(255,255,255,.22);
+      padding-top:8px;
+      font-size:12.5px;
+      color: rgba(255,255,255,.75);
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .called strong{ color:#fff; }
+
+    .list{
+      margin-top:10px;
+      border-top:1px solid rgba(0,0,0,.08);
+      padding-top:10px;
+    }
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px;
+      border-radius:14px;
+      border:1px solid rgba(0,0,0,.08);
+      background: rgba(60,40,20,.04);
+      margin-bottom:8px;
+    }
+    .row:last-child{ margin-bottom:0; }
+    .code{
+      font-weight:950;
+      font-size:16px;
+      letter-spacing:.04em;
+      color: var(--text);
+    }
+    .meta{
+      font-size:12px;
+      color: rgba(31,41,51,.78);
+      margin-top:2px;
+    }
+    .left{ min-width: 180px; }
+    .right{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .tag{
+      font-size:11px;
+      border-radius:999px;
+      padding:4px 8px;
+      border:1px solid rgba(0,0,0,.10);
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    .tag.prio{
+      border-color: rgba(245,158,11,.45);
+      color: var(--accent);
+      background: rgba(245,158,11,.10);
+    }
+    .tag.called{
+      color: #0f5132;
+      border: 1px solid rgba(15,81,50,.18);
+      background: #e7f6ee;
+      font-weight: 800;
+    }
+
+    /* Actions */
+    .actions{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:10px;
+    }
+    .actions .btn{
+      width:100%;
+      justify-content:center;
+      padding:12px 12px;
+      border-radius:14px;
+    }
+    .hint{
+      margin-top:10px;
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.5;
+    }
+
+    /* Header tools on the right card */
+    .hdrTools{
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .miniPill{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,.10);
+      background: rgba(60,40,20,.04);
+      color: var(--muted);
+      white-space:nowrap;
+    }
+
+    /* Toast */
+    .toastWrap{
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      display:flex;
+      justify-content:center;
+      z-index: 999;
+      pointer-events:none;
+    }
+    .toast{
+      pointer-events:auto;
+      max-width: 780px;
+      width: fit-content;
+      background: var(--card);
+      border: 1px solid rgba(0,0,0,.10);
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.40);
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      color: var(--text);
+    }
+    .toast small{ color: var(--muted); display:block; margin-top:2px; }
+    .toast .tDot{
+      width:10px; height:10px; border-radius:999px;
+      margin-top:4px;
+      background: var(--accent);
+    }
+    .toast.ok .tDot{ background: var(--good); }
+    .toast.bad .tDot{ background: var(--bad); }
+
+    /* Modal */
+    .modalBack{
+      position: fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      z-index: 1000;
+    }
+    .modal{
+      width: min(520px, 100%);
+      background: var(--card);
+      border:1px solid rgba(0,0,0,.10);
+      border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.55);
+      overflow:hidden;
+    }
+    .modal h3{
+      margin:0;
+      padding:14px 16px;
+      border-bottom:1px solid rgba(0,0,0,.10);
+      font-size:14px;
+      letter-spacing:.2px;
+    }
+    .modal .body{ padding:14px 16px 16px 16px; }
+    .field{ margin-top:10px; }
+    .field label{
+      display:block;
+      font-size:12px;
+      color: var(--muted);
+      margin-bottom:6px;
+    }
+    .field input, .field select, .field textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,.10);
+      background: rgba(60,40,20,.06);
+      color: var(--text);
+      outline:none;
+      font-size:14px;
+    }
+    .field textarea{ resize: vertical; min-height: 86px; }
+    .modal .foot{
+      padding:12px 16px 16px 16px;
+      border-top:1px solid rgba(0,0,0,.10);
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+    }
+
+    /* Group picker pillbox (replaces dropdown) */
+    .groupPills{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .gPill{
+      border:1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      padding:10px 12px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12.5px;
+      cursor:pointer;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease;
+      white-space:nowrap;
+    }
+    .gPill:hover{ transform: translateY(-1px); border-color: rgba(225,6,0,.28); }
+    .gPill.active{
+      border-color: rgba(225,6,0,.45);
+      background: rgba(225,6,0,.10);
+      color: var(--accent);
+    }
+
+    /* Called 3x+ escalation highlight */
+.ticket.calledMany {
+  border: 2px solid rgb(141, 6, 1);
+  box-shadow: 0 0 0 3px rgba(141, 6, 1, 0.15);
+}
+
+.ticket .metaBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.ticket .metaBadge.escalate {
+  background: rgba(141, 6, 1, 0.12);
+  border-color: rgba(141, 6, 1, 0.35);
+  color: rgb(141, 6, 1);
+}
+
+  </style>
+</head>
+
+<body>
+  <!-- Top Bar -->
+  <div class="topbar" id="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="dot" id="onlineDot"></div>
+        <div>
+          <h1>QSys Staff</h1>
+          <div class="sub" id="branchLine">—</div>
+        </div>
+      </div>
+
+      <div class="who">
+        <div class="pill">
+          Logged in as: <strong id="meName">—</strong>
+          <span class="roleTag" id="meRole">—</span>
+        </div>
+
+        <div class="statusPill" id="serverStatusPill" title="Local server connection status">
+          <span class="statusDot" id="serverStatusDot"></span>
+          <span id="serverStatusText">Server: …</span>
+        </div>
+
+        <button class="btn danger" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+
+      <!-- LEFT: Queue -->
+      <div class="card">
+        <div class="card-h">
+          <h2>Today’s Queue</h2>
+          <div class="kv">
+            <span>Date: <strong id="bizDate">—</strong></span>
+            <span>Waiting: <strong id="waitCount">—</strong></span>
+            <span>Called: <strong id="calledCount">—</strong></span>
+          </div>
+        </div>
+
+        <div class="card-b">
+          <div class="groups" id="groupSummary"></div>
+
+          <div class="list" style="margin-top:14px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+              <div style="color:var(--muted); font-size:12px;">Tickets (WAITING + CALLED)</div>
+              <button class="btn" id="refreshBtn">Refresh</button>
+            </div>
+            <div id="queueList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Actions + Audit -->
+      <div class="card">
+        <div class="card-h">
+          <h2>Actions</h2>
+          <div class="hdrTools">
+            <span class="miniPill" id="displayStatus">Display: —</span>
+            <button class="btn" id="openDisplayBtn">Open Display</button>
+            <button class="btn" id="closeDisplayBtn">Close Display</button>
+          </div>
+        </div>
+
+        <div class="card-b">
+          <div class="field" style="margin-top:0;">
+            <label>Group</label>
+            <div class="groupPills" id="groupPickPills">
+              <button type="button" class="gPill" data-group="A">1 Pax</button>
+              <button type="button" class="gPill" data-group="B">2–3 Pax</button>
+              <button type="button" class="gPill" data-group="C">4–5 Pax</button>
+              <button type="button" class="gPill" data-group="D">6++ Pax</button>
+            </div>
+          </div>
+
+          <div class="actions" style="margin-top:12px;">
+            <button class="btn primary" id="callNextBtn">Call Again</button>
+            <button class="btn" id="callPriorityBtn">Call Priority Next</button>
+            <button class="btn" id="callRegularBtn">Call Regular Next</button>
+            <button class="btn" id="seatBtn">Seat Called</button>
+            <button class="btn" id="skipBtn">Skip</button>
+            <button class="btn" id="clearBtn">Clear Called</button>
+            <button class="btn" id="overrideBtn">Override Call (Specific)</button>
+          </div>
+
+          <div class="hint" id="permHint">—</div>
+
+          <div style="margin-top:14px; border-top:1px solid rgba(0,0,0,.10); padding-top:14px; display:none">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div style="font-weight:800; font-size:13px;">Audit Trail</div>
+              <button class="btn" id="auditRefreshBtn">Refresh</button>
+            </div>
+            <div id="auditList" style="margin-top:10px;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Override Modal -->
+  <div class="modalBack" id="overrideModal">
+    <div class="modal">
+      <h3>Override Call (Specific Ticket)</h3>
+      <div class="body">
+        <div class="field" style="margin-top:0;">
+          <label>Ticket</label>
+          <select id="overrideTicket"></select>
+        </div>
+        <div class="field">
+          <label>Note (optional)</label>
+          <textarea id="overrideNote" placeholder="Reason / note (max 200 chars)"></textarea>
+        </div>
+
+        <div id="supervisorBlock" style="display:none; margin-top:14px; padding-top:14px; border-top:1px dashed rgba(0,0,0,.12);">
+          <div style="font-weight:900; color:var(--accent); font-size:12px; letter-spacing:.06em; text-transform:uppercase;">
+            Supervisor approval required
+          </div>
+          <div class="field">
+            <label>Supervisor Username / Name</label>
+            <input id="supUser" placeholder="Supervisor user/name" />
+          </div>
+          <div class="field">
+            <label>Supervisor PIN</label>
+            <input id="supPin" type="password" inputmode="numeric" placeholder="PIN" />
+          </div>
+          <div style="margin-top:8px; color:var(--muted); font-size:12px; line-height:1.45;">
+            This will log-in as supervisor for now (simple approach). If you want one-shot approval instead, we’ll add a verify endpoint.
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="btn" id="overrideCancel">Cancel</button>
+        <button class="btn primary" id="overrideGo">Call Ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toastWrap" id="toastWrap"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    function $(id){ return document.getElementById(id); }
+
+    function toast(msg, type, sub){
+      const wrap = $("toastWrap");
+      const node = document.createElement("div");
+      node.className = "toast " + (type || "");
+      node.innerHTML = `
+        <div class="tDot"></div>
+        <div>
+          <div style="font-weight:850">${escapeHtml(msg)}</div>
+          ${sub ? `<small>${escapeHtml(sub)}</small>` : ``}
+        </div>
+      `;
+      wrap.appendChild(node);
+      setTimeout(() => { node.style.opacity = "0"; node.style.transform = "translateY(6px)"; }, 2600);
+      setTimeout(() => { node.remove(); }, 3200);
+    }
+
+    function escapeHtml(s){
+      return String(s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#39;");
+    }
+
+    function pad2(n){
+      const v = Number(n);
+      if (!Number.isFinite(v)) return "";
+      return String(v).padStart(2,"0");
+    }
+
+    function bucketFromPax(pax){
+      const p = Number(pax);
+      if (Number.isFinite(p) && p > 0){
+        if (p <= 1) return "A";
+        if (p <= 3) return "B";
+        if (p <= 5) return "C";
+        return "D";
+      }
+      return "B";
+    }
+
+    function formatTime(ts){
+  const d = new Date(Number(ts));
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("en-PH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila"
+  });
+}
+
+function getQueuedTs(r){
+  return (
+    r.createdAt ??
+    r.timestamp ??
+    r.created_at ??
+    r.createdAtLocal ??
+    null
+  );
+}
+
+function getCalledTs(r){
+  return (
+    r.calledAt ??
+    r.called_at ??
+    null
+  );
+}
+
+function getNextCallsRaw(r){
+  return String(r.next_calls ?? r.nextCalls ?? "").trim();
+}
+
+function countNextCalls(r){
+  const raw = getNextCallsRaw(r);
+  if (!raw) return 0;
+  return raw.split(",").map(s => s.trim()).filter(Boolean).length;
+}
+
+function callCount(r){
+  const base = getCalledTs(r) ? 1 : 0;
+  return base + countNextCalls(r);
+}
+
+function waitingMins(r){
+  const ts = getQueuedTs(r);
+  const n = Number(ts);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const mins = Math.floor((Date.now() - n) / 60000);
+  return mins < 0 ? 0 : mins;
+}
+
+
+
+    function codeFor(r){
+      if (!r) return "—";
+      const g = String(r.groupCode || "").toUpperCase();
+      const isPriority = (String(r.priorityType || "NONE").toUpperCase() !== "NONE");
+      const num = isPriority ? (r.priorityNum ?? r.queueNum) : r.queueNum;
+      const qn = pad2(num);
+      if (!qn || !g) return "—";
+      return isPriority ? `P${g}-${qn}` : `${g}-${qn}`;
+    }
+
+    async function api(url, method, body){
+      const opt = { method: method || "GET", headers: {} };
+      if (body !== undefined){
+        opt.headers["Content-Type"] = "application/json";
+        opt.body = JSON.stringify(body);
+      }
+      const res = await fetch(url, opt);
+      let data = null;
+      try { data = await res.json(); } catch {}
+      return { res, data };
+    }
+
+    const state = {
+      me: null,
+      permissions: {},
+      snapshot: null,
+      lastRows: [],
+      selectedGroup: "B" // default: 2–3 pax
+    };
+
+    function hasPerm(key){
+      const perms = state.permissions;
+
+      if (Array.isArray(perms)) return perms.includes(key);
+
+      const p = perms ? perms[key] : null;
+      if (p === true || p === 1 || p === "1") return true;
+
+      if (p && typeof p === "object" && (p.allowed === 1 || p.allowed === true || p.allowed === "1")) return true;
+
+      return false;
+    }
+
+    async function refreshServerStatus(){
+      const pill = $("serverStatusPill");
+      const txt = $("serverStatusText");
+      const dot = $("onlineDot");
+      if (!pill || !txt || !dot) return;
+
+      try{
+        const r = await fetch("/api/health", { cache:"no-store" });
+        if (!r.ok) throw new Error("bad");
+        pill.classList.remove("bad");
+        pill.classList.add("ok");
+        txt.textContent = "Server: OK";
+        dot.style.background = "var(--good)";
+        dot.style.boxShadow = "0 0 0 6px rgba(34,197,94,.12)";
+      }catch{
+        pill.classList.remove("ok");
+        pill.classList.add("bad");
+        txt.textContent = "Server: Reconnecting…";
+        dot.style.background = "var(--bad)";
+        dot.style.boxShadow = "0 0 0 6px rgba(220,38,38,.12)";
+      }
+    }
+
+    function parseNextCalls(nextCalls) {
+  if (!nextCalls) return [];
+  return String(nextCalls)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function calledCountOf(item) {
+  const base = item.calledAt ? 1 : 0;
+  return base + parseNextCalls(item.next_calls).length;
+}
+
+function toMMSS(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// Uses local createdAt if present; falls back to timestamp.
+// createdAt is usually ISO string; timestamp can be unix ms or ISO depending on your db.
+function getQueuedMs(item) {
+  const v = item.createdAt ?? item.timestamp ?? item.queuedAt ?? item.created_at;
+  if (!v) return null;
+
+  // number: assume ms
+  if (typeof v === 'number') return v;
+
+  // string: Date parse
+  const ms = Date.parse(v);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+
+    async function refreshDisplayStatus(){
+      const el = $("displayStatus");
+      if (!el) return;
+
+      try{
+        const { res, data } = await api("/api/system/display/state", "GET");
+        if (!res.ok || !data || !data.ok) throw new Error("bad");
+        const on = !!data.on;
+        el.textContent = on ? "Display: ON" : "Display: OFF";
+      }catch{
+        el.textContent = "Display: UNKNOWN";
+      }
+    }
+
+    async function loadMe(){
+      const { res, data } = await api("/api/staff/auth/me", "GET");
+      if (!res.ok || !data || !data.ok){
+        window.location.href = "/staff-login";
+        return false;
+      }
+      state.me = data.user || null;
+      state.permissions = data.permissions || {};
+      $("meName").textContent = state.me?.fullName || state.me?.username || "—";
+      $("meRole").textContent = String(state.me?.roleId || state.me?.role || "—").toUpperCase();
+
+      const lines = [];
+      if (hasPerm("QUEUE_CALL_NEXT")) lines.push("✅ Call Again");
+      if (hasPerm("QUEUE_SEAT")) lines.push("✅ Seat");
+      if (hasPerm("QUEUE_SKIP")) lines.push("✅ Skip");
+      if (hasPerm("QUEUE_CLEAR_CALLED")) lines.push("✅ Clear Called");
+      if (hasPerm("QUEUE_CALL_OVERRIDE")) lines.push("✅ Override Call");
+      $("permHint").textContent = lines.length ? ("Permissions: " + lines.join(" • ")) : "Permissions: —";
+      return true;
+    }
+
+    function applyPermsToButtons(){
+      $("callNextBtn").disabled = !hasPerm("QUEUE_CALL_NEXT");
+      $("seatBtn").disabled     = !hasPerm("QUEUE_SEAT");
+      $("skipBtn").disabled     = !hasPerm("QUEUE_SKIP");
+      $("clearBtn").disabled    = !hasPerm("QUEUE_CLEAR_CALLED");
+      $("overrideBtn").disabled = false;
+    }
+
+    function groupPick(){ return state.selectedGroup || "B"; }
+
+    function applyGroupPills(){
+      const box = $("groupPickPills");
+      if (!box) return;
+      const btns = Array.from(box.querySelectorAll(".gPill"));
+
+      function setActive(g){
+        state.selectedGroup = g;
+        for (const b of btns){
+          b.classList.toggle("active", b.getAttribute("data-group") === g);
+        }
+      }
+
+      // initial
+      const initial = state.selectedGroup || "B";
+      setActive(initial);
+
+      for (const b of btns){
+        b.addEventListener("click", async () => {
+          const g = b.getAttribute("data-group") || "B";
+          setActive(g);
+          // refresh list for selected group
+          const rows = Array.isArray(state.lastRows) ? state.lastRows : [];
+          const filtered = rows.filter(r => String(r.groupCode||"").toUpperCase() === g);
+          renderList(filtered);
+          fillOverrideTickets(filtered);
+          const hasCalled = filtered.some(r => r.status === "CALLED");
+          $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+        });
+      }
+    }
+
+    async function loadState(){
+      const { res, data } = await api("/api/state", "GET");
+      if (!res.ok || !data || !data.ok){
+        toast("Not authenticated", "bad", "Please login again.");
+        window.location.href = "/staff-login";
+        return;
+      }
+
+      state.snapshot = data;
+      $("branchLine").textContent = `${data.branchName || data.branchCode || "—"} • ${data.branchCode || "—"}`;
+      $("bizDate").textContent = data.businessDate || "—";
+
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      state.lastRows = rows;
+
+      const w = rows.filter(r => r.status === "WAITING").length;
+      const c = rows.filter(r => r.status === "CALLED").length;
+      $("waitCount").textContent = w;
+      $("calledCount").textContent = c;
+
+      renderSummary(rows);
+
+      const g = groupPick();
+      const filtered = rows.filter(r => r.groupCode === g);
+      renderList(filtered);
+      fillOverrideTickets(filtered);
+
+      const hasCalled = filtered.some(r => r.status === "CALLED");
+      $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+    }
+
+    function renderSummary(rows){
+      const groups = ["A","B","C","D"]; // Priority is now inside A/B/C/D
+      const el = $("groupSummary");
+      el.innerHTML = "";
+
+      const label = {
+        A: "1 Pax",
+        B: "2–3 Pax",
+        C: "4–5 Pax",
+        D: "6++ Pax"
+      };
+
+      for (const g of groups){
+        const w = rows.filter(r => r.groupCode === g && r.status === "WAITING").length;
+        const called = rows.find(r => r.groupCode === g && r.status === "CALLED");
+
+        const node = document.createElement("div");
+        node.className = "gcard";
+        node.innerHTML = `
+          <div class="ghead">
+            <div class="gname">${label[g] || `Group ${g}`}</div>
+          </div>
+          <div class="big">${w}</div>
+          <div class="called">
+            <span>Called</span>
+            <strong>${called ? codeFor(called) : "—"}</strong>
+          </div>
+        `;
+        el.appendChild(node);
+      }
+    }
+
+    function renderList(rows){
+      const wrap = $("queueList");
+      wrap.innerHTML = "";
+
+      if (!rows.length){
+        wrap.innerHTML = `<div style="color:var(--muted); font-size:13px; padding:10px;">No tickets for today.</div>`;
+        return;
+      }
+
+      // Within a group: show Priority first, then Regular, both oldest-first by their own counters.
+      const sorted = rows.slice().sort((a,b) => {
+        const ap = (String(a.priorityType || "NONE").toUpperCase() !== "NONE") ? 0 : 1;
+        const bp = (String(b.priorityType || "NONE").toUpperCase() !== "NONE") ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+
+        const an = (ap === 0) ? (a.priorityNum ?? a.queueNum ?? 0) : (a.queueNum ?? 0);
+        const bn = (bp === 0) ? (b.priorityNum ?? b.queueNum ?? 0) : (b.queueNum ?? 0);
+        return an - bn;
+      });
+
+      for (const r of sorted){
+        const node = document.createElement("div");
+        node.className = "row";
+        const code = codeFor(r);
+        const prio = String(r.priorityType || "NONE").toUpperCase();
+        const isPrio = prio !== "NONE";
+        const isCalled = r.status === "CALLED";
+        const wm = waitingMins(r);
+        const cc = callCount(r);
+
+        node.innerHTML = `
+          <div class="left">
+            <div class="code">${escapeHtml(code)}</div>
+            <div class="meta">
+            ${escapeHtml(r.name || "Guest")} • ${Number(r.pax||1)} pax
+            ${getQueuedTs(r)
+              ? ` • <span style="opacity:.7">Queued: ${formatTime(getQueuedTs(r))}</span>`
+              : ``}
+            ${wm !== null
+              ? ` • <span style="opacity:.7">Waiting: ${wm} min</span>`
+              : ``}
+            ${cc > 0
+              ? ` • <span style="opacity:.7">Called: ${cc}×</span>`
+              : ``}
+            </div>
+
+          </div>
+          <div class="right">
+            ${isPrio ? `<span class="tag prio">${escapeHtml(prio)}</span>` : ``}
+            <span class="tag ${isCalled ? "called" : ""}">${escapeHtml(r.status)}</span>
+          </div>
+        `;
+        wrap.appendChild(node);
+      }
+    }
+
+    function fillOverrideTickets(rows){
+      const sel = $("overrideTicket");
+      sel.innerHTML = "";
+
+      const waiting = rows.filter(r => r.status === "WAITING");
+      if (!waiting.length){
+        const o = document.createElement("option");
+        o.value = "";
+        o.textContent = "No WAITING tickets available";
+        sel.appendChild(o);
+        return;
+      }
+
+      for (const r of waiting){
+        const o = document.createElement("option");
+        o.value = r.id;
+        o.textContent = `${codeFor(r)} — ${r.name || "Guest"} (${Number(r.pax||1)} pax)`;
+        sel.appendChild(o);
+      }
+    }
+
+    async function loadAudit(){
+      const { res, data } = await api("/api/admin/audit?limit=50&offset=0", "GET");
+      const el = $("auditList");
+      el.innerHTML = "";
+
+      if (!res.ok || !data || !data.ok){
+        el.innerHTML = `<div style="color:var(--muted); font-size:12.5px;">Audit not available (permission/server).</div>`;
+        return;
+      }
+
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      if (!rows.length){
+        el.innerHTML = `<div style="color:var(--muted); font-size:12.5px;">No audit logs.</div>`;
+        return;
+      }
+
+      for (const r of rows.slice(0, 18)){
+        const when = new Date(Number(r.createdAt||0)).toLocaleString("en-PH", { timeZone:"Asia/Manila" });
+        let summary = "";
+        try{
+          const p = JSON.parse(r.payload || "{}");
+          if (p.groupCode && (p.queueNum || p.priorityNum)){
+            const g = String(p.groupCode || '').toUpperCase();
+            const isPriority = (String(p.priorityType || 'NONE').toUpperCase() !== 'NONE') || String(p.code || '').toUpperCase().startsWith('P');
+            const num = isPriority ? (p.priorityNum ?? p.queueNum) : p.queueNum;
+            const qn = pad2(num);
+            summary = isPriority ? ` • P${g}-${qn}` : ` • ${g}-${qn}`;
+          }
+          if (p.businessDate) summary += ` • ${p.businessDate}`;
+        }catch{}
+        const node = document.createElement("div");
+        node.style.border = "1px solid rgba(0,0,0,.08)";
+        node.style.background = "rgba(60,40,20,.35)";
+        node.style.borderRadius = "14px";
+        node.style.padding = "10px 10px";
+        node.style.marginBottom = "8px";
+        node.innerHTML = `
+          <div style="display:flex; justify-content:space-between; gap:10px;">
+            <div style="font-weight:850; font-size:12.5px;">${escapeHtml(r.action || "—")}${escapeHtml(summary)}</div>
+            <div style="color:var(--muted); font-size:11px; white-space:nowrap;">${escapeHtml(when)}</div>
+          </div>
+        `;
+        el.appendChild(node);
+      }
+    }
+
+    async function doAction(url, body, okMsg){
+      try{
+        const { res, data } = await api(url, "POST", body || {});
+        if (!res.ok || !data || !data.ok){
+          toast(data?.error || "Action failed", "bad");
+          return;
+        }
+        toast(okMsg || "Done", "ok");
+        await loadState();
+        await loadAudit();
+        nudgeRealtime();
+      }catch(e){
+        console.error(e);
+        toast("Network error", "bad");
+      }
+    }
+
+    function openModal(){
+      $("overrideModal").style.display = "flex";
+      $("overrideNote").value = "";
+      $("supUser").value = "";
+      $("supPin").value = "";
+      $("supervisorBlock").style.display = hasPerm("QUEUE_CALL_OVERRIDE") ? "none" : "block";
+    }
+    function closeModal(){ $("overrideModal").style.display = "none"; }
+
+    $("refreshBtn").addEventListener("click", loadState);
+    $("auditRefreshBtn").addEventListener("click", loadAudit);
+
+    $("callNextBtn").addEventListener("click", async () => {
+      if (!hasPerm("QUEUE_CALL_NEXT")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+
+      // Call Again = re-call the currently CALLED ticket for the selected group.
+      // This should NOT change the first calledAt; it only appends to next_calls and
+      // triggers the same display attention (pulse + chime).
+      await doAction("/api/staff/call-again", { groupCode: groupPick() }, "Called again");
+    });
+
+    $("callPriorityBtn").addEventListener("click", async () => {
+      if (!hasPerm("QUEUE_CALL_NEXT")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+      await doAction("/api/staff/call-next", { groupCode: groupPick(), pick: "PRIORITY" }, "Called priority next");
+    });
+
+    $("callRegularBtn").addEventListener("click", async () => {
+      if (!hasPerm("QUEUE_CALL_NEXT")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+      await doAction("/api/staff/call-next", { groupCode: groupPick(), pick: "REGULAR" }, "Called regular next");
+    });
+
+    $("seatBtn").addEventListener("click", async () => {
+      if (!hasPerm("QUEUE_SEAT")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+      await doAction("/api/staff/seat-called", { groupCode: groupPick() }, "Seated");
+    });
+
+    $("skipBtn").addEventListener("click", async () => {
+      if (!hasPerm("QUEUE_SKIP")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+      await doAction("/api/staff/skip", { groupCode: groupPick() }, "Skipped");
+    });
+
+    $("clearBtn").addEventListener("click", async () => {
+      if (!hasPerm("QUEUE_CLEAR_CALLED")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+      await doAction("/api/staff/clear-called", { groupCode: groupPick() }, "Cleared called");
+    });
+
+    $("overrideBtn").addEventListener("click", openModal);
+
+    $("overrideCancel").addEventListener("click", closeModal);
+    $("overrideModal").addEventListener("click", (e) => {
+      if (e.target === $("overrideModal")) closeModal();
+    });
+
+    $("overrideGo").addEventListener("click", async () => {
+      const id = $("overrideTicket").value;
+      const note = String($("overrideNote").value || "").trim().slice(0, 200);
+      const groupCode = groupPick();
+      if (!id) return toast("Pick a ticket first", "bad");
+
+      if (hasPerm("QUEUE_CALL_OVERRIDE")){
+        closeModal();
+        return doAction("/api/staff/call-specific", { groupCode, id, note }, "Override called");
+      }
+
+      const supUser = String($("supUser").value || "").trim();
+      const supPin  = String($("supPin").value || "").trim();
+      if (!supUser || !supPin){
+        return toast("Supervisor required", "bad", "Enter supervisor user + PIN.");
+      }
+
+      try{
+        const { res: lr, data: ld } = await api("/api/staff/auth/login", "POST", {
+          username: supUser,
+          fullName: supUser,
+          pin: supPin
+        });
+        if (!lr.ok || !ld || !ld.ok){
+          return toast(ld?.error || "Supervisor login failed", "bad");
+        }
+
+        await loadMe();
+        applyPermsToButtons();
+
+        if (!hasPerm("QUEUE_CALL_OVERRIDE")){
+          return toast("Supervisor has no override permission", "bad");
+        }
+
+        closeModal();
+        await doAction("/api/staff/call-specific", { groupCode, id, note }, "Override called");
+      }catch(e){
+        console.error(e);
+        toast("Network error", "bad");
+      }
+    });
+
+    $("logoutBtn").addEventListener("click", async () => {
+      try{ await fetch("/api/staff/auth/logout", { method:"POST" }); }catch{}
+      window.location.href = "/staff-login";
+    });
+
+    $("openDisplayBtn")?.addEventListener("click", async () => {
+      const { res, data } = await api("/api/system/display/open", "POST", {});
+      if (!res.ok || !data?.ok) return toast(data?.error || "Failed to open display", "bad");
+      toast("Display opened", "ok");
+      refreshDisplayStatus();
+    });
+
+    $("closeDisplayBtn")?.addEventListener("click", async () => {
+      const { res, data } = await api("/api/system/display/close", "POST", {});
+      if (!res.ok || !data?.ok) return toast(data?.error || "Failed to close display", "bad");
+      toast("Display closed", "ok");
+      refreshDisplayStatus();
+    });
+
+    let rtSocket = null;
+    function nudgeRealtime(){
+      try{
+        if (rtSocket && rtSocket.connected){
+          rtSocket.emit("state:changed");
+          rtSocket.emit("display:refresh");
+        }
+      }catch{}
+    }
+
+    try{
+      rtSocket = io();
+      rtSocket.on("state:changed", () => loadState());
+    }catch{}
+
+    (async function boot(){
+      const ok = await loadMe();
+      if (!ok) return;
+
+      applyPermsToButtons();
+      applyGroupPills();
+
+      await refreshServerStatus();
+      setInterval(refreshServerStatus, 2000);
+
+      await loadState();
+
+      // UI-only ticker: keeps Waiting minutes + Called count fresh without spamming the server.
+      setInterval(() => {
+        try{
+          const rows = Array.isArray(state.lastRows) ? state.lastRows : [];
+          const g = groupPick();
+          const filtered = rows.filter(r => String(r.groupCode||'').toUpperCase() === String(g).toUpperCase());
+          renderList(filtered);
+          const hasCalled = filtered.some(r => r.status === 'CALLED');
+          $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+        }catch{}
+      }, 30000);
+
+      await loadAudit();
+
+      await refreshDisplayStatus();
+      setInterval(refreshDisplayStatus, 2000);
+    })();
+  </script>
+</body>
+</html>

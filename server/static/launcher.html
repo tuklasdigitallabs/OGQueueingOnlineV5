@@ -1,0 +1,446 @@
+﻿<!-- Updated by Codex: launcher accessibility/UX pass -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Strict CSP: no inline JS -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QSys</title>
+
+    <style>
+      :root {
+        --primary: #e49424;
+        --accent: #590e0e;
+        --bg: #0b0f17;
+        --text: #e5e7eb;
+        --muted: rgba(229, 231, 235, 0.7);
+        --border: rgba(255, 255, 255, 0.08);
+
+        /* Single spacing token (uniform) */
+        --s: 16px;
+
+        /* Radius */
+        --r: 16px;
+        --r2: 12px;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        background: radial-gradient(1000px 700px at 15% 0%, rgba(228,148,36,.18), transparent 55%),
+                    radial-gradient(900px 600px at 90% 20%, rgba(89,14,14,.22), transparent 55%),
+                    var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      .app {
+        padding: calc(var(--s) * 1.5);
+        max-width: 980px;
+        margin: 0 auto;
+        opacity: 0;
+        transform: translateY(8px);
+        pointer-events: none;
+        transition: opacity 220ms ease, transform 220ms ease;
+      }
+
+      body.ready .app {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      .bootOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background:
+          radial-gradient(900px 500px at 20% 0%, rgba(228, 148, 36, 0.14), transparent 55%),
+          radial-gradient(900px 500px at 80% 10%, rgba(89, 14, 14, 0.2), transparent 55%),
+          #070a11;
+      }
+
+      body.ready .bootOverlay {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 220ms ease;
+      }
+
+      .bootCard {
+        width: min(680px, calc(100vw - 40px));
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 18px;
+        background: rgba(17, 24, 39, 0.9);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        display: grid;
+        gap: 12px;
+      }
+
+      .bootTitle {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 800;
+      }
+
+      .bootMeta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .bootPct {
+        color: var(--text);
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .bootBar {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+      }
+
+      .bootBarFill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--primary), #f3b45a);
+        border-radius: 999px;
+        transition: width 120ms linear;
+      }
+
+      .bootNow {
+        font-size: 12px;
+        color: rgba(229, 231, 235, 0.95);
+      }
+
+      .bootList {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(10, 14, 23, 0.85);
+        max-height: 170px;
+        overflow: auto;
+      }
+
+      .bootList li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 12px;
+      }
+
+      .bootList li:last-child {
+        border-bottom: 0;
+      }
+
+      .bootFile {
+        color: rgba(229, 231, 235, 0.94);
+      }
+
+      .bootState {
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      .bootState.ok {
+        color: #86efac;
+      }
+
+      .bootState.bad {
+        color: #fca5a5;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s);
+        margin-bottom: calc(var(--s) * 1.25);
+      }
+
+      @media (max-width: 700px) {
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      .brand {
+        display: grid;
+        gap: 6px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 22px;
+        letter-spacing: 0.2px;
+      }
+
+      .brand .sub {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(17, 24, 39, 0.75);
+        backdrop-filter: blur(10px);
+        font-size: 12px;
+        color: var(--muted);
+        max-width: 100%;
+        flex-wrap: wrap;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.25);
+        box-shadow: 0 0 0 4px rgba(255,255,255,.05);
+      }
+      .dot.ok { background: rgba(34,197,94,1); box-shadow: 0 0 0 4px rgba(34,197,94,.12); }
+      .dot.bad { background: rgba(239,68,68,1); box-shadow: 0 0 0 4px rgba(239,68,68,.12); }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s);
+        align-items: start;
+      }
+
+      @media (min-width: 860px) {
+        .grid { grid-template-columns: 1.1fr 0.9fr; }
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        background: rgba(17, 24, 39, 0.75);
+        backdrop-filter: blur(10px);
+        overflow: hidden;
+      }
+
+      .cardHeader {
+        padding: var(--s);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s);
+        background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+      }
+
+      .cardHeader h2 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+        color: rgba(229,231,235,.95);
+      }
+
+      .cardBody {
+        padding: var(--s);
+        display: grid;
+        gap: var(--s);
+      }
+
+      .kv {
+        display: grid;
+        gap: 8px;
+      }
+
+      .kvRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s);
+        padding: 12px;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.75);
+        border-radius: var(--r2);
+      }
+
+      .k { font-size: 12px; color: var(--muted); }
+      .v { font-size: 12px; color: rgba(229,231,235,.95); font-weight: 600; }
+
+      .actions {
+        display: grid;
+        gap: var(--s);
+      }
+
+      .btnRow {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s);
+      }
+      @media (min-width: 520px) {
+        .btnRow { grid-template-columns: 1fr 1fr; }
+      }
+
+      .btn {
+        width: 100%;
+        border: 0;
+        border-radius: 14px;
+        padding: 14px 14px;
+        font-size: 14px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: transform .05s ease, filter .15s ease;
+      }
+      .btn:active { transform: translateY(1px); }
+      .btn:hover { filter: brightness(1.05); }
+      .btn:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+
+      .btnPrimary { background: var(--primary); color: #111; }
+      .btnAccent  { background: var(--accent); color: #fff; }
+      .btnNeutral { background: rgba(43,43,43,.9); color: #fff; border: 1px solid var(--border); }
+      .btnGhost   { background: transparent; color: rgba(229,231,235,.92); border: 1px solid var(--border); }
+
+      .note {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .footer {
+        margin-top: calc(var(--s) * 1.25);
+        font-size: 11px;
+        color: rgba(229,231,235,.55);
+        display: flex;
+        justify-content: space-between;
+        gap: var(--s);
+        flex-wrap: wrap;
+      }
+
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    </style>
+  </head>
+
+  <body>
+    <div class="bootOverlay" id="bootOverlay" role="status" aria-live="polite" aria-atomic="true">
+      <section class="bootCard" aria-label="Launcher startup">
+        <h2 class="bootTitle">Starting QSys Launcher</h2>
+        <div class="bootMeta">
+          <span id="bootSummary">Preparing startup checks...</span>
+          <span class="bootPct" id="bootPct">0%</span>
+        </div>
+        <div class="bootBar" aria-hidden="true">
+          <div class="bootBarFill" id="bootBarFill"></div>
+        </div>
+        <div class="bootNow" id="bootNow">Waiting...</div>
+        <ul class="bootList" id="bootList"></ul>
+      </section>
+    </div>
+
+    <main class="app">
+      <header class="topbar">
+        <div class="brand">
+          <h1>QSys Control Center</h1>
+          <p class="sub">Local server + launcher (offline)</p>
+        </div>
+
+        <div class="pill" title="Live server health" role="status" aria-live="polite" aria-atomic="true">
+          <span id="healthDot" class="dot"></span>
+          <span id="healthText">Checking server...</span>
+          <span class="mono" id="baseUrl"></span>
+        </div>
+      </header>
+
+      <div class="grid">
+        <!-- Left: Actions -->
+        <section class="card" aria-labelledby="quickActionsHeading">
+          <div class="cardHeader">
+            <h2 id="quickActionsHeading">Quick Actions</h2>
+          </div>
+          <div class="cardBody actions">
+            <div class="btnRow">
+              <button type="button" class="btn btnPrimary" id="btnStaff">Staff Login</button>
+              <button type="button" class="btn btnAccent" id="btnAdmin">Admin Login</button>
+            </div>
+
+            <div class="btnRow">
+              <button type="button" class="btn btnPrimary" id="btnGuest">Guest App</button>
+              <button type="button" class="btn btnNeutral" id="btnDisplay">Open Display</button>
+            </div>
+
+            <div class="btnRow">
+              <button type="button" class="btn btnGhost" id="btnRefresh">Refresh Status</button>
+            </div>
+
+            <div class="note">
+              Staff/Admin/Guest opens in your default browser. Display opens in kiosk window.
+            </div>
+          </div>
+        </section>
+
+        <!-- Right: Status -->
+        <section class="card" aria-labelledby="statusHeading">
+          <div class="cardHeader">
+            <h2 id="statusHeading">Status</h2>
+          </div>
+          <div class="cardBody">
+            <div class="kv">
+              <div class="kvRow">
+                <div class="k">Server</div>
+                <div class="v" id="serverStatus" aria-live="polite">-</div>
+              </div>
+
+              <div class="kvRow">
+                <div class="k">Branch Code</div>
+                <div class="v mono" id="branchCode">-</div>
+              </div>
+
+              <div class="kvRow">
+                <div class="k">Business Date</div>
+                <div class="v" id="businessDate">-</div>
+              </div>
+
+              <div class="kvRow">
+                <div class="k">Local Time</div>
+                <div class="v" id="localTime">-</div>
+              </div>
+            </div>
+
+            <div class="note">
+              Status updates automatically while this launcher is open.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="footer">
+        <div>(c) QSys Local</div>
+      </div>
+    </main>
+
+    <!-- External JS (CSP-compliant) -->
+    <script src="/static/js/launcher.js" defer></script>
+  </body>
+</html>
+

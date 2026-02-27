@@ -1,0 +1,374 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Guest</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root{
+        /* spacing token */
+        --sp: 12px;
+
+        /* brand palette */
+        --primary:#e49424;
+        --secondary:#ec9c34;
+        --brand:#590e0e;
+        --priority:#22c55e;
+
+        /* dark UI */
+        --bg:#1a0f0f;
+        --panel:#2b1414;
+        --card:#3b1c1c;
+        --line:rgba(255,255,255,.10);
+        --text:#ffffff;
+        --muted:rgba(255,255,255,.75);
+        --muted2:rgba(255,255,255,.55);
+
+        --shadow: 0 20px 50px rgba(0,0,0,.45);
+        --radius: 18px;
+      }
+
+      *{ box-sizing:border-box; }
+      html, body{ height:100%; }
+      body{
+        margin:0;
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+        background:
+          radial-gradient(1200px 700px at 20% -20%, rgba(228,148,36,.14), transparent 60%),
+          radial-gradient(900px 650px at 110% 10%, rgba(34,197,94,.10), transparent 55%),
+          linear-gradient(180deg, #1a0f0f 0%, #2b1414 100%);
+        color:var(--text);
+        overflow-x:hidden;
+      }
+
+      .page{
+        min-height:100%;
+        display:flex;
+        align-items:flex-start;
+        justify-content:center;
+        padding: calc(var(--sp) * 1.5) var(--sp) calc(var(--sp) * 2.5);
+      }
+
+      .shell{ width: min(560px, 100%); }
+
+      .topbar{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap: var(--sp);
+        margin-bottom: var(--sp);
+      }
+
+      .brandWrap{
+        display:flex;
+        flex-direction:column;
+        gap: calc(var(--sp) * 0.35);
+      }
+
+      h1{
+        margin:0;
+        font-size: 26px;
+        letter-spacing:.2px;
+        font-weight: 900;
+      }
+
+      .sub{
+        margin:0;
+        color:var(--muted);
+        font-size: 13.5px;
+      }
+
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap: calc(var(--sp) * 0.6);
+        padding: calc(var(--sp) * 0.65) calc(var(--sp) * 0.85);
+        border-radius: 999px;
+        border:1px solid var(--line);
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+      .dot{
+        width:8px;height:8px;border-radius:999px;
+        background: var(--priority);
+        box-shadow: 0 0 0 4px rgba(34,197,94,.14);
+      }
+
+      .card{
+        background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+        border:1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow:hidden;
+      }
+
+      .cardHead{
+        padding: calc(var(--sp) * 1.15) calc(var(--sp) * 1.35);
+        border-bottom:1px solid rgba(255,255,255,.08);
+        background: linear-gradient(90deg, #590e0e, #3b1c1c);
+      }
+      .cardHeadTitle{
+        margin:0;
+        font-weight: 900;
+        letter-spacing:.2px;
+        font-size: 14px;
+        color: rgba(255,255,255,.92);
+      }
+      .cardHeadHint{
+        margin: calc(var(--sp) * 0.55) 0 0;
+        font-size: 12.5px;
+        color: var(--muted2);
+        line-height: 1.35;
+      }
+
+      form{
+        padding: calc(var(--sp) * 1.35);
+        display:flex;
+        flex-direction:column;
+        gap: var(--sp);
+      }
+
+      .field{
+        display:flex;
+        flex-direction:column;
+        gap: calc(var(--sp) * 0.5);
+      }
+
+      label{
+        font-size: 13px;
+        font-weight: 800;
+        color: rgba(255,255,255,.86);
+        letter-spacing: .2px;
+      }
+
+      input, select{
+        width:100%;
+        padding: calc(var(--sp) * 1.0) calc(var(--sp) * 1.0);
+        border-radius: 14px;
+        border:1px solid rgba(255,255,255,.14);
+        background: rgba(10,6,6,.55);
+        color: var(--text);
+        font-size: 16px;
+        outline: none;
+      }
+
+      input::placeholder{ color: rgba(255,255,255,.40); }
+
+      input:focus, select:focus{
+        border-color: rgba(228,148,36,.65);
+        box-shadow: 0 0 0 4px rgba(228,148,36,.14);
+      }
+
+      .row2{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--sp);
+      }
+
+      .help{
+        margin-top: calc(var(--sp) * -0.2);
+        font-size: 12px;
+        color: var(--muted2);
+        line-height: 1.35;
+      }
+
+      .btn{
+        margin-top: calc(var(--sp) * 0.4);
+        width:100%;
+        padding: calc(var(--sp) * 1.15) calc(var(--sp) * 1.15);
+        border-radius: 14px;
+        border:none;
+        background: linear-gradient(180deg, var(--primary), var(--secondary));
+        color:#140909;
+        font-weight: 900;
+        font-size: 17px;
+        cursor: pointer;
+        transition: transform .05s ease, opacity .15s ease, filter .15s ease;
+      }
+      .btn:hover{ opacity:.92; }
+      .btn:active{ transform: translateY(1px); }
+      .btn:disabled{ opacity:.55; cursor:not-allowed; }
+
+      .msgCard{
+        margin-top: var(--sp);
+        padding: calc(var(--sp) * 1.15) calc(var(--sp) * 1.35);
+        border-radius: var(--radius);
+        border: 1px solid rgba(255,255,255,.10);
+        background: rgba(0,0,0,.18);
+      }
+
+      .msgCard.err{
+        border-color: rgba(239,68,68,.35);
+        background: rgba(239,68,68,.10);
+      }
+
+      .msgTitle{
+        margin:0 0 calc(var(--sp) * 0.45);
+        font-weight: 900;
+        letter-spacing:.2px;
+        font-size: 13.5px;
+      }
+
+      .msgBody{
+        margin:0;
+        color: rgba(255,255,255,.82);
+        font-size: 13.5px;
+        line-height: 1.35;
+      }
+
+      @media (max-width: 520px){
+        .row2{ grid-template-columns: 1fr; }
+        h1{ font-size: 24px; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <div class="shell">
+        <div class="topbar">
+          <div class="brandWrap">
+            <h1>Get a Queue Number</h1>
+            <p class="sub">Offline mode (local store Wi-Fi)</p>
+          </div>
+          <div class="badge" title="Connected to local store network">
+            <span class="dot"></span>
+            Local
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardHead">
+            <p class="cardHeadTitle">Guest Registration</p>
+            <p class="cardHeadHint">
+              Enter your name and party size. Select Priority only if applicable (Senior Citizen / PWD / Pregnant).
+            </p>
+          </div>
+
+          <form id="f" autocomplete="on">
+            <div class="field">
+              <label for="name">Name</label>
+              <input id="name" required placeholder="Your name" inputmode="text" />
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label for="pax">Pax</label>
+                <input id="pax" type="number" min="1" max="50" value="2" required inputmode="numeric" />
+                <div class="help">Example: 2 for two guests.</div>
+              </div>
+
+              <div class="field">
+                <label for="priorityType">Priority</label>
+                <select id="priorityType">
+                  <option value="NONE">None</option>
+                  <option value="SENIOR">Senior Citizen</option>
+                  <option value="PWD">PWD</option>
+                  <option value="PREGNANT">Pregnant</option>
+                </select>
+              </div>
+            </div>
+
+            <button id="btnSubmit" class="btn" type="submit">Get Number</button>
+          </form>
+        </div>
+
+        <!-- (Kept for compatibility, though you redirect to ticket.html) -->
+        <div id="result" class="msgCard" style="display:none;">
+          <p class="msgTitle">Your Ticket</p>
+          <p class="msgBody"><span id="code" style="font-weight:900;font-size:28px;"></span></p>
+          <p class="msgBody" id="meta"></p>
+        </div>
+
+        <div id="err" class="msgCard err" style="display:none;"></div>
+      </div>
+    </div>
+
+    <script>
+      const f = document.getElementById("f");
+      const nameEl = document.getElementById("name");
+      const paxEl = document.getElementById("pax");
+      const prioEl = document.getElementById("priorityType");
+      const result = document.getElementById("result");
+      const code = document.getElementById("code");
+      const meta = document.getElementById("meta");
+      const err = document.getElementById("err");
+      const btnSubmit = document.getElementById("btnSubmit");
+
+      function showErr(msg) {
+        err.style.display = "block";
+        err.textContent = msg;
+      }
+      function clearErr() {
+        err.style.display = "none";
+        err.textContent = "";
+      }
+
+      function pad2(n){
+        const v = Number(n);
+        if (!Number.isFinite(v)) return "";
+        return String(v).padStart(2, "0");
+      }
+
+      function bucketFromPax(pax){
+        const p = Number(pax);
+        if (Number.isFinite(p) && p > 0){
+          if (p <= 1) return "A";
+          if (p <= 3) return "B";
+          if (p <= 5) return "C";
+          return "D";
+        }
+        return "B";
+      }
+
+      // Unified ticket label (used on any guest-side confirmation that shows the code)
+      function ticketLabel(groupCode, pax, queueNum){
+        const qn = pad2(queueNum);
+        const g = String(groupCode || "").toUpperCase();
+        if (g === "P") return `P${bucketFromPax(pax)}-${qn}`;
+        return `${g}-${qn}`;
+      }
+
+      f.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        clearErr();
+
+        const payload = {
+          name: nameEl.value.trim(),
+          pax: Number(paxEl.value || 1),
+          priorityType: prioEl.value
+        };
+
+        if (!payload.name) return showErr("Please enter your name.");
+        if (!payload.pax || payload.pax < 1) return showErr("Please enter a valid pax (minimum 1).");
+
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Submitting…";
+
+        try {
+          const r = await fetch("/api/queue/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const j = await r.json();
+          if (!j.ok) {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Get Number";
+            return showErr(j.error || "Failed.");
+          }
+
+          window.location.href = "/static/ticket.html?id=" + encodeURIComponent(j.id);
+
+        } catch (e2) {
+          showErr("Network error. Please try again.");
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = "Get Number";
+        }
+      });
+    </script>
+  </body>
+</html>

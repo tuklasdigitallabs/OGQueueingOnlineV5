@@ -1,0 +1,4197 @@
+﻿<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+  :root{
+    /* Parchment / rice-paper base */
+    --bg:#f3eadc;
+    --panel:#faf6ee;
+    --panel2:#f0e6d6;
+    --card:#fbf7f0;
+
+    --line:rgba(0,0,0,.08);
+    --text:#1f2933;
+    --muted:rgba(31,41,51,.62);
+    --muted2:rgba(31,41,51,.45);
+
+    /* Yakiniku Like accent */
+    --brand-red:#e10600;
+    --accent:var(--brand-red);
+
+    --good:#16a34a;
+    --bad:#dc2626;
+    --warn:#f59e0b;
+
+    --shadow: 0 10px 26px rgba(0,0,0,.10);
+    --radius:18px;
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+margin:0;
+    min-height:100vh;
+    font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--text);
+    background: var(--bg);
+    background-image: radial-gradient(900px 600px at 18% 12%, rgba(225,6,0,.05), transparent 55%);
+    background-attachment: fixed;
+    overflow:hidden;
+  }
+
+  /* Layout */
+  .layout{
+    display:grid;
+    grid-template-columns: 280px 1fr;
+    min-height:100vh;
+  }
+
+  /* Sidebar (match Staff panel feel) */
+  .sidebar{
+    padding:18px 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(245,247,251,.92));
+    border-right: 1px solid var(--line);
+    box-shadow: inset -1px 0 0 rgba(255,255,255,.03);
+  }
+
+  .brand{
+    font-weight: 900;
+    letter-spacing:.4px;
+    font-size: 18px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom: 10px;
+  }
+  .brand::before{
+    content:"";
+    width:10px;height:10px;
+    border-radius:999px;
+    background: var(--good);
+    box-shadow: 0 0 0 4px rgba(34,197,94,.10);
+    flex:0 0 auto;
+  }
+
+  .sub{
+    color:var(--muted);
+    font-size: 12px;
+    line-height:1.35;
+    white-space: pre-line;
+    padding: 10px 12px;
+    border:1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.78);
+    margin-bottom: 14px;
+  }
+
+  .nav{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-top: 4px;
+  }
+
+  .nav button{
+    width:100%;
+    text-align:left;
+    padding: 12px 12px;
+    border-radius: 14px;
+    border:1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    color: var(--text);
+    cursor:pointer;
+    font-weight: 800;
+    transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  }
+  .nav button:hover{
+    background: rgba(60,40,20,.06);
+    transform: translateY(-1px);
+  }
+  .nav button.active{
+    border-color: rgba(225,6,0,.55);
+    background: rgba(225,6,0,.08);
+    box-shadow: 0 10px 24px rgba(0,0,0,.25);
+  }
+
+  /* Content */
+  .content{
+    height:100vh;
+    overflow:auto;
+    padding: 18px 18px 30px;
+  }
+
+  /* Topbar styled like a Staff card header */
+  .topbar{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding: 12px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,.82);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(8px);
+  }
+
+  .crumb{
+    display:flex;
+    flex-direction:column;
+    gap: 3px;
+    min-width: 220px;
+  }
+  .crumb h1{
+    margin:0;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing:.2px;
+  }
+  .crumb .meta{
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .actions{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items:center;
+    justify-content:flex-end;
+  }
+
+  /* Buttons */
+  .btn{
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    color: var(--text);
+    cursor:pointer;
+    font-weight: 900;
+    transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  }
+  .btn:hover{
+    background: rgba(60,40,20,.08);
+    transform: translateY(-1px);
+  }
+  .btn:active{ transform: translateY(0px); }
+
+  .btn.primary{
+    border-color: rgba(225,6,0,.55);
+    background: rgba(225,6,0,.10);
+  }
+  .btn.danger{
+    border-color: rgba(239,68,68,.55);
+    background: rgba(239,68,68,.12);
+  }
+  .btn.small{
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  /* Grid + cards */
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px;
+  }
+
+  .card{
+    background: rgba(255,255,255,.85);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    min-height: 60px;
+    box-shadow: 0 14px 34px rgba(60,40,20,.10);
+  }
+  .card h3{
+    margin:0 0 10px 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--text);
+    letter-spacing:.2px;
+  }
+
+  .kpi{
+    font-size: 28px;
+    font-weight: 950;
+    margin-top: 2px;
+    letter-spacing:.2px;
+  }
+
+  .row{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items:center;
+  }
+
+  .pill{
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    font-weight: 900;
+    font-size: 12px;
+    color: rgba(60,40,20,.82);
+  }
+  .pill.ok{ border-color: rgba(34,197,94,.45); }
+  .pill.warn{ border-color: rgba(245,158,11,.55); }
+  .pill.bad{ border-color: rgba(239,68,68,.55); }
+
+  .setup-pills{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom: 12px;
+  }
+  .setup-pill-btn{
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    color: rgba(60,40,20,.82);
+    font-weight: 900;
+    font-size: 12px;
+    cursor:pointer;
+    transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  }
+  .setup-pill-btn:hover{
+    background: rgba(60,40,20,.08);
+    transform: translateY(-1px);
+  }
+  .setup-pill-btn.active{
+    border-color: rgba(225,6,0,.55);
+    background: rgba(225,6,0,.10);
+    color: var(--text);
+  }
+  .setup-pane{ margin-top: 8px; }
+  .qr-setup-shell{
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,.70), rgba(255,255,255,.45));
+    padding: 14px;
+  }
+  .qr-setup-top{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .qr-setup-kicker{
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .45px;
+    color: rgba(60,40,20,.62);
+  }
+  .qr-setup-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .qr-setup-global-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin: 0 0 14px 0;
+  }
+  .qr-card{
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255,255,255,.62);
+    padding: 14px;
+  }
+  .qr-card h3{
+    margin: 0;
+    font-size: 15px;
+  }
+  .qr-card-sub{
+    margin-top: 6px;
+    color: var(--muted2);
+    font-size: 12px;
+  }
+  .qr-form{
+    margin-top: 12px;
+    display:grid;
+    gap: 10px;
+  }
+  .qr-form-row{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .qr-radio-group{
+    display:flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .qr-radio-chip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: rgba(60,40,20,.03);
+    font-weight: 800;
+    font-size: 13px;
+  }
+  .qr-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+  }
+  .qr-preview{
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.78);
+    padding: 14px;
+  }
+  .qr-preview-box{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding: 8px;
+  }
+  .qr-preview img{
+    width: 320px;
+    height: 320px;
+    max-width: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border-radius: 12px;
+    border:1px solid var(--line);
+    background:#fff;
+  }
+  .qr-note{
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted2);
+  }
+
+  .seedLoader{
+    display:none;
+    align-items:center;
+    gap:10px;
+    margin-top:10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .seedLoader.show{ display:flex; }
+  .seedSpinner{
+    width:14px;
+    height:14px;
+    border:2px solid rgba(31,41,51,.20);
+    border-top-color: var(--brand-red);
+    border-radius:50%;
+    animation: seedSpin .8s linear infinite;
+  }
+  @keyframes seedSpin { to { transform: rotate(360deg); } }
+
+  .muted{ color: var(--muted); }
+  .muted2{ color: var(--muted2); }
+
+  /* Tables - make it feel like Staff list rows */
+  table{ width:100%; border-collapse: collapse; }
+  th, td{
+    padding: 11px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    text-align:left;
+    font-size: 13px;
+  }
+  thead th{
+    position: sticky;
+    top: 0;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(8px);
+    z-index: 2;
+  }
+  th{ color: rgba(60,40,20,.88); font-weight: 950; }
+  td{ color: rgba(60,40,20,.86); }
+
+  tbody tr:hover td{
+    background: rgba(225,6,0,.04);
+  }
+
+  tr.dailyDateBreak td{
+    background: rgba(60,40,20,.06);
+    font-weight: 900;
+    color: rgba(60,40,20,.92);
+    border-top: 2px solid var(--line);
+  }
+  tr.dailyDateAlt td{
+    background: rgba(60,40,20,.025);
+  }
+  td.num{
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+/* Group header row */
+tr.group-header td{
+  font-weight: 900;
+  background: rgba(60,40,20,.04);
+  border-top: 1px solid var(--line);
+}
+
+/* Sub rows */
+tr.subrow td{
+  font-size: 12px;
+  color: var(--muted);
+}
+tr.subrow td:first-child{ padding-left: 22px; }
+
+/* Priority accent */
+tr.subrow.prio td{
+  background: rgba(34,197,94,.08); /* subtle green wash */
+}
+
+/* Collapse helper */
+tr.is-collapsed + tr.subrow,
+tr.is-collapsed + tr.subrow + tr.subrow{
+  display: none;
+}
+
+/* Toggle + badge */
+.groupCell{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.groupLeft{
+  display:flex;
+  flex-direction:column;
+  gap: 2px;
+}
+.groupMeta{
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.toggleBtn{
+  border: 1px solid var(--line);
+  background: rgba(60,40,20,.04);
+  border-radius: 12px;
+  font-weight: 950;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.toggleBtn:hover{ background: rgba(60,40,20,.08); }
+
+
+  /* Inputs */
+  input, select, textarea{
+    width:100%;
+    padding: 10px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    color: var(--text);
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus{
+    border-color: rgba(225,6,0,.45);
+    box-shadow: 0 0 0 3px rgba(225,6,0,.12);
+  }
+  textarea{ min-height: 90px; resize: vertical; }
+
+  .two{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .three{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .hidden{ display:none; }
+
+  /* toast */
+  #toastWrap{
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    display: grid;
+    gap: 10px;
+    z-index: 9999;
+  }
+  .toast{
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.92);
+    box-shadow: 0 10px 28px rgba(60,40,20,.14);
+    max-width: 420px;
+    color: rgba(60,40,20,.90);
+    font-size: 13px;
+    backdrop-filter: blur(8px);
+  }
+  .toast b{ display:block; margin-bottom: 2px; }
+  .toast.ok{ border-color: rgba(34,197,94,.55); }
+  .toast.err{ border-color: rgba(239,68,68,.55); }
+  .toast.warn{ border-color: rgba(245,158,11,.60); }
+
+  .help{
+    font-size: 12px;
+    color: var(--muted2);
+    margin-top: 8px;
+    line-height: 1.35;
+  }
+
+  /* Hamburger (mobile) */
+  .hamburger{
+    display:none;
+    align-items:center;
+    justify-content:center;
+    width:44px;
+    height:44px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    cursor:pointer;
+    font-weight: 950;
+    flex: 0 0 auto;
+  }
+  .hamburger:active{ transform: translateY(1px); }
+  .hamburger svg{ width:20px; height:20px; }
+
+  /* Responsive */
+  @media (max-width: 980px){
+    .layout{ grid-template-columns: 1fr; grid-template-rows: 1fr; }
+    .hamburger{ display:flex; }
+    .sidebar{
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: min(86vw, 340px);
+      z-index: 90;
+      transform: translateX(-102%);
+      transition: transform .18s ease;
+      border-right: 1px solid var(--line);
+      border-bottom: none;
+    }
+    body.drawerOpen .sidebar{ transform: translateX(0); }
+    body.drawerOpen .drawerOverlay{ display:block; }
+    .two, .three{ grid-template-columns: 1fr; }
+    .qr-setup-grid, .qr-form-row{ grid-template-columns: 1fr; }
+    .qr-setup-global-actions .btn{ width: 100%; }
+}
+
+  
+
+  /* Drawer overlay */
+  .drawerOverlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.30);
+    z-index: 80;
+    display:none;
+  }
+</style>
+  </head>
+
+  <body>
+    <div class="drawerOverlay" id="drawerOverlay" aria-hidden="true"></div>
+    <div class="layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">QSys Local - Admin</div>
+        <div class="sub" id="sideMeta">Loading...</div>
+
+        <div class="nav">
+          <button class="active" data-page="dashboard">Dashboard</button>
+          <button data-page="setup">Setup</button>
+          <button data-page="users">Users</button>
+          <button data-page="permissions">Permissions</button>
+          <button data-page="reports">Reports</button>
+          <button data-page="audit">Audit Logs</button>
+          <button data-page="upload">Upload / Sync</button>
+          <button data-page="system">System</button>
+          <button class="danger" id="btnLogout">Logout</button>
+        </div>
+      </aside>
+
+      <main class="content" id="content">
+        <div class="topbar">
+
+          <button class="hamburger" id="btnHamburger" type="button" aria-label="Open menu" title="Menu">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+          <div class="crumb">
+            <h1 id="pageTitle">LIVE OPS OVERVIEW</h1>
+            <div class="meta" id="topMeta">-</div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="btnRefresh">Refresh</button>
+          </div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <section id="page-dashboard">
+          <div class="grid">
+            <div class="card" style="grid-column: span 3;">
+              <h3>Registered (Today)</h3>
+              <div class="kpi" id="kpiRegistered">-</div>
+              <div class="muted2">Total created tickets</div>
+            </div>
+            <div class="card" style="grid-column: span 3;">
+              <h3>Seated (Today)</h3>
+              <div class="kpi" id="kpiSeated">-</div>
+              <div class="muted2">Status = SEATED</div>
+            </div>
+            <div class="card" style="grid-column: span 3;">
+              <h3>Skipped (Today)</h3>
+              <div class="kpi" id="kpiSkipped">-</div>
+              <div class="muted2">Status = SKIPPED</div>
+            </div>
+            <div class="card" style="grid-column: span 3;">
+              <h3>Waiting Now</h3>
+              <div class="kpi" id="kpiWaiting">-</div>
+              <div class="muted2">Status = WAITING + CALLED</div>
+            </div>
+
+            <div class="card" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between;">
+                <div>
+                  <h3 style="margin-bottom:6px;">Per Group</h3>                  
+                </div>
+                <div class="row">
+                  <span class="pill ok" id="pillOnline">Network: -</span>
+                  <span class="pill" id="pillBizDate">Business Date: -</span>
+                </div>
+              </div>
+
+              <div style="margin-top:10px; overflow:auto;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Group</th>
+                      <th>Waiting</th>
+                      <th>Called</th>
+                      <th>Seated</th>
+                      <th>Skipped</th>
+                      <th>Avg Wait (2h)</th>
+                      <th>Overrides</th>
+                    </tr>
+                  </thead>
+                  <tbody id="groupTable">
+                    <tr><td colspan="7" class="muted">Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>          
+        </section>
+
+        <!-- SETUP -->
+        <section id="page-setup" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <div class="setup-pills" id="setupPills">
+                <button type="button" class="setup-pill-btn active" data-setup-pane="branch">Branch Setup</button>
+                <button type="button" class="setup-pill-btn" data-setup-pane="display">Display Setup</button>
+                <button type="button" class="setup-pill-btn" data-setup-pane="auth">Authentications</button>
+                <button type="button" class="setup-pill-btn" data-setup-pane="qr">QR Setup</button>
+              </div>
+
+              <div class="setup-pane" id="setup-pane-branch">
+                <div class="two">
+                  <div>
+                    <label class="muted2">Branch Name</label>
+                    <input id="branchName" placeholder="e.g., Yakiniku Like - MOA" />
+                  </div>
+                  <div>
+                    <label class="muted2">Branch Code (read-only)</label>
+                    <input id="branchCode" placeholder="e.g., MOA" disabled />
+                    <div class="help">
+                      Branch Code is tied to ticket partitioning. Changing it can "lose" tickets (they remain in DB under the old code).
+                    </div>
+                    <div class="row" style="margin-top:10px;">
+                      <button class="btn small danger" id="btnUnlockBranchCode">Change Branch Code (Admin Only)</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="two" style="margin-top:10px;">
+                  <div>
+                    <label class="muted2">Timezone</label>
+                    <input id="timezone" value="Asia/Manila" />
+                  </div>
+                  <div>
+                    <label class="muted2">Max Pax</label>
+                    <input id="maxPax" type="number" value="50" />
+                  </div>
+                </div>
+
+                <div class="two" style="margin-top:10px;">
+                  <div>
+                    <label class="muted2">Auto Close Day (Midnight Manila)</label>
+                    <select id="autoCloseDay">
+                      <option value="true">ON</option>
+                      <option value="false">OFF</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="muted2">Allow Override Call (global)</label>
+                    <select id="allowOverride">
+                      <option value="true">ON</option>
+                      <option value="false">OFF</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setup-pane hidden" id="setup-pane-display">
+                <div class="two" style="margin-top:10px;">
+                  <div>
+                    <label>Display Mode (Kiosk)</label>
+                    <select id="displayShowVideo">
+                      <option value="false">Queue Only (No Video)</option>
+                      <option value="true">Video Mode</option>
+                    </select>
+                    <div class="muted2" style="margin-top:6px;">
+                      Video Mode shows the video section and hides the 6-grid queue layout.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label>Display Orientation</label>
+                    <select id="displayOrientation">
+                      <option value="landscape">Landscape</option>
+                      <option value="portrait">Portrait</option>
+                    </select>
+                    <div class="muted2" style="margin-top:6px;">
+                      Affects the queue grid layout (Queue Only mode).
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
+                  <label>Display Pairing (One-time Code)</label>
+                  <div class="row" style="margin-top:8px; gap:10px; align-items:center;">
+                    <button class="btn" id="btnGenerateDisplayPairCode">Generate Pair Code</button>
+                    <button class="btn danger" id="btnRevokeAllDisplayPairing">Revoke Pairing</button>
+                    <span id="displayPairCodeValue" class="pill">No active code</span>
+                    <span id="displayPairCodeExpiry" class="muted2"></span>
+                  </div>
+                  <div class="help" style="margin-top:6px;">
+                    Open <b>/display</b> on the TV screen, enter this one-time code, then it stays paired.
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <label>Media Source Folder (Videos)</label>
+                  <input id="mediaSourceDir" disabled placeholder="Bundled videos (default)" />
+
+                  <div class="row" style="margin-top:8px; gap:10px;">
+                    <button class="btn" id="btnPickMediaFolder">Choose Folder...</button>
+                    <button class="btn" id="btnClearMediaFolder">Use Bundled</button>
+                  </div>
+
+                  <div class="muted2" style="margin-top:6px;">
+                    If empty, the display uses bundled videos under <b>/static/media</b>.
+                    If set, the display plays videos from the selected folder.
+                  </div>
+                </div>
+              </div>
+
+              <div class="setup-pane hidden" id="setup-pane-auth">
+                <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
+                  <label>Google Drive Folder ID (Reports Upload)</label>
+                  <input id="gdriveFolderId" placeholder="e.g. 1AbCdEfGhIjKlMnOpQrStUvWxYz" />
+                  <div class="help">Copy from Drive URL: https://drive.google.com/drive/folders/&lt;FOLDER_ID&gt;</div>
+                </div>
+
+                <div style="margin-top:8px;">
+                  <label>Google Drive Auth Mode</label>
+                  <select id="gdriveAuthMode">
+                    <option value="oauth">OAuth (Recommended)</option>
+                    <option value="service_account">Service Account</option>
+                  </select>
+                  <div class="help">OAuth works with regular My Drive folders. Service account usually requires Shared Drive.</div>
+                </div>
+
+                <div id="gdriveOAuthWrap" style="margin-top:8px;">
+                  <label>OAuth Client JSON File</label>
+                  <input id="gdriveOauthClientFile" disabled placeholder="Not selected" />
+                  <div class="row" style="margin-top:8px; gap:10px;">
+                    <button class="btn" id="btnPickGdriveOAuthClient">Choose OAuth JSON...</button>
+                    <button class="btn" id="btnClearGdriveOAuthClient">Clear OAuth JSON</button>
+                  </div>
+                  <label>OAuth Client ID</label>
+                  <input id="gdriveOauthClientId" placeholder="Google OAuth Client ID" />
+                  <label style="margin-top:8px;">OAuth Client Secret</label>
+                  <div class="row" style="gap:8px; align-items:center;">
+                    <input id="gdriveOauthClientSecret" type="password" placeholder="Google OAuth Client Secret" style="flex:1;" />
+                    <button class="btn small" type="button" id="btnToggleOauthSecret">Show</button>
+                  </div>
+                  <label style="margin-top:8px;">OAuth Redirect URI</label>
+                  <input id="gdriveOauthRedirectUri" placeholder="http://127.0.0.1:3000/api/admin/gdrive/oauth/callback" />
+                  <label style="margin-top:8px;">OAuth Refresh Token</label>
+                  <input id="gdriveOauthRefreshToken" disabled placeholder="Not connected yet" />
+                  <div class="row" style="margin-top:8px; gap:10px;">
+                    <button class="btn" id="btnStartGdriveOAuth">Connect OAuth...</button>
+                    <button class="btn" id="btnClearGdriveOAuth">Clear OAuth Token</button>
+                    <button class="btn" id="btnTestGdriveSyncOauth">Test Connection</button>
+                  </div>
+                </div>
+
+                <div style="margin-top:8px;">
+                  <label>Google Service Account JSON File</label>
+                  <input id="gdriveServiceAccountFile" disabled placeholder="Not selected" />
+                  <div class="row" style="margin-top:8px; gap:10px;">
+                    <button class="btn" id="btnPickGdriveServiceAccount">Choose JSON File...</button>
+                    <button class="btn" id="btnClearGdriveServiceAccount">Clear</button>
+                    <button class="btn" id="btnTestGdriveSync">Test Connection</button>
+                  </div>
+                  <div class="help" id="gdriveSetupStatus" style="margin-top:6px;">Status: Not tested.</div>
+                  <div class="help" id="gdriveLastUploadSummary" style="margin-top:6px;">Last successful upload: -</div>
+                  <div class="row" style="margin-top:6px;">
+                    <button class="btn small" id="btnRefreshGdriveSummary">Refresh Upload Summary</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setup-pane hidden" id="setup-pane-qr">
+                <div class="qr-setup-shell">
+                  <div class="qr-setup-top">
+                    <div class="qr-setup-kicker">Wi-Fi + Queue QR Configuration</div>
+                  </div>
+                  <div class="qr-setup-global-actions">
+                    <button class="btn" id="btnDownloadWifiQr">Download Wi-Fi QR</button>
+                    <button class="btn" id="btnDownloadQueueQr">Download Queue QR</button>
+                    <button class="btn" id="btnPrintQrPair">Print (Wi-Fi + Queue)</button>
+                  </div>
+
+                  <div class="qr-setup-grid">
+                    <section class="qr-card">
+                      <h3>Wi-Fi QR</h3>
+                      <div class="qr-card-sub">Configure guest Wi-Fi payload and generate a scannable QR.</div>
+
+                      <div class="qr-form">
+                        <div class="qr-form-row">
+                          <div>
+                            <label class="muted2">Security</label>
+                            <select id="wifiSec">
+                              <option value="WPA">WPA/WPA2/WPA3</option>
+                              <option value="WEP">WEP</option>
+                              <option value="nopass">Open (No password)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label class="muted2">Hidden SSID</label>
+                            <div class="qr-radio-group">
+                              <label class="qr-radio-chip"><input type="radio" name="wifiHidden" id="wifiHiddenNo" value="false" checked />No</label>
+                              <label class="qr-radio-chip"><input type="radio" name="wifiHidden" id="wifiHiddenYes" value="true" />Yes</label>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="qr-form-row">
+                          <div>
+                            <label class="muted2">SSID (Network Name)</label>
+                            <input id="wifiSsid" placeholder="e.g. Restaurant_WiFi" />
+                          </div>
+                          <div>
+                            <label class="muted2">Password</label>
+                            <input id="wifiPass" placeholder="e.g. password123" />
+                          </div>
+                        </div>
+
+                        <div class="qr-actions">
+                          <button class="btn primary" id="btnSaveWifi">Save Wi-Fi Settings</button>
+                        </div>
+
+                        <div>
+                          <label class="muted2">Wi-Fi QR Source</label>
+                          <input id="wifiQrUrlText" disabled />
+                        </div>
+                      </div>
+
+                      <div class="qr-preview">
+                        <div class="qr-preview-box">
+                          <img id="wifiQrPreview" alt="Wi-Fi QR" />
+                        </div>
+                        <div class="qr-note" id="wifiQrHint">Loading Wi-Fi QR...</div>
+                      </div>
+                    </section>
+
+                    <section class="qr-card">
+                      <h3>Queue QR</h3>
+                      <div class="qr-card-sub">Use this QR to open the guest queue page on the local network.</div>
+
+                      <div class="qr-form">
+                        <div>
+                          <label class="muted2">Queue QR Source</label>
+                          <input id="queueQrUrlText" disabled />
+                          <div class="qr-note">
+                            If the LAN IP changes, regenerate and reprint the queue QR unless using static IP.
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="qr-preview">
+                        <div class="qr-preview-box">
+                          <img id="queueQrPreview" alt="Queue QR" />
+                        </div>
+                        <div class="qr-note" id="queueQrHint">Loading Queue QR...</div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+
+              <div id="setupSaveRow" style="margin-top:12px;">
+                <button class="btn primary" id="btnSaveSetup">Save Setup</button>
+              </div>
+
+              <!-- QR Preview + Actions -->
+            </div>
+          </div>
+        </section>
+
+
+        <!-- USERS -->
+        <section id="page-users" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 7;">
+              <div class="row" style="justify-content: space-between; align-items:center;">
+                <h3 style="margin:0;">Users</h3>
+                <button class="btn small" id="btnReloadUsers">Reload</button>
+              </div>
+
+              <div style="overflow:auto; margin-top:10px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Role</th>
+                      <th>Active</th>
+                      <th>Last Login</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersTable">
+                    <tr><td colspan="5" class="muted">Load users...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+
+            <div class="card" style="grid-column: span 5;">
+              <h3>Add User</h3>
+              <div style="display:grid; gap:10px;">
+                <div>
+                  <label class="muted2">Full Name</label>
+                  <input id="newUserName" placeholder="e.g., Juan Dela Cruz" />
+                </div>
+                <div>
+                  <label class="muted2">Role</label>
+                  <select id="newUserRole">
+                    <option value="STAFF">STAFF</option>
+                    <option value="SUPERVISOR">SUPERVISOR</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                </div>
+                <div class="two">
+                  <div>
+                    <label class="muted2">6-digit PIN</label>
+                    <input id="newUserPin" inputmode="numeric" maxlength="6" placeholder="******" />
+                  </div>
+                  <div>
+                    <label class="muted2">Confirm PIN</label>
+                    <input id="newUserPin2" inputmode="numeric" maxlength="6" placeholder="******" />
+                  </div>
+                </div>
+                <button class="btn primary" id="btnCreateUser">Create User</button>
+                <div class="muted2">PIN is stored hashed (bcrypt) server-side.</div>
+              </div>
+            </div>
+          </div>
+
+          
+        </section>
+
+        <!-- PERMISSIONS -->
+        <section id="page-permissions" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between; align-items:center;">
+                <div>
+                  <h3 style="margin:0;">Role Permissions</h3>
+                  <div class="muted" style="margin-top:6px;">
+                    Edit permissions per role. Save writes role_permissions.
+                  </div>
+                </div>
+              </div>
+
+              <div style="overflow:auto; margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Permission</th>
+                      <th>STAFF</th>
+                      <th>SUPERVISOR</th>
+                      <th>ADMIN</th>
+                    </tr>
+                  </thead>
+                  <tbody id="permTable">
+                    <tr><td colspan="4" class="muted">Load permissions...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div style="margin-top:12px;">
+                <button class="btn primary" id="btnSavePerms">Save Permissions</button>
+              </div>
+              
+            </div>
+          </div>        </section>
+
+        <!-- REPORTS -->
+        <section id="page-reports" class="hidden">
+          <div class="grid">
+
+            <!-- Report Builder -->
+            <div class="card" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between; align-items:flex-start; gap:12px;">
+                <div>
+                  <h3 style="margin:0;">Reports</h3>
+                  <div class="muted2" style="margin-top:6px;">Build a report, preview what will be included, then generate/export/print.</div>
+                </div>
+                <div class="row" style="gap:10px;">
+                  <button class="btn primary" id="btnRepGenerate">Generate</button>
+                  <button class="btn" id="btnRepExport">Export CSV</button>
+                  <button class="btn" id="btnRepPrint">Print (1 page)</button>
+                </div>
+              </div>
+
+              
+              <div class="three" style="margin-top:12px;">
+                <div>
+                  <label class="muted2">Report Type</label>
+                  <select id="repType">
+                    <option value="custom_summary">Custom Summary (CSV + 1-page print)</option>
+                    <option value="raw_tickets">Raw Data (Tickets)</option>
+                    <option value="daily_summary">Daily Summary (daily_summary.csv)</option>
+                    <option value="audit_logs">Audit Logs (audit_logs.csv)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="muted2">Date Scope</label>
+                  <select id="repScope">
+                    <option value="single">Absolute Date</option>
+                    <option value="range">Date Range</option>
+                    <option value="last_days">Last X Days (rolling)</option>
+                    <option value="last_hours">Last X Hours (rolling)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="muted2">Scope Preview</label>
+                  <input id="repScopePreview" disabled value="-" />
+                </div>
+              </div>
+
+              <div class="three" style="margin-top:12px;" id="repScopeInputs">
+                <div id="scopeSingleWrap">
+                  <label class="muted2">Date</label>
+                  <input id="repDateSingle" type="date" />
+                </div>
+
+                <div id="scopeRangeFromWrap" class="hidden">
+                  <label class="muted2">From</label>
+                  <input id="repFrom" type="date" />
+                </div>
+
+                <div id="scopeRangeToWrap" class="hidden">
+                  <label class="muted2">To</label>
+                  <input id="repTo" type="date" />
+                </div>
+
+                <div id="scopeRollWrap" class="hidden">
+                  <label class="muted2" id="repRollLabel">Value</label>
+                  <input id="repRollValue" type="number" min="1" max="999" value="2" />
+                  <div class="help" id="repRollHelp">-</div>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap;" id="repScopePresets">
+                <span class="muted2">Quick Presets:</span>
+                <button class="btn" type="button" data-rep-preset="today">Today</button>
+                <button class="btn" type="button" data-rep-preset="yesterday">Yesterday</button>
+                <button class="btn" type="button" data-rep-preset="last7">Last 7 Days</button>
+                <button class="btn" type="button" data-rep-preset="mtd">Month-to-date</button>
+              </div>
+
+              <div class="three" style="margin-top:12px;" id="repWaitRefRow">
+                <div>
+                  <label class="muted2">Wait Time Reference</label>
+                  <select id="sumWaitRefType">
+                    <option value="hours">Last X hours</option>
+                    <option value="days">Last X days</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="muted2">Reference Value</label>
+                  <input id="sumWaitRefValue" type="number" min="1" max="999" value="2" />
+                </div>
+                <div>
+                  <label class="muted2">Status</label>
+                  <input disabled value="Executive uses completed queues for Avg Wait; other reports export all rows." />
+                </div>
+              </div>
+
+              <!-- What will be included -->
+              <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
+                <div class="row" style="justify-content:space-between; align-items:center;">
+                  <div class="row" style="gap:10px; flex-wrap:wrap;">
+                    <span class="pill" id="repStalePill">Not generated yet</span>
+                    <span class="muted2" id="repMeta">-</span>
+                  </div>
+                  <span class="muted2" id="sumMeta" style="display:none;"></span>
+                </div>
+                <div class="help" id="repIncludes" style="margin-top:8px;"></div>
+              </div>
+            </div>
+
+            <!-- Output -->
+            <div class="card" style="grid-column: span 12;">
+              <h3 id="repOutTitle">Report Output</h3>
+
+              <!-- Executive output -->
+              <div id="sumOut" style="display:none;">
+                <div class="row" style="gap:12px; flex-wrap:wrap; margin-top:6px;">
+                  <div class="pill"><b>Pax Overall:</b> <span id="sumPaxOverall">0</span></div>
+                  <div class="pill"><b>Priority Total:</b> <span id="sumPriOverall">0</span></div>
+                </div>
+
+<div id="customOut" style="display:none; margin-top:12px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Custom Summary</h4>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>GROUP CODE</th>
+                        <th>Total Reservations (all created tickets)</th>
+                        <th>Total Pax count reserved</th>
+                        <th>Total Priority Reservations</th>
+                        <th>Seated Count - group</th>
+                        <th>Seated Count - total pax count</th>
+                        <th>Waiting Time to be called - Average (mins)</th>
+                        <th>Waiting Time to be seated - Average (mins)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tblCustomSummary">
+                      <tr><td colspan="8" class="muted">No data loaded</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div id="rawOut" style="display:none; margin-top:12px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Raw Data (Tickets)</h4>
+                  <div class="row" style="justify-content:space-between; align-items:center; margin:6px 0 8px;">
+                    <div class="muted2" id="rawPageInfo">Rows: 0</div>
+                    <div class="row" style="gap:8px;">
+                      <label class="muted2" for="rawPageSize" style="margin:0;">Rows per page</label>
+                      <select id="rawPageSize" style="width:110px;">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                      </select>
+                      <button class="btn" id="btnRawPrev" type="button">Prev</button>
+                      <button class="btn" id="btnRawNext" type="button">Next</button>
+                    </div>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Business Date</th>
+                        <th>Group</th>
+                        <th>Queue #</th>
+                        <th>Priority</th>
+                        <th>Name</th>
+                        <th>Pax</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Called</th>
+                        <th>Times Called</th>
+                        <th>Seated</th>
+                        <th>Skipped</th>
+                        <th>Wait to Called (mins)</th>
+                        <th>Wait to Seated (mins)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tblRawTickets">
+                      <tr><td colspan="14" class="muted">No data loaded</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div id="dailyOut" style="display:none; margin-top:12px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Daily Summary</h4>
+                  <div class="row" style="justify-content:space-between; align-items:center; margin:6px 0 8px;">
+                    <div class="muted2" id="dailyPageInfo">Rows: 0</div>
+                    <div class="row" style="gap:8px;">
+                      <label class="muted2" for="dailyPageSize" style="margin:0;">Rows per page</label>
+                      <select id="dailyPageSize" style="width:110px;">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                      </select>
+                      <button class="btn" id="btnDailyPrev" type="button">Prev</button>
+                      <button class="btn" id="btnDailyNext" type="button">Next</button>
+                    </div>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Business Date</th>
+                        <th>Group</th>
+                        <th>Registered</th>
+                        <th>Called</th>
+                        <th>Seated</th>
+                        <th>Skipped</th>
+                        <th>Override Called</th>
+                        <th>Avg Wait (mins)</th>
+                        <th>EMA14 Wait (mins)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tblDailySummary">
+                      <tr><td colspan="9" class="muted">No data loaded</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div id="execOutWrap">
+
+                <div style="margin-top:12px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Waitlist Count (WAITING)</h4>
+                  <table>
+                    <thead><tr><th>Group</th><th>1</th><th>2-3</th><th>4-5</th><th>6+</th><th>Total</th></tr></thead>
+                    <tbody id="tblWaitlist"></tbody>
+                  </table>
+                </div>
+
+                <div style="margin-top:14px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Seated Count (SEATED)</h4>
+                  <table>
+                    <thead><tr><th>Group</th><th>1</th><th>2-3</th><th>4-5</th><th>6+</th><th>Total</th></tr></thead>
+                    <tbody id="tblSeated"></tbody>
+                  </table>
+                </div>
+
+                <div style="margin-top:14px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Average Waiting Time</h4>
+                  <table>
+                    <thead><tr><th>Group</th><th>Avg Wait (mins)</th><th>Sample Size (n)</th><th>Reference</th></tr></thead>
+                    <tbody id="tblAvgWait"></tbody>
+                  </table>
+                </div>
+
+                <div style="margin-top:14px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Pax Totals (excluding SKIPPED)</h4>
+                  <table>
+                    <thead><tr><th>Group</th><th>Total Pax</th></tr></thead>
+                    <tbody id="tblPax"></tbody>
+                  </table>
+                </div>
+
+                <div style="margin-top:14px; overflow:auto;">
+                  <h4 style="margin:10px 0 6px;">Priority Registrations (excluding SKIPPED)</h4>
+                  <table>
+                    <thead><tr><th>Group</th><th>Priority Count</th></tr></thead>
+                    <tbody id="tblPri"></tbody>
+                  </table>
+                </div>
+              </div>
+              </div>
+
+              <!-- CSV-only output -->
+              <div id="repCsvOnlyOut" style="display:none;">
+                <div class="muted2" style="margin-top:6px;">
+                  This report exports to CSV only. Use <b>Export CSV</b> above.
+                </div>
+                <div class="help" style="margin-top:10px;">
+                  Tip: If you need a preview later, we can add a "Top 50 rows" JSON endpoint without slowing down exports.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+<!-- AUDIT -->
+        <section id="page-audit" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <h3>Audit Logs</h3>
+              <div class="row" style="margin-bottom:10px;">
+                <button class="btn" id="btnLoadAudit">Load Latest</button>
+                <span class="muted2">Paged via /api/admin/audit?limit=100&offset=0</span>
+              </div>
+              <div style="overflow:auto;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Action</th>
+                      <th>User</th>
+                      <th>Payload</th>
+                    </tr>
+                  </thead>
+                  <tbody id="auditTable">
+                    <tr><td colspan="4" class="muted">No data loaded</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- UPLOAD -->
+        <section id="page-upload" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <h3>Upload / Sync</h3>
+              <div class="muted">
+                When internet is available, upload local data to cloud.
+              </div>
+              <div class="row" style="margin-top:12px;">
+                <button class="btn primary" id="btnUploadNow">Upload Now</button>
+                <span class="muted2" id="uploadStatus">Status: -</span>
+              </div>
+              <div style="margin-top:10px;">
+                <div class="muted2">Upload Date Scope</div>
+                <div class="row" style="margin-top:6px; gap:8px; flex-wrap:wrap;" id="uploadScopePresets">
+                  <button class="btn" type="button" data-upload-preset="today">Today</button>
+                  <button class="btn" type="button" data-upload-preset="yesterday">Yesterday</button>
+                  <button class="btn" type="button" data-upload-preset="last7">Last 7 Days</button>
+                  <button class="btn" type="button" data-upload-preset="mtd">Month-to-date</button>
+                </div>
+                <div class="help" id="uploadScopePreview" style="margin-top:6px;">Scope: Uses current Reports scope.</div>
+              </div>
+              <div style="margin-top:10px;">
+                <div class="muted2">Reports To Upload</div>
+                <div class="row" style="margin-top:6px; gap:12px; flex-wrap:wrap;">
+                  <label><input type="checkbox" id="uploadRptTickets" checked /> Raw Tickets (CSV)</label>
+                  <label><input type="checkbox" id="uploadRptDailyCsv" checked /> Daily Summary (CSV)</label>
+                  <label><input type="checkbox" id="uploadRptDailyHtml" checked /> Daily Summary (Formatted HTML)</label>
+                  <label><input type="checkbox" id="uploadRptCustomCsv" checked /> Custom Summary (CSV)</label>
+                </div>
+              </div>
+              <div class="seedLoader" id="uploadLoader">
+                <span class="seedSpinner" aria-hidden="true"></span>
+                <span id="uploadLoaderText">Uploading... 0%</span>
+              </div>
+              <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
+                <div class="row" style="justify-content:space-between;">
+                  <div><b>Google Drive Sync Status</b></div>
+                </div>
+                <div class="help" id="uploadCfgReady" style="margin-top:8px;">Ready: -</div>
+                <div class="help" id="uploadCfgFolder">Folder ID: -</div>
+                <div class="help" id="uploadCfgCreds">Service Account Source: -</div>
+                <div class="help" id="uploadCfgFile">Service Account File: -</div>
+                <div class="help" id="uploadLastAt">Last Sync: -</div>
+                <div class="help" id="uploadLastResult">Last Result: -</div>
+                <div class="help" id="uploadLastFiles">Uploaded File IDs: -</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SYSTEM -->
+        <section id="page-system" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 6;">
+              <h3>System Info</h3>
+              <div class="muted" id="sysInfo">-</div>
+            </div>
+            <div class="card" style="grid-column: span 6;">
+              <h3>Backups</h3>
+              <div class="row">
+                <button class="btn" id="btnBackup">Backup DB</button>
+                <button class="btn" id="btnBackupExport">Export Backup...</button>
+                <button class="btn" id="btnOpenBackupFolder">Open Backup Folder</button>
+                <button class="btn danger" id="btnRestore">Restore DB</button>
+                <button class="btn" id="btnSeedToday">Seed Test Data (Month To Date)</button>
+              </div>
+              <div class="help">
+                Backup creates a timestamped DB snapshot in local storage. Export Backup lets you choose where to copy it.
+                Restore loads the latest local backup and restarts QSys.
+                Seed Test Data wipes month-to-date queue rows for the current branch and inserts month-to-date demo data for testing (including EMA14/MTD reports).
+              </div>
+              <div class="seedLoader" id="seedLoader">
+                <span class="seedSpinner" aria-hidden="true"></span>
+                <span id="seedLoaderText">Seeding test data... 0%</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <div id="toastWrap"></div>
+
+    <script>
+      // ---------- helpers ----------
+      const $ = (id) => document.getElementById(id);
+
+      function openDrawer(){
+        document.body.classList.add("drawerOpen");
+        $("drawerOverlay")?.setAttribute("aria-hidden", "false");
+      }
+      function closeDrawer(){
+        document.body.classList.remove("drawerOpen");
+        $("drawerOverlay")?.setAttribute("aria-hidden", "true");
+      }
+      function isMobileDrawer(){
+        return window.matchMedia && window.matchMedia("(max-width: 980px)").matches;
+      }
+      function maybeCloseDrawerAfterNav(){
+        if (isMobileDrawer()) closeDrawer();
+      }
+
+      $("drawerOverlay")?.addEventListener("click", closeDrawer);
+      $("btnHamburger")?.addEventListener("click", () => {
+        if (document.body.classList.contains("drawerOpen")) closeDrawer();
+        else openDrawer();
+      });
+      window.addEventListener("resize", () => { if (!isMobileDrawer()) closeDrawer(); });
+
+      const COLLAPSE_KEY = "qsys_admin_group_collapsed_v1";
+      
+      function loadCollapsed(){
+        try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}") || {}; }
+        catch { return {}; }
+      }
+      
+      function saveCollapsed(map){
+        try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(map || {})); } catch {}
+      }
+      
+      
+      function toast(title, msg, type) {
+        const wrap = $("toastWrap");
+        const t = document.createElement("div");
+        t.className = "toast " + (type || "");
+        t.innerHTML = `<b>${escapeHtml(title)}</b><div class="muted">${escapeHtml(msg || "")}</div>`;
+        wrap.appendChild(t);
+        setTimeout(() => t.remove(), 4200);
+      }
+
+      function escapeHtml(s) {
+        const v = (s === 0) ? "0" : (s ?? "");
+        return String(v)
+          .replaceAll("&","&amp;").replaceAll("<","&lt;")
+          .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      function handleAuthRedirect(res) {
+  if (res.status === 401) {
+    // session missing/expired => go login
+    window.location.href = "/admin-login";
+    return true;
+  }
+  return false;
+}
+
+async function jget(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  if (handleAuthRedirect(r)) return { ok: false, error: "Not authenticated" };
+
+  // Be resilient: if server returns HTML/error text, don't crash the entire UI.
+  const ct = String(r.headers.get("content-type") || "").toLowerCase();
+  if (ct.includes("application/json")) {
+    try { return await r.json(); }
+    catch {
+      const txt = await r.text().catch(()=> "");
+      return { ok:false, error: (txt || "Invalid JSON response").slice(0, 200) };
+    }
+  } else {
+    const txt = await r.text().catch(()=> "");
+    // If the server sent a redirect/login page, surface it instead of throwing.
+    return { ok:false, error: (txt || ("HTTP " + r.status)).slice(0, 200) };
+  }
+}
+
+async function jpost(url, body) {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {})
+  });
+  if (handleAuthRedirect(r)) return { ok: false, error: "Not authenticated" };
+  const ct = String(r.headers.get("content-type") || "").toLowerCase();
+  if (ct.includes("application/json")) {
+    try { return await r.json(); }
+    catch {
+      const txt = await r.text().catch(()=> "");
+      return { ok:false, error: (txt || "Invalid JSON response").slice(0, 200) };
+    }
+  }
+  const txt = await r.text().catch(()=> "");
+  return { ok:false, error: (txt || ("HTTP " + r.status)).slice(0, 200) };
+}
+
+
+      function fmtTime(ms) {
+        if (!ms) return "-";
+        try { return new Date(ms).toLocaleString(); } catch { return String(ms); }
+      }
+
+      function setActive(page) {
+        CURRENT_PAGE = String(page || "dashboard");
+        document.querySelectorAll(".nav button[data-page]").forEach(b => {
+          b.classList.toggle("active", b.dataset.page === page);
+        });
+        document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
+        const sec = $("page-" + page);
+        if (sec) sec.classList.remove("hidden");
+
+        let title = page.charAt(0).toUpperCase() + page.slice(1).replaceAll("_"," ");
+        if (page === "dashboard") title = "LIVE OPS OVERVIEW";
+        $("pageTitle").textContent = title;
+
+
+        // page loaders
+        if (page === "setup") loadSetup();
+        if (page === "users") loadUsers();
+        if (page === "permissions") loadPerms();
+        if (page === "audit") loadAudit();
+        if (page === "reports") initReports();
+        if (page === "upload") {
+          loadUploadStatus();
+          updateUploadScopePreview();
+        }
+        if (page === "system") loadSystemInfo();
+
+        maybeCloseDrawerAfterNav();
+      }
+
+      // ---------- state ----------
+      let BRANCH_CACHE = null;     // {branchCode, branchName, timezone, ...}
+      let SETTINGS_CACHE = null;   // map
+      let PERM_CACHE = null;       // {roles, permissions, matrix}
+      let LAST_BIZ = null;
+      let REPORT_ACTIVE_PRESET = "";
+      let UPLOAD_ACTIVE_PRESET = "";
+      let SETUP_ACTIVE_PANE = "branch";
+      let CURRENT_PAGE = "dashboard";
+      let META_BRANCH_LABEL = "-";
+      let META_BUSINESS_DATE_LABEL = "";
+      let SYS_INFO_CACHE = null;
+
+      function nowTimeText() {
+        return new Date().toLocaleTimeString();
+      }
+
+      function renderMetaWithTime() {
+        if (!META_BUSINESS_DATE_LABEL) return;
+        const t = nowTimeText();
+        if ($("topMeta")) {
+          $("topMeta").textContent =
+            `Branch: ${META_BRANCH_LABEL || "-"} - Business Date: ${META_BUSINESS_DATE_LABEL} - Time: ${t}`;
+        }
+        if ($("sideMeta")) {
+          $("sideMeta").textContent =
+            `Branch: ${META_BRANCH_LABEL || "-"}\nBusiness Date: ${META_BUSINESS_DATE_LABEL}\nTime: ${t}`;
+        }
+      }
+
+      function renderSystemInfoWithTime() {
+        if (!SYS_INFO_CACHE) return;
+        if ($("sysInfo")) {
+          $("sysInfo").textContent =
+            `BranchCode: ${SYS_INFO_CACHE.branchCode}\nPort: ${SYS_INFO_CACHE.port}\nCurrent Business Date: ${SYS_INFO_CACHE.currentBusinessDate}\nTime: ${nowTimeText()}`;
+        }
+      }
+
+      async function refreshCurrentPage() {
+        await loadBasic();
+        if (CURRENT_PAGE === "setup") {
+          if (SETUP_ACTIVE_PANE === "qr") await loadQrSetup();
+          else await loadSetup();
+          return;
+        }
+        if (CURRENT_PAGE === "users") return loadUsers();
+        if (CURRENT_PAGE === "permissions") return loadPerms();
+        if (CURRENT_PAGE === "audit") return loadAudit();
+        if (CURRENT_PAGE === "reports") return initReports();
+        if (CURRENT_PAGE === "upload") {
+          await loadUploadStatus();
+          updateUploadScopePreview();
+          return;
+        }
+        if (CURRENT_PAGE === "system") return loadSystemInfo();
+      }
+
+      async function logoutAdmin() {
+        const ok = confirm("Are you sure you want to logout?");
+        if (!ok) return;
+        try {
+          await jpost("/api/admin/auth/logout", {});
+        } catch {}
+        window.location.href = "/admin-login";
+      }
+
+      function setActiveSetupPane(pane) {
+        const target = String(pane || "branch");
+        SETUP_ACTIVE_PANE = target;
+        document.querySelectorAll("[data-setup-pane]").forEach(btn => {
+          btn.classList.toggle("active", btn.getAttribute("data-setup-pane") === target);
+        });
+        ["branch", "display", "auth", "qr"].forEach(key => {
+          const paneEl = $("setup-pane-" + key);
+          if (!paneEl) return;
+          paneEl.classList.toggle("hidden", key !== target);
+        });
+        const saveRow = $("setupSaveRow");
+        if (saveRow) saveRow.classList.toggle("hidden", target === "qr");
+        if (target === "qr") loadQrSetup();
+      }
+
+      // ---------- dashboard renderer ----------
+      function applyOverview(o) {
+        if (!o) return;
+
+        $("pillOnline").textContent = "Network: Local";
+        $("pillOnline").classList.add("ok");
+
+        if (o.businessDate) $("pillBizDate").textContent = "Business Date: " + o.businessDate;
+
+        const labels = {
+          A: "A (1 Pax)",
+          B: "B (2-3 Pax)",
+          C: "C (4-5 Pax)",
+          D: "D (6+ Pax)"
+        };
+
+        // normalize groups
+        const gmap = {};
+        if (o.groups && typeof o.groups === "object") {
+          Object.keys(o.groups).forEach(k => {
+            const r = o.groups[k] || {};
+                        gmap[k] = {
+              registered: r.registered ?? 0,
+              waiting: r.waiting ?? 0,
+              called: r.called ?? 0,
+              seated: r.seated ?? 0,
+              skipped: r.skipped ?? 0,
+              // NEW: Avg Wait (2h) per group (completed queues only)
+              avgWait2hMins: (r.avgWait2hMins ?? r.avgWait2hMinutes ?? r.avgWait2h ?? "-"),
+              overrides: (r.overrides ?? "-"),
+
+              // NEW: breakdown rows
+              sub: (r.sub && typeof r.sub === "object") ? r.sub : null
+            };
+
+          });
+        }
+
+        // totals compute (server doesn't return totals in your current implementation)
+        let totalReserved = 0, totalSeated = 0, totalSkipped = 0, currentlyWaiting = 0;
+        Object.keys(labels).forEach(g => {
+          const r = gmap[g] || { registered:0, seated:0, skipped:0, waiting:0, called:0 };
+          totalReserved += Number(r.registered || 0);
+          totalSeated   += Number(r.seated || 0);
+          totalSkipped  += Number(r.skipped || 0);
+          currentlyWaiting += Number(r.waiting || 0) + Number(r.called || 0);
+        });
+
+        $("kpiRegistered").textContent = totalReserved;
+        $("kpiSeated").textContent     = totalSeated;
+        $("kpiSkipped").textContent    = totalSkipped;
+        $("kpiWaiting").textContent    = currentlyWaiting;
+
+        const tb = $("groupTable");
+        tb.innerHTML = "";
+
+        const collapsed = loadCollapsed();
+
+       Object.keys(labels).forEach(g => {
+        const r = gmap[g] || {};
+        const sub = r.sub || {};
+        const reg = sub.regular || {};
+        const pri = sub.priority || {};
+
+        // % share based on "Waiting Now" = WAITING + CALLED
+        const regNow = Number(reg.waiting||0) + Number(reg.called||0);
+        const priNow = Number(pri.waiting||0) + Number(pri.called||0);
+        const totNow = regNow + priNow;
+        const prioPct = totNow > 0 ? Math.round((priNow / totNow) * 100) : 0;
+
+        const isCollapsed = !!collapsed[g];
+
+        // --- Group header row ---
+        const tr = document.createElement("tr");
+        tr.className = "group-header" + (isCollapsed ? " is-collapsed" : "");
+        tr.setAttribute("data-group", g);
+
+        tr.innerHTML = `
+          <td>
+            <div class="groupCell">
+              <div class="groupLeft">
+                <div><b>${labels[g]}</b></div>
+                <div class="groupMeta">Priority share (Waiting Now): ${prioPct}%</div>
+              </div>
+              <button class="toggleBtn" type="button" data-toggle="${g}">
+                ${isCollapsed ? "Expand" : "Collapse"}
+              </button>
+            </div>
+          </td>
+
+          <td>${(Number(reg.waiting||0) + Number(pri.waiting||0))}</td>
+          <td>${(Number(reg.called||0) + Number(pri.called||0))}</td>
+          <td>${(Number(reg.seated||0) + Number(pri.seated||0))}</td>
+          <td>${(Number(reg.skipped||0) + Number(pri.skipped||0))}</td>
+
+          <td>${r.avgWait2hMins ?? "-"}</td>
+          <td>${r.overrides ?? "-"}</td>
+        `;
+        tb.appendChild(tr);
+
+        // --- Regular subrow ---
+        const trReg = document.createElement("tr");
+        trReg.className = "subrow";
+        trReg.setAttribute("data-parent", g);
+        trReg.innerHTML = `
+          <td>Regular</td>
+          <td>${reg.waiting ?? 0}</td>
+          <td>${reg.called ?? 0}</td>
+          <td>${reg.seated ?? 0}</td>
+          <td>${reg.skipped ?? 0}</td>
+          <td>-</td>
+          <td>-</td>
+        `;
+        tb.appendChild(trReg);
+
+        // --- Priority subrow (green accent) ---
+        const trPri = document.createElement("tr");
+        trPri.className = "subrow prio";
+        trPri.setAttribute("data-parent", g);
+        trPri.innerHTML = `
+          <td>Priority</td>
+          <td>${pri.waiting ?? 0}</td>
+          <td>${pri.called ?? 0}</td>
+          <td>${pri.seated ?? 0}</td>
+          <td>${pri.skipped ?? 0}</td>
+          <td>-</td>
+          <td>-</td>
+        `;
+        tb.appendChild(trPri);
+      });
+
+        // --- Collapse / Expand per group (event delegation) ---
+        tb.onclick = (ev) => {
+          const btn = ev.target?.closest?.("button[data-toggle]");
+          if (!btn) return;
+
+          const g = btn.getAttribute("data-toggle");
+          if (!g) return;
+
+          const collapsed = loadCollapsed();
+          collapsed[g] = !collapsed[g];
+          saveCollapsed(collapsed);
+
+          const header = tb.querySelector(`tr.group-header[data-group="${g}"]`);
+          if (header) {
+            header.classList.toggle("is-collapsed", !!collapsed[g]);
+            btn.textContent = collapsed[g] ? "Expand" : "Collapse";
+          }
+        };
+
+
+
+      }
+
+      async function loadBasic() {
+        // business date meta (this endpoint exists)
+        try {
+          const biz = await jget("/api/admin/business-date");
+          if (biz.ok) {
+            LAST_BIZ = biz.currentBusinessDate || null;
+            META_BRANCH_LABEL = String(biz.branchCode || "-");
+            META_BUSINESS_DATE_LABEL = String(biz.currentBusinessDate || "");
+            $("pillBizDate").textContent = "Business Date: " + biz.currentBusinessDate;
+            renderMetaWithTime();
+            $("repFrom").value = biz.currentBusinessDate;
+        if ($("sumFrom")) $("sumFrom").value = $("repFrom").value;
+        if ($("sumTo")) $("sumTo").value = $("repTo").value || $("repFrom").value;
+
+            $("repTo").value = biz.currentBusinessDate;
+          }
+        } catch (e) {
+          $("topMeta").textContent = "Failed to load business date";
+          toast("Admin", "Cannot reach /api/admin/business-date. Open this page via the server (not file://).", "err");
+        }
+
+        // branch meta (so branch name shows somewhere meaningful)
+        try {
+          const b = await jget("/api/admin/branch");
+          if (b.ok && b.branch) {
+            BRANCH_CACHE = b.branch;
+            // add branch name to sidebar meta line 1 if available
+            const bn = String(b.branch.branchName || "").trim();
+            if (bn) {
+              META_BRANCH_LABEL = bn;
+              renderMetaWithTime();
+            }
+          }
+        } catch {}
+
+        // dashboard snapshot
+        try {
+          const st = await jget("/api/admin/stats/today");
+          if (st && st.ok) applyOverview(st);
+        } catch {}
+      }
+
+      // ---------- Setup page ----------
+      
+      function getQrPngUrl(branchCode) {
+  // Uses your server-side QR generator endpoint
+  return `${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`;
+}
+
+function refreshQrPreview() {
+  const code = String(BRANCH_CACHE?.branchCode || $("branchCode")?.value || "").trim();
+  const img = $("qrPreview");
+  const hint = $("qrHint");
+  const txt = $("qrUrlText");
+
+  if (!img || !hint || !txt) return;
+
+  if (!code) {
+    img.removeAttribute("src");
+    txt.value = "";
+    hint.textContent = "Branch Code not loaded yet. Open Setup tab first.";
+    return;
+  }
+
+  const url = getQrPngUrl(code);
+  img.src = url;
+  txt.value = url;
+
+  hint.textContent = "Tip: If on-screen scan fails, use Print QR for a larger code.";
+}
+
+function openPrintWindowForQr(imgSrc, branchName, branchCode) {
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) {
+    toast("QR Print", "Popup blocked. Allow popups for this site.", "err");
+    return;
+  }
+
+  w.document.open();
+  w.document.write(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>QSys QR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; margin: 0; padding: 24px; }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { margin: 0 0 6px 0; font-size: 22px; }
+    .meta { color: #444; margin-bottom: 16px; font-size: 14px; }
+    .qrbox { border: 2px solid #000; border-radius: 18px; padding: 18px; display:flex; justify-content:center; align-items:center; background:#fff; }
+    img { width: 520px; height: 520px; object-fit: contain; image-rendering: pixelated; }
+    .note { margin-top: 14px; font-size: 14px; color: #222; line-height: 1.4; }
+    .note b { display:block; margin-bottom: 6px; }
+    @media print {
+      body { padding: 0; }
+      .wrap { max-width: none; margin: 0; padding: 0; }
+      img { width: 170mm; height: 170mm; }
+      .qrbox { border-radius: 12px; padding: 10mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>${escapeHtml(branchName || "Branch QR Code")}</h1>
+    <div class="meta">${escapeHtml(branchCode ? ("Branch Code: " + branchCode) : "")}</div>
+
+    <div class="qrbox">
+      <img src="${imgSrc}" alt="QR Code" />
+    </div>
+
+    <div class="note">
+      <b>Scan to Join Queue</b>
+      If scan fails: increase screen brightness, clean camera lens, and keep ~15-30cm distance.
+    </div>
+  </div>
+
+  <script>
+    window.onload = () => { setTimeout(() => window.print(), 250); };
+  <\/script>
+</body>
+</html>
+  `);
+  w.document.close();
+}
+
+/* ---------- QR Setup (Wi-Fi + Queue) ---------- */
+
+function getWifiQrPngUrl() {
+  return `${window.location.origin}/api/admin/wifi-qrcode.png?t=${Date.now()}`;
+}
+
+function refreshWifiQrPreview() {
+  const img = $("wifiQrPreview");
+  const hint = $("wifiQrHint");
+  const txt = $("wifiQrUrlText");
+  if (!img || !hint || !txt) return;
+
+  const ssid = String($("wifiSsid")?.value || "").trim();
+  if (!ssid) {
+    img.removeAttribute("src");
+    txt.value = "";
+    hint.textContent = "Enter SSID to generate Wi-Fi QR.";
+    return;
+  }
+
+  const url = getWifiQrPngUrl();
+  img.src = url;
+  txt.value = url;
+  hint.textContent = "Scan to connect to Wi-Fi. (iPhone behavior may vary by iOS.)";
+}
+
+function refreshQueueQrPreview2() {
+  const img = $("queueQrPreview");
+  const hint = $("queueQrHint");
+  const txt = $("queueQrUrlText");
+  if (!img || !hint || !txt) return;
+
+  const url = `${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`;
+  img.src = url;
+  txt.value = url;
+  hint.textContent = "Scan to open the Guest queueing page.";
+}
+
+async function loadQrSetup() {
+  try {
+    // Ensure branch + settings caches exist
+    if (!BRANCH_CACHE) {
+      const b = await jget("/api/admin/branch");
+      if (b.ok) BRANCH_CACHE = b.branch || null;
+    }
+    const s = await jget("/api/admin/settings");
+    if (s.ok) SETTINGS_CACHE = s.settings || {};
+
+    // Populate Wi-Fi fields
+    const sec = String(SETTINGS_CACHE?.wifi_security || "WPA");
+    const ssid = String(SETTINGS_CACHE?.wifi_ssid || "");
+    const pass = String(SETTINGS_CACHE?.wifi_password || "");
+    const hidden = String(SETTINGS_CACHE?.wifi_hidden || "false").toLowerCase() === "true";
+
+    if ($("wifiSec")) $("wifiSec").value = ["WPA","WEP","nopass"].includes(sec) ? sec : "WPA";
+    if ($("wifiSsid")) $("wifiSsid").value = ssid;
+    if ($("wifiPass")) $("wifiPass").value = pass;
+    if ($("wifiHiddenYes")) $("wifiHiddenYes").checked = hidden;
+    if ($("wifiHiddenNo")) $("wifiHiddenNo").checked = !hidden;
+
+    refreshWifiQrPreview();
+    refreshQueueQrPreview2();
+  } catch (e) {
+    console.error("[qrsetup]", e);
+    toast("QR Setup", "Failed to load QR setup.", "err");
+  }
+}
+
+async function saveWifiSettings() {
+  const sec = String($("wifiSec")?.value || "WPA");
+  const ssid = String($("wifiSsid")?.value || "").trim();
+  const pass = String($("wifiPass")?.value || "");
+  const hidden = (document.querySelector('input[name="wifiHidden"]:checked')?.value || "false");
+
+  if (!ssid) {
+    toast("Wi-Fi", "SSID is required.", "warn");
+    return;
+  }
+  if (sec !== "nopass" && !pass) {
+    toast("Wi-Fi", "Password is required for WPA/WEP.", "warn");
+    return;
+  }
+
+  const payload = {
+    wifi_security: sec,
+    wifi_ssid: ssid,
+    wifi_password: sec === "nopass" ? "" : pass,
+    wifi_hidden: String(hidden),
+  };
+
+  const r = await jpost("/api/admin/settings", payload);
+  if (!r.ok) {
+    toast("Wi-Fi", r.error || "Failed to save.", "err");
+    return;
+  }
+  SETTINGS_CACHE = { ...(SETTINGS_CACHE || {}), ...payload };
+  toast("Wi-Fi", "Saved.", "ok");
+  refreshWifiQrPreview();
+}
+
+function openPrintWindowForQrPair(wifiImgSrc, queueImgSrc, ssid) {
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) {
+    toast("Print", "Popup blocked. Allow popups for this site.", "err");
+    return;
+  }
+
+  const safeSsid = escapeHtml(String(ssid || "").trim());
+
+  const html =
+    "<!doctype html>" +
+    "<html><head>" +
+    "<meta charset='utf-8' />" +
+    "<title>QSys QR Print</title>" +
+    "<meta name='viewport' content='width=device-width, initial-scale=1' />" +
+    "<style>" +
+      "html,body{height:100%;}" +
+      "body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;color:#000;}" +
+      "*{box-sizing:border-box;}" +
+      ".wrap{width:100%;max-width:none;padding:6mm;height:100%;}" +
+      ".grid{display:grid;grid-template-columns:1fr;grid-template-rows:1fr 1fr;gap:6mm;height:100%;}" +
+      ".panel{border:1.5px solid #000;border-radius:12px;padding:8px;margin:0;display:grid;grid-template-rows:auto auto 1fr auto;min-height:0;}" +
+      ".title{font-size:14px;font-weight:800;margin:0 0 4px 0;line-height:1.2;}" +
+      ".sub{font-size:12px;margin:0 0 6px 0;line-height:1.25;}" +
+      ".qr{display:flex;justify-content:center;align-items:center;background:#fff;padding:6px;border:1px solid #000;border-radius:10px;min-height:0;}" +
+      "img{max-width:100%;max-height:100%;width:auto;height:auto;aspect-ratio:1/1;object-fit:contain;image-rendering:pixelated;}" +
+      ".steps{font-size:12px;margin-top:6px;line-height:1.3;}" +
+      ".steps b{display:inline-block;width:16px;}" +
+      "@page{size:A4 portrait;margin:8mm;}" +
+      "@media screen and (max-width:900px){.wrap{height:auto;}.grid{height:auto;grid-template-rows:auto auto;} .panel{min-height:340px;} img{max-width:70vw;max-height:70vw;}}" +
+      "@media print{body{margin:0;}.wrap{padding:0;height:100%;}.grid{height:100%;}.panel{break-inside:avoid-page;page-break-inside:avoid;}}" +
+    "</style>" +
+    "</head><body>" +
+    "<div class='wrap'>" +
+      "<div class='grid'>" +
+
+      "<div class='panel'>" +
+        "<div class='title'>STEP 1 - CONNECT TO WI-FI</div>" +
+        "<div class='sub'>Wi-Fi: <b>" + safeSsid + "</b></div>" +
+        "<div class='qr'><img src='" + wifiImgSrc + "' alt='Wi-Fi QR' /></div>" +
+        "<div class='steps'>" +
+          "<div><b>1)</b> Scan this QR</div>" +
+          "<div><b>2)</b> Tap &quot;Join&quot; / &quot;Connect&quot;</div>" +
+        "</div>" +
+      "</div>" +
+
+      "<div class='panel'>" +
+        "<div class='title'>STEP 2 - SCAN TO GET QUEUE NUMBER</div>" +
+        "<div class='sub'>After you are connected to Wi-Fi, scan the QR below.</div>" +
+        "<div class='qr'><img src='" + queueImgSrc + "' alt='Queue QR' /></div>" +
+        "<div class='steps'>" +
+          "<div><b>3)</b> Scan this QR</div>" +
+          "<div><b>4)</b> Enter your details to get your number</div>" +
+        "</div>" +
+      "</div>" +
+      "</div>" +
+
+      "<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>" +
+    "</div>" +
+    "</body></html>";
+
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+function downloadImage(url, filename) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "qr.png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function printQrNow() {
+  const code = String(BRANCH_CACHE?.branchCode || $("branchCode")?.value || "").trim();
+  if (!code) return toast("QR", "Branch Code not loaded.", "warn");
+
+  const name = String(BRANCH_CACHE?.branchName || $("branchName")?.value || "").trim();
+  const url = getQrPngUrl(code);
+
+  openPrintWindowForQr(url, name, code);
+}
+
+function downloadQrNow() {
+  const code = String(BRANCH_CACHE?.branchCode || $("branchCode")?.value || "").trim();
+  if (!code) return toast("QR", "Branch Code not loaded.", "warn");
+
+  // Force download by navigating to the PNG endpoint.
+  // If your server sets Content-Disposition attachment, it will download cleanly.
+  downloadViaUrl(getQrPngUrl(code));
+}
+
+
+      async function loadSetup() {
+        try {
+          const b = await jget("/api/admin/branch");
+          if (!b.ok) throw new Error(b.error || "branch");
+          BRANCH_CACHE = b.branch || null;
+
+          $("branchName").value = BRANCH_CACHE?.branchName || "";
+          $("branchCode").value = BRANCH_CACHE?.branchCode || "";
+          $("timezone").value = BRANCH_CACHE?.timezone || "Asia/Manila";
+        } catch (e) {
+          toast("Setup", "Failed to load branch config.", "err");
+        }
+
+        try {
+          const s = await jget("/api/admin/settings");
+          if (s.ok) SETTINGS_CACHE = s.settings || {};
+          $("mediaSourceDir").value = SETTINGS_CACHE?.["media.sourceDir"] || "";
+          $("maxPax").value = SETTINGS_CACHE?.maxPax ?? 1000;
+          $("autoCloseDay").value = String(SETTINGS_CACHE?.autoCloseDay ?? "true");
+          $("allowOverride").value = String(SETTINGS_CACHE?.allowOverride ?? "true");
+          $("displayShowVideo").value = String(SETTINGS_CACHE?.["display.showVideo"] ?? "true");
+          $("displayOrientation").value = String(SETTINGS_CACHE?.["display.orientation"] ?? "portrait");
+          $("gdriveFolderId").value = SETTINGS_CACHE?.["gdrive.folderId"] || "";
+          $("gdriveAuthMode").value = SETTINGS_CACHE?.["gdrive.authMode"] || "oauth";
+          $("gdriveOauthClientId").value = SETTINGS_CACHE?.["gdrive.oauthClientId"] || "";
+          $("gdriveOauthClientSecret").value = SETTINGS_CACHE?.["gdrive.oauthClientSecret"] || "";
+          {
+            const rawRedirect = String(SETTINGS_CACHE?.["gdrive.oauthRedirectUri"] || "").trim();
+            const fallbackRedirect = `${window.location.origin}/api/admin/gdrive/oauth/callback`;
+            $("gdriveOauthRedirectUri").value =
+              /\/api\/admin\/gdrive\/oauth\/callback$/i.test(rawRedirect) ? rawRedirect : fallbackRedirect;
+          }
+          setOauthRefreshTokenUi(SETTINGS_CACHE?.["gdrive.oauthRefreshToken"] || "");
+          $("gdriveOauthClientFile").value = SETTINGS_CACHE?.["gdrive.oauthClientFile"] || "";
+          $("gdriveServiceAccountFile").value = SETTINGS_CACHE?.["gdrive.serviceAccountFile"] || "";
+          $("gdriveSetupStatus").textContent = "Status: Ready to test.";
+          updateGdriveAuthModeUi();
+          loadSetupUploadSummary();
+          loadDisplayPairingStatus();
+
+
+        } catch (e) {
+          // still usable
+          toast("Setup", "Failed to load app settings (using defaults).", "warn");
+        }
+        if (SETUP_ACTIVE_PANE === "qr") loadQrSetup();
+        refreshQrPreview();
+
+      }
+
+      function renderDisplayPairCode(info) {
+        const codeEl = $("displayPairCodeValue");
+        const expEl = $("displayPairCodeExpiry");
+        if (!codeEl || !expEl) return;
+        if (!info || !info.code) {
+          codeEl.textContent = "No active code";
+          expEl.textContent = "";
+          return;
+        }
+        codeEl.textContent = `Code: ${String(info.code)}`;
+        expEl.textContent = "Active until used or revoked";
+      }
+
+      async function loadDisplayPairingStatus() {
+        try {
+          const j = await jget("/api/admin/display/devices");
+          if (!j.ok) return;
+          renderDisplayPairCode(j.lastPairCode || null);
+        } catch {}
+      }
+
+      async function generateDisplayPairCode() {
+        try {
+          const j = await jpost("/api/admin/display/pair-code", {});
+          if (!j.ok) return toast("Display Pairing", j.error || "Failed to generate code.", "err");
+          renderDisplayPairCode({ code: j.code, createdAt: j.createdAt });
+          toast("Display Pairing", `Pair code ${j.code} generated.`, "ok");
+        } catch {
+          toast("Display Pairing", "Request failed.", "err");
+        }
+      }
+
+      async function revokeAllDisplayPairing() {
+        const ok = confirm(
+          "Revoke all paired display screens now?\n\nAll TV/display sessions will be disconnected and must pair again.",
+        );
+        if (!ok) return;
+        try {
+          const j = await jpost("/api/admin/display/devices/revoke-all", {});
+          if (!j.ok) return toast("Display Pairing", j.error || "Failed to revoke pairing.", "err");
+          renderDisplayPairCode(null);
+          toast("Display Pairing", `Revoked ${Number(j.revoked || 0)} paired screen(s).`, "ok");
+          loadDisplayPairingStatus();
+        } catch {
+          toast("Display Pairing", "Request failed.", "err");
+        }
+      }
+
+      function updateGdriveAuthModeUi() {
+        const mode = String($("gdriveAuthMode")?.value || "oauth");
+        const isOauth = mode === "oauth";
+        if ($("gdriveOAuthWrap")) $("gdriveOAuthWrap").style.display = isOauth ? "" : "none";
+        if ($("gdriveServiceAccountFile")?.parentElement) {
+          $("gdriveServiceAccountFile").parentElement.style.display = isOauth ? "none" : "";
+        }
+      }
+
+      function maskToken(token) {
+        const t = String(token || "").trim();
+        if (!t) return "";
+        if (t.length <= 10) return `${"*".repeat(Math.max(0, t.length - 2))}${t.slice(-2)}`;
+        return `${"*".repeat(Math.max(0, t.length - 6))}${t.slice(-6)}`;
+      }
+
+      function setOauthRefreshTokenUi(token) {
+        const raw = String(token || "").trim();
+        const el = $("gdriveOauthRefreshToken");
+        if (!el) return;
+        el.dataset.rawToken = raw;
+        el.value = raw ? maskToken(raw) : "";
+        el.placeholder = raw ? "Connected" : "Not connected yet";
+      }
+
+      function getOauthRefreshTokenRaw() {
+        const el = $("gdriveOauthRefreshToken");
+        const fromUi = String(el?.dataset?.rawToken || "").trim();
+        if (fromUi) return fromUi;
+        return String(SETTINGS_CACHE?.["gdrive.oauthRefreshToken"] || "").trim();
+      }
+
+      async function loadSetupUploadSummary() {
+        const el = $("gdriveLastUploadSummary");
+        if (!el) return;
+        el.textContent = "Last successful upload: Loading...";
+        try {
+          const j = await jget("/api/admin/upload/status");
+          if (!j?.ok) {
+            el.textContent = `Last successful upload: Error (${j?.error || "Failed"})`;
+            return;
+          }
+          const last = j.config?.lastSync || null;
+          if (!last || !last.ok) {
+            el.textContent = "Last successful upload: None yet.";
+            return;
+          }
+          const when = fmtTime(last.at);
+          const files = Array.isArray(last.uploaded) ? last.uploaded.length : 0;
+          const branch = String(last.branchCode || "-");
+          const biz = String(last.businessDate || "-");
+          el.textContent = `Last successful upload: ${when} | Branch ${branch} | Business Date ${biz} | Files ${files}`;
+        } catch {
+          el.textContent = "Last successful upload: Failed to load.";
+        }
+      }
+
+      async function pickMediaFolder() {
+  try {
+    const j = await jpost("/api/admin/media/source/select", {});
+    if (!j.ok) return toast("Media Folder", j.error || "Failed to open folder picker.", "err");
+    if (j.canceled) return toast("Media Folder", "Selection canceled.", "warn");
+
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["media.sourceDir"] = j.folder || "";
+    $("mediaSourceDir").value = j.folder || "";
+
+    toast("Media Folder", "Saved. Display will use this folder now.", "");
+  } catch {
+    toast("Media Folder", "Request failed.", "err");
+  }
+}
+
+async function clearMediaFolder() {
+  try {
+    const j = await jpost("/api/admin/media/source/clear", {});
+    if (!j.ok) return toast("Media Folder", j.error || "Failed to clear.", "err");
+
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["media.sourceDir"] = "";
+    $("mediaSourceDir").value = "";
+
+    toast("Media Folder", "Cleared. Display will use bundled videos.", "");
+  } catch {
+    toast("Media Folder", "Request failed.", "err");
+  }
+}
+
+
+async function pickGdriveServiceAccount() {
+  try {
+    const j = await jpost("/api/admin/gdrive/service-account/select", {});
+    if (!j.ok) return toast("Google Drive", j.error || "Failed to open file picker.", "err");
+    if (j.canceled) return toast("Google Drive", "Selection canceled.", "warn");
+
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["gdrive.serviceAccountFile"] = j.filePath || "";
+    $("gdriveServiceAccountFile").value = j.filePath || "";
+    $("gdriveSetupStatus").textContent = `Status: Service account loaded (${j.clientEmail || "unknown email"}).`;
+    toast("Google Drive", "Service account JSON selected.", "ok");
+  } catch {
+    toast("Google Drive", "Request failed.", "err");
+  }
+}
+
+async function clearGdriveServiceAccount() {
+  try {
+    const j = await jpost("/api/admin/gdrive/service-account/clear", {});
+    if (!j.ok) return toast("Google Drive", j.error || "Failed to clear service account file.", "err");
+
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["gdrive.serviceAccountFile"] = "";
+    $("gdriveServiceAccountFile").value = "";
+    $("gdriveSetupStatus").textContent = "Status: Service account file cleared.";
+    toast("Google Drive", "Service account file cleared.", "ok");
+  } catch {
+    toast("Google Drive", "Request failed.", "err");
+  }
+}
+
+async function testGdriveSync() {
+  try {
+    $("gdriveSetupStatus").textContent = "Status: Testing connection...";
+    const j = await jpost("/api/admin/upload/test", {
+      authMode: String($("gdriveAuthMode")?.value || "oauth"),
+      folderId: String($("gdriveFolderId")?.value || "").trim(),
+      oauthClientId: String($("gdriveOauthClientId")?.value || "").trim(),
+      oauthClientSecret: String($("gdriveOauthClientSecret")?.value || "").trim(),
+      oauthRedirectUri: String($("gdriveOauthRedirectUri")?.value || "").trim(),
+      oauthRefreshToken: getOauthRefreshTokenRaw(),
+      serviceAccountFile: String($("gdriveServiceAccountFile")?.value || "").trim(),
+    });
+    if (!j.ok) {
+      $("gdriveSetupStatus").textContent = `Status: Test failed (${j.error || "Unknown error"}).`;
+      return toast("Google Drive", j.error || "Connection test failed.", "err");
+    }
+    const fid = String(j.uploaded?.id || "").trim();
+    $("gdriveSetupStatus").textContent = `Status: Test succeeded${fid ? ` (file id: ${fid})` : ""}.`;
+    toast("Google Drive", "Connection test succeeded.", "ok");
+    loadUploadStatus();
+  } catch (e) {
+    const msg = String(e?.message || "Request failed.");
+    $("gdriveSetupStatus").textContent = `Status: Test failed (${msg}).`;
+    toast("Google Drive", msg, "err");
+  }
+}
+
+async function pickGdriveOAuthClient() {
+  try {
+    const j = await jpost("/api/admin/gdrive/oauth-client/select", {});
+    if (!j.ok) return toast("Google Drive", j.error || "Failed to open OAuth JSON picker.", "err");
+    if (j.canceled) return toast("Google Drive", "Selection canceled.", "warn");
+
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["gdrive.oauthClientFile"] = j.filePath || "";
+    SETTINGS_CACHE["gdrive.oauthClientId"] = j.clientId || "";
+    SETTINGS_CACHE["gdrive.oauthClientSecret"] = j.clientSecret || "";
+    if (j.redirectUri) SETTINGS_CACHE["gdrive.oauthRedirectUri"] = j.redirectUri;
+
+    $("gdriveOauthClientFile").value = j.filePath || "";
+    $("gdriveOauthClientId").value = j.clientId || "";
+    $("gdriveOauthClientSecret").value = j.clientSecret || "";
+    if (j.redirectUri) $("gdriveOauthRedirectUri").value = j.redirectUri;
+    $("gdriveSetupStatus").textContent = "Status: OAuth client JSON loaded.";
+    toast("Google Drive", "OAuth JSON loaded and fields auto-filled.", "ok");
+  } catch {
+    toast("Google Drive", "Request failed.", "err");
+  }
+}
+
+async function clearGdriveOAuthClient() {
+  try {
+    const j = await jpost("/api/admin/gdrive/oauth-client/clear", {});
+    if (!j.ok) return toast("Google Drive", j.error || "Failed to clear OAuth JSON file.", "err");
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["gdrive.oauthClientFile"] = "";
+    $("gdriveOauthClientFile").value = "";
+    $("gdriveSetupStatus").textContent = "Status: OAuth JSON file cleared.";
+    toast("Google Drive", "OAuth JSON file cleared.", "ok");
+  } catch {
+    toast("Google Drive", "Request failed.", "err");
+  }
+}
+
+function toggleOauthClientSecretVisibility() {
+  const input = $("gdriveOauthClientSecret");
+  const btn = $("btnToggleOauthSecret");
+  if (!input || !btn) return;
+  const isHidden = String(input.type || "").toLowerCase() === "password";
+  input.type = isHidden ? "text" : "password";
+  btn.textContent = isHidden ? "Hide" : "Show";
+}
+
+async function refreshOAuthTokenFromServer(silent = true) {
+  try {
+    const s = await jget("/api/admin/settings");
+    if (!s?.ok) return false;
+    SETTINGS_CACHE = s.settings || SETTINGS_CACHE || {};
+    const token = String(SETTINGS_CACHE?.["gdrive.oauthRefreshToken"] || "").trim();
+    setOauthRefreshTokenUi(token);
+    if (token) {
+      if ($("gdriveSetupStatus")) $("gdriveSetupStatus").textContent = "Status: OAuth connected (refresh token saved).";
+      return true;
+    }
+    if (!silent && $("gdriveSetupStatus")) {
+      $("gdriveSetupStatus").textContent = "Status: OAuth not connected yet.";
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function startGdriveOAuth() {
+  try {
+    const payload = {
+      authMode: "oauth",
+      oauthClientId: String($("gdriveOauthClientId")?.value || "").trim(),
+      oauthClientSecret: String($("gdriveOauthClientSecret")?.value || "").trim(),
+      oauthRedirectUri: String($("gdriveOauthRedirectUri")?.value || "").trim(),
+    };
+    if (!payload.oauthClientId || !payload.oauthClientSecret) {
+      return toast("Google Drive", "OAuth Client ID and Client Secret are required.", "warn");
+    }
+    const j = await jpost("/api/admin/gdrive/oauth/start", payload);
+    if (!j.ok) return toast("Google Drive", j.error || "Failed to start OAuth.", "err");
+    $("gdriveSetupStatus").textContent = "Status: OAuth window opened. Complete Google sign-in, then return here.";
+    const w = window.open(j.authUrl, "_blank");
+    if (!w) {
+      toast("Google Drive", "Popup blocked. Allow popups, then retry Connect OAuth.", "warn");
+    } else {
+      w.focus();
+      const startedAt = Date.now();
+      const timer = setInterval(async () => {
+        const connected = await refreshOAuthTokenFromServer(true);
+        if (connected) {
+          clearInterval(timer);
+          toast("Google Drive", "OAuth token detected and loaded.", "ok");
+          return;
+        }
+        const timedOut = (Date.now() - startedAt) > 180000;
+        if (w.closed || timedOut) {
+          clearInterval(timer);
+          await refreshOAuthTokenFromServer(false);
+        }
+      }, 2000);
+    }
+  } catch (e) {
+    toast("Google Drive", String(e?.message || "Failed to start OAuth."), "err");
+  }
+}
+
+async function clearGdriveOAuth() {
+  try {
+    const j = await jpost("/api/admin/gdrive/oauth/clear", {});
+    if (!j.ok) return toast("Google Drive", j.error || "Failed to clear OAuth token.", "err");
+    setOauthRefreshTokenUi("");
+    SETTINGS_CACHE = SETTINGS_CACHE || {};
+    SETTINGS_CACHE["gdrive.oauthRefreshToken"] = "";
+    $("gdriveSetupStatus").textContent = "Status: OAuth refresh token cleared.";
+    toast("Google Drive", "OAuth token cleared.", "ok");
+  } catch {
+    toast("Google Drive", "Request failed.", "err");
+  }
+}
+
+
+      async function saveSetup() {
+        const branchName = ($("branchName").value || "").trim();
+        const timezone = ($("timezone").value || "").trim() || "Asia/Manila";
+
+        if (!branchName) return toast("Setup", "Branch Name is required.", "warn");
+
+        // IMPORTANT: Your current server.js defaults branchCode to the server start variable if you omit it.
+        // So we ALWAYS send the existing stored branchCode to avoid reverting to DEV.
+        const branchCodeKeep = String(BRANCH_CACHE?.branchCode || $("branchCode").value || "").trim();
+        if (!branchCodeKeep) return toast("Setup", "Branch Code missing. Reload Setup page.", "err");
+
+        const ok = confirm("Save setup changes now?");
+        if (!ok) return;
+
+        try {
+          const j1 = await jpost("/api/admin/branch", { branchName, branchCode: branchCodeKeep, timezone });
+          if (!j1.ok) return toast("Setup", j1.error || "Failed saving branch.", "err");
+        } catch {
+          return toast("Setup", "Failed saving branch config.", "err");
+        }
+
+        // settings
+        const maxPax = Number(($("maxPax").value || "50").trim());
+        const autoCloseDay = $("autoCloseDay").value;
+        const allowOverride = $("allowOverride").value;
+        const oauthRefreshTokenSafe = getOauthRefreshTokenRaw();
+
+        try {
+          const j2 = await jpost("/api/admin/settings", {
+            maxPax: String(Number.isFinite(maxPax) ? maxPax : 50),
+            autoCloseDay: String(autoCloseDay),
+            allowOverride: String(allowOverride),
+            "display.showVideo": String($("displayShowVideo").value) === "true" ? "true" : "false",
+            "display.orientation": String($("displayOrientation").value) === "portrait" ? "portrait" : "landscape",
+            "gdrive.authMode": String($("gdriveAuthMode").value || "oauth"),
+            "gdrive.folderId": String($("gdriveFolderId").value || "").trim(),
+            "gdrive.oauthClientId": String($("gdriveOauthClientId").value || "").trim(),
+            "gdrive.oauthClientSecret": String($("gdriveOauthClientSecret").value || "").trim(),
+            "gdrive.oauthRedirectUri": String($("gdriveOauthRedirectUri").value || "").trim(),
+            "gdrive.oauthRefreshToken": oauthRefreshTokenSafe,
+            "gdrive.oauthClientFile": String($("gdriveOauthClientFile").value || "").trim(),
+            "gdrive.serviceAccountFile": String($("gdriveServiceAccountFile").value || "").trim(),
+
+          });
+          if (!j2.ok) return toast("Setup", j2.error || "Failed saving settings.", "err");
+        } catch {
+          return toast("Setup", "Failed saving settings.", "err");
+        }
+
+        toast("Setup", "Saved successfully.", "ok");
+        await loadBasic();
+        await loadSetup();
+        refreshQrPreview();
+      }
+
+      async function unlockAndChangeBranchCode() {
+        // UI gate only (server must enforce admin-only in server.js later)
+        if (!BRANCH_CACHE?.branchCode) {
+          toast("Setup", "Branch config not loaded yet. Open Setup page first.", "warn");
+          return;
+        }
+
+        const warnText =
+          "Changing Branch Code can cause existing tickets to disappear from the live screens because tickets are partitioned by branchCode.\n\n" +
+          "If you proceed, you must accept that:\n" +
+          "- Existing tickets under the old code will not show under the new code\n" +
+          "- Reports will split between old/new codes\n\n" +
+          "Type CHANGE to continue:";
+        const v = prompt(warnText, "");
+        if (String(v || "").trim().toUpperCase() !== "CHANGE") {
+          toast("Setup", "Cancelled.", "warn");
+          return;
+        }
+
+        const newCode = prompt("Enter NEW Branch Code (e.g., MOA). This must match your intended partition key:", BRANCH_CACHE.branchCode);
+        const code = String(newCode || "").trim().toUpperCase();
+        if (!code) return toast("Setup", "No branch code entered.", "warn");
+
+        const confirm2 = confirm(`FINAL CONFIRM:\nChange Branch Code from ${BRANCH_CACHE.branchCode} -> ${code}\n\nProceed?`);
+        if (!confirm2) return;
+
+        try {
+          const j = await jpost("/api/admin/branch", {
+              branchName: String(BRANCH_CACHE.branchName || $("branchName").value || "").trim(),
+              branchCode: code,
+              timezone: String(BRANCH_CACHE.timezone || $("timezone").value || "Asia/Manila").trim(),
+              confirmLoss: true, // REQUIRED by server.js when changing branchCode
+            });
+
+          if (!j.ok) return toast("Setup", j.error || "Server rejected branch code change.", "err");
+
+          toast("Setup", "Branch code updated. Expect tickets to reset for the new code.", "ok");
+          await loadBasic();
+          await loadSetup();
+        } catch {
+          toast("Setup", "Request failed.", "err");
+        }
+      }
+
+      // ---------- Users ----------
+      async function loadUsers() {
+        try {
+          const j = await jget("/api/admin/users");
+          if (!j.ok) throw new Error(j.error || "users");
+
+          const tb = $("usersTable");
+          tb.innerHTML = "";
+          const users = j.users || [];
+
+          if (!users.length) {
+            tb.innerHTML = `<tr><td colspan="5" class="muted">No users found.</td></tr>`;
+            return;
+          }
+
+          for (const u of users) {
+            const tr = document.createElement("tr");
+
+            const name = escapeHtml(u.fullName || u.name || "-");
+            const role = escapeHtml(u.roleId || u.role || "-");
+            const active = (u.isActive === 0 || u.isActive === false) ? "No" : "Yes";
+            const last = u.lastLoginAt || u.lastLogin || u.lastLoginMs || u.lastLoginTS || 0;
+
+            tr.innerHTML = `
+              <td><b>${name}</b></td>
+              <td>${role}</td>
+              <td>${active}</td>
+              <td>${escapeHtml(fmtTime(last))}</td>
+              <td>
+                <div class="row" style="gap:8px; flex-wrap:nowrap;">
+                  <button class="btn small" data-act="edit" data-id="${escapeHtml(u.userId)}">Edit</button>
+                  <button class="btn small" data-act="toggle" data-id="${escapeHtml(u.userId)}">${active === "Yes" ? "Disable" : "Enable"}</button>
+                  <button class="btn small danger" data-act="pin" data-id="${escapeHtml(u.userId)}">Reset PIN</button>
+                </div>
+              </td>
+            `;
+            tb.appendChild(tr);
+          }
+
+          // actions
+          tb.querySelectorAll("button[data-act]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const act = btn.getAttribute("data-act");
+              const id = btn.getAttribute("data-id");
+              const user = users.find(x => x.userId === id);
+              if (!user) return;
+
+              if (act === "edit") return editUser(user);
+              if (act === "toggle") return toggleUser(user);
+              if (act === "pin") return resetPin(user);
+            });
+          });
+
+        } catch (e) {
+          toast("Users", "Failed to load users.", "err");
+          const tb = $("usersTable");
+          tb.innerHTML = `<tr><td colspan="5" class="muted">Failed to load.</td></tr>`;
+        }
+      }
+
+      async function createUser() {
+        const name = ($("newUserName").value || "").trim();
+        const role = $("newUserRole").value;
+        const pin1 = ($("newUserPin").value || "").trim();
+        const pin2 = ($("newUserPin2").value || "").trim();
+
+        if (!name) return toast("Users", "Name is required.", "warn");
+        if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
+        if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
+
+        if (!confirm(`Create user?\n\nName: ${name}\nRole: ${role}`)) return;
+
+        try {
+          const j = await jpost("/api/admin/users/create", { fullName: name, roleId: role, pin: pin1 });
+          if (!j.ok) return toast("Users", j.error || "Create failed", "err");
+
+          toast("Users", "User created.", "ok");
+          $("newUserName").value = "";
+          $("newUserPin").value = "";
+          $("newUserPin2").value = "";
+          await loadUsers();
+        } catch {
+          toast("Users", "Request failed.", "err");
+        }
+      }
+
+      async function editUser(user) {
+        const fullName = prompt("Edit Full Name:", user.fullName || "");
+        if (fullName === null) return;
+
+        const roleId = prompt("Edit Role (STAFF / SUPERVISOR / ADMIN):", user.roleId || "STAFF");
+        if (roleId === null) return;
+
+        const role = String(roleId || "").trim().toUpperCase();
+        const name = String(fullName || "").trim();
+
+        if (!name) return toast("Users", "Name cannot be empty.", "warn");
+        if (!["STAFF","SUPERVISOR","ADMIN"].includes(role)) return toast("Users", "Invalid role.", "warn");
+
+        if (!confirm(`Save changes?\n\n${user.fullName} -> ${name}\n${user.roleId} -> ${role}`)) return;
+
+        try {
+          const j = await jpost("/api/admin/users/update", { userId: user.userId, fullName: name, roleId: role });
+          if (!j.ok) return toast("Users", j.error || "Update failed", "err");
+          toast("Users", "Updated.", "ok");
+          await loadUsers();
+        } catch {
+          toast("Users", "Request failed.", "err");
+        }
+      }
+
+      async function toggleUser(user) {
+        const next = !user.isActive;
+        if (!confirm(`${next ? "Enable" : "Disable"} this user?\n\n${user.fullName}`)) return;
+
+        try {
+          const j = await jpost("/api/admin/users/update", { userId: user.userId, isActive: next });
+          if (!j.ok) return toast("Users", j.error || "Update failed", "err");
+          toast("Users", next ? "Enabled." : "Disabled.", "ok");
+          await loadUsers();
+        } catch {
+          toast("Users", "Request failed.", "err");
+        }
+      }
+
+      async function resetPin(user) {
+        const pin = prompt(`Reset PIN for:\n${user.fullName}\n\nEnter NEW 6-digit PIN:`, "");
+        if (pin === null) return;
+        const p = String(pin || "").trim();
+        if (!/^\d{6}$/.test(p)) return toast("Users", "PIN must be 6 digits.", "warn");
+
+        const pin2 = prompt("Confirm NEW 6-digit PIN:", "");
+        if (pin2 === null) return;
+        if (String(pin2 || "").trim() !== p) return toast("Users", "PIN mismatch.", "warn");
+
+        if (!confirm("Confirm PIN reset?")) return;
+
+        try {
+          const j = await jpost("/api/admin/users/reset-pin", { userId: user.userId, pin: p });
+          if (!j.ok) return toast("Users", j.error || "Reset failed", "err");
+          toast("Users", "PIN reset.", "ok");
+        } catch {
+          toast("Users", "Request failed.", "err");
+        }
+      }
+
+      // ---------- Permissions ----------
+      function roleOrder(roles) {
+        const wanted = ["STAFF","SUPERVISOR","ADMIN"];
+        const out = [];
+        wanted.forEach(w => {
+          const r = roles.find(x => x.roleId === w);
+          if (r) out.push(r);
+        });
+        // append any others
+        roles.forEach(r => { if (!out.find(x => x.roleId === r.roleId)) out.push(r); });
+        return out;
+      }
+
+      async function loadPerms() {
+        try {
+          const j = await jget("/api/admin/permissions");
+          if (!j.ok) throw new Error(j.error || "permissions");
+
+          PERM_CACHE = j;
+
+          const roles = roleOrder(j.roles || []);
+          const perms = j.permissions || [];
+          const matrix = j.matrix || {};
+
+          // we render only STAFF/SUPERVISOR/ADMIN columns (per your UI layout)
+          const tb = $("permTable");
+          tb.innerHTML = "";
+
+          if (!perms.length) {
+            tb.innerHTML = `<tr><td colspan="4" class="muted">No permissions found.</td></tr>`;
+            return;
+          }
+
+          for (const p of perms) {
+            const key = p.permKey;
+            const tr = document.createElement("tr");
+
+            const staff = !!(matrix.STAFF && matrix.STAFF[key]);
+            const sup   = !!(matrix.SUPERVISOR && matrix.SUPERVISOR[key]);
+            const adm   = !!(matrix.ADMIN && matrix.ADMIN[key]);
+
+            tr.innerHTML = `
+              <td>
+                <b>${escapeHtml(p.permName || key)}</b>
+                <div class="muted2" style="font-size:11px;">${escapeHtml(key)} - ${escapeHtml(p.description || "")}</div>
+              </td>
+              <td><input type="checkbox" data-role="STAFF" data-perm="${escapeHtml(key)}" ${staff ? "checked":""} /></td>
+              <td><input type="checkbox" data-role="SUPERVISOR" data-perm="${escapeHtml(key)}" ${sup ? "checked":""} /></td>
+              <td><input type="checkbox" data-role="ADMIN" data-perm="${escapeHtml(key)}" ${adm ? "checked":""} /></td>
+            `;
+            tb.appendChild(tr);
+          }
+
+        } catch (e) {
+          toast("Permissions", "Failed to load permissions.", "err");
+          const tb = $("permTable");
+          tb.innerHTML = `<tr><td colspan="4" class="muted">Failed to load.</td></tr>`;
+        }
+      }
+
+      async function savePerms() {
+        const tb = $("permTable");
+        const inputs = tb.querySelectorAll('input[type="checkbox"][data-role][data-perm]');
+        if (!inputs.length) return toast("Permissions", "Nothing to save.", "warn");
+
+        if (!confirm("Save permission matrix now?")) return;
+
+        const matrix = {};
+        inputs.forEach(ch => {
+          const role = ch.getAttribute("data-role");
+          const perm = ch.getAttribute("data-perm");
+          if (!matrix[role]) matrix[role] = {};
+          matrix[role][perm] = ch.checked ? 1 : 0;
+        });
+
+        try {
+          const j = await jpost("/api/admin/permissions", { matrix });
+          if (!j.ok) return toast("Permissions", j.error || "Save failed", "err");
+          toast("Permissions", "Saved.", "ok");
+          await loadPerms();
+        } catch {
+          toast("Permissions", "Request failed.", "err");
+        }
+      }
+
+      // ---------- audit ----------
+      async function loadAudit() {
+        try {
+          const j = await jget("/api/admin/audit?limit=100&offset=0");
+          if (!j.ok) throw new Error(j.error || "audit");
+          const tb = $("auditTable");
+          tb.innerHTML = "";
+          const rows = j.rows || [];
+
+          if (!rows.length) {
+            tb.innerHTML = `<tr><td colspan="4" class="muted">No audit logs.</td></tr>`;
+            return;
+          }
+          for (const r of rows) {
+            let actorText = "System/Unknown";
+            try {
+              const p = JSON.parse(String(r.payload || "{}"));
+              const a = p && p.actor ? p.actor : null;
+              if (a) {
+                const name = String(a.fullName || a.userId || "").trim();
+                const role = String(a.roleId || "").trim();
+                actorText = role ? `${name} (${role})` : name || actorText;
+              }
+            } catch {}
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${escapeHtml(fmtTime(r.createdAt))}</td>
+              <td><b>${escapeHtml(r.action)}</b></td>
+              <td>${escapeHtml(actorText)}</td>
+              <td><pre style="margin:0; white-space:pre-wrap; color:rgba(60,40,20,.78); font-size:12px;">${escapeHtml(r.payload || "")}</pre></td>
+            `;
+            tb.appendChild(tr);
+          }
+        } catch {
+          toast("Audit", "Failed to load audit logs.", "err");
+        }
+      }
+
+      // ---------- system ----------
+      async function loadSystemInfo() {
+        try {
+          const h = await jget("/api/health");
+          if (!h.ok) throw new Error("health");
+          SYS_INFO_CACHE = {
+            branchCode: h.branchCode,
+            port: h.port,
+            currentBusinessDate: h.currentBusinessDate,
+          };
+          renderSystemInfoWithTime();
+        } catch {
+          SYS_INFO_CACHE = null;
+          $("sysInfo").textContent = "Failed to load /api/health";
+        }
+      }
+
+      // System backups: create a local snapshot in ProgramData backups folder.
+      async function backupDb() {
+        const btn = $("btnBackup");
+        if (!btn) return;
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "Backing up...";
+        try {
+          const j = await jpost("/api/admin/system/backup", {});
+          if (!j.ok) return toast("Backup DB", j.error || "Backup failed.", "err");
+          toast("Backup DB", `Created ${j.fileName || "backup file"}`, "ok");
+        } catch {
+          toast("Backup DB", "Request failed.", "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prev;
+        }
+      }
+
+      // System backups: create local snapshot then export a copy to a chosen folder.
+      async function exportBackupDb() {
+        const btn = $("btnBackupExport");
+        if (!btn) return;
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "Exporting...";
+        try {
+          const j = await jpost("/api/admin/system/backup/export", {});
+          if (!j.ok) return toast("Export Backup", j.error || "Export failed.", "err");
+          if (j.canceled) return toast("Export Backup", "Export canceled.", "warn");
+          toast("Export Backup", `Exported to ${j.exportPath || "selected folder"}`, "ok");
+        } catch {
+          toast("Export Backup", "Request failed.", "err");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prev;
+        }
+      }
+
+      // System restore: restores latest local backup and triggers app relaunch.
+      async function restoreDb() {
+        const ok = window.confirm(
+          "Restore latest backup?\n\nThis will replace the current database and restart QSys."
+        );
+        if (!ok) return;
+
+        const btn = $("btnRestore");
+        if (!btn) return;
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "Restoring...";
+        try {
+          const j = await jpost("/api/admin/system/restore", {});
+          if (!j.ok) {
+            btn.disabled = false;
+            btn.textContent = prev;
+            return toast("Restore DB", j.error || "Restore failed.", "err");
+          }
+          toast("Restore DB", j.message || "Restore started. App will restart.", "ok");
+        } catch {
+          btn.disabled = false;
+          btn.textContent = prev;
+          toast("Restore DB", "Request failed.", "err");
+        }
+      }
+
+      // Utility action: open local backups folder in file explorer.
+      async function openBackupFolder() {
+        try {
+          const j = await jpost("/api/admin/system/backup/open-folder", {});
+          if (!j.ok) return toast("Backups", j.error || "Failed to open backup folder.", "err");
+          toast("Backups", "Opened backup folder.", "ok");
+        } catch {
+          toast("Backups", "Request failed.", "err");
+        }
+      }
+
+      // Seed test data for today's business date (current branch).
+      async function seedTodayData() {
+        const ok = window.confirm(
+          "Seed month-to-date test data?\n\nThis will DELETE month-to-date queue rows for the current branch and insert demo records."
+        );
+        if (!ok) return;
+
+        const btn = $("btnSeedToday");
+        const loader = $("seedLoader");
+        const loaderText = $("seedLoaderText");
+        if (!btn) return;
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "Seeding...";
+        let pct = 0;
+        let pctTimer = null;
+        if (loader && loaderText) {
+          loader.classList.add("show");
+          loaderText.textContent = "Seeding test data... 0%";
+          pctTimer = setInterval(() => {
+            // Simulated progress for better UX while request runs.
+            pct = Math.min(95, pct + (pct < 60 ? 7 : 3));
+            loaderText.textContent = `Seeding test data... ${pct}%`;
+          }, 500);
+        }
+        try {
+          const j = await jpost("/api/admin/system/seed-today", {});
+          if (!j.ok) return toast("Seed Data", j.error || "Seed failed.", "err");
+          if (loaderText) loaderText.textContent = "Seeding test data... 100%";
+          toast("Seed Data", "Seed completed for today.", "ok");
+          await loadBasic();
+          await loadSystemInfo();
+        } catch {
+          toast("Seed Data", "Request failed.", "err");
+        } finally {
+          if (pctTimer) clearInterval(pctTimer);
+          if (loader) loader.classList.remove("show");
+          btn.disabled = false;
+          btn.textContent = prev;
+        }
+      }
+
+      // ---------- actions ----------
+      async function closeDay() {
+        try {
+          const j = await jpost("/api/admin/close-day", {});
+          if (!j.ok) return toast("Close Day", j.error || "Failed", "err");
+          toast("Close Day", j.message || "Done", "ok");
+          await loadBasic();
+        } catch (e) {
+          toast("Close Day", "Request failed", "err");
+        }
+      }
+
+      function downloadViaUrl(url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      
+      function getWaitRef(){
+        // Prefer summary controls if present; fallback to 2h
+        const tEl = document.getElementById("sumWaitRefType");
+        const vEl = document.getElementById("sumWaitRefValue");
+        const t = (tEl ? (tEl.value || "hours") : "hours").trim();
+        const v = vEl ? parseInt(vEl.value||"2",10) : 2;
+        const vv = Number.isFinite(v) && v>0 ? v : 2;
+        return `${t}:${vv}`;
+      }
+
+      
+      // ---------- Reports UI ----------
+      // Controls report scope, type, preview text, and generate/export/print actions.
+
+      let REPORT_HAS_OUTPUT = false;
+      let RAW_TICKETS_CACHE = [];
+      let RAW_TICKETS_PAGE = 1;
+      let RAW_TICKETS_PAGE_SIZE = 50;
+      let DAILY_SUMMARY_CACHE = [];
+      let DAILY_SUMMARY_PAGE = 1;
+      let DAILY_SUMMARY_PAGE_SIZE = 50;
+
+      // Toggles generated-state pill so users know whether output is current.
+      function setReportsStale(stale){
+        const pill = $("repStalePill");
+        if (!pill) return;
+        pill.textContent = stale ? "Not generated yet" : "Up to date";
+        pill.classList.toggle("ok", !stale);
+        pill.classList.toggle("warn", stale);
+      }
+
+      function getReportType(){
+        return String($("repType")?.value || "custom_summary").trim();
+      }
+
+      function getReportScope(){
+        return String($("repScope")?.value || "single").trim();
+      }
+
+      function manilaYMDFromTs(ts){
+        try{
+          return new Date(ts).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+        }catch{
+          return new Date(ts).toISOString().slice(0,10);
+        }
+      }
+
+      function manilaTodayYMD(){
+        return manilaYMDFromTs(Date.now());
+      }
+
+      function manilaMonthStartYMD(ymd){
+        const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return ymd;
+        return `${m[1]}-${m[2]}-01`;
+      }
+
+      function ymdAddDays(ymd, deltaDays){
+        const m = String(ymd||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if(!m) return ymd;
+        const y = parseInt(m[1],10), mo=parseInt(m[2],10), d=parseInt(m[3],10);
+        // Use UTC anchor to avoid DST surprises; format back in Manila tz.
+        const base = Date.UTC(y, mo-1, d, 12, 0, 0);
+        return manilaYMDFromTs(base + (deltaDays*86400000));
+      }
+
+      // Computes effective [from,to] date range for all report scope modes.
+      function computeScopeRange(){
+        const scope = getReportScope();
+        const today = manilaTodayYMD();
+
+        if(scope === "single"){
+          const day = String($("repDateSingle")?.value || today).trim() || today;
+          return { scope, from: day, to: day };
+        }
+
+        if(scope === "range"){
+          const from = String($("repFrom")?.value || "").trim();
+          const to = String($("repTo")?.value || "").trim();
+          return { scope, from, to };
+        }
+
+        if(scope === "last_days"){
+          const v = parseInt(String($("repRollValue")?.value || "2"), 10);
+          const days = Number.isFinite(v) && v>0 ? v : 2;
+          const from = ymdAddDays(today, -(days-1));
+          const to = today;
+          return { scope, from, to, days };
+        }
+
+        if(scope === "last_hours"){
+          const v = parseInt(String($("repRollValue")?.value || "2"), 10);
+          const hours = Number.isFinite(v) && v>0 ? v : 2;
+          const sinceMs = Date.now() - (hours*3600000);
+          const from = manilaYMDFromTs(sinceMs);
+          const to = today;
+          return { scope, from, to, hours, sinceMs };
+        }
+
+        return { scope:"single", from: today, to: today };
+      }
+
+      function getReportDates(){
+        const r = computeScopeRange();
+        return { from: r.from, to: r.to };
+      }
+
+      // Builds human-readable "what this report includes" text under the builder.
+      function buildIncludesText(){
+        const type = getReportType();
+        const scopeInfo = computeScopeRange();
+        const branch = (BRANCH_CACHE?.branchCode || BRANCH_CACHE?.branchName || "").toString();
+
+        const rangeTxt = (scopeInfo.from && scopeInfo.to) ? `${scopeInfo.from} -> ${scopeInfo.to}` : "-";
+        const scopeLabel =
+          (scopeInfo.scope === "single") ? "Absolute Date" :
+          (scopeInfo.scope === "range") ? "Date Range" :
+          (scopeInfo.scope === "last_days") ? `Last ${scopeInfo.days || "X"} Days` :
+          (scopeInfo.scope === "last_hours") ? `Last ${scopeInfo.hours || "X"} Hours` : "-";
+
+        const lines = [];
+        lines.push(`Scope: <b>${escapeHtml(rangeTxt)}</b> - (${escapeHtml(scopeLabel)}) - Branch: <b>${escapeHtml(branch || "Current")}</b>`);
+
+        if (type === "custom_summary") {
+          lines.push(`Rows included: Aggregate by GROUP CODE (A-D) for all tickets created in the selected scope.`);
+          lines.push(`<br/><b>Columns (matches your template):</b>`);
+          lines.push(`- Total Reservations (all created tickets)`);
+          lines.push(`- Total Pax count reserved`);
+          lines.push(`- Total Priority Reservations`);
+          lines.push(`- Seated Count - group`);
+          lines.push(`- Seated Count - total pax count`);
+          lines.push(`- Waiting Time to be called - Average (mins)`);
+          lines.push(`- Waiting Time to be seated - Average (mins)`);
+          lines.push(`<br/>Outputs: On-screen table - CSV Export - 1-page Print.`);
+        } else if (type === "raw_tickets") {
+          lines.push(`Rows included: All tickets created in the selected scope (all statuses).`);
+          lines.push(`<br/><b>Columns:</b>`);
+          lines.push(`- Ticket ID - Business Date - Group Code - Queue Num - Guest Name - Pax`);
+          lines.push(`- Priority Type - Status - createdAt - calledAt - timesCalled - seatedAt - skippedAt`);
+          lines.push(`<br/>Outputs: On-screen table - CSV Export.`);
+        } else if (type === "daily_summary") {
+          lines.push(`Rows included: Daily aggregates (per date + group) within the selected scope.`);
+          lines.push(`<br/>Outputs: On-screen table - CSV Export (daily_summary.csv).`);
+        } else if (type === "audit_logs") {
+          lines.push(`Rows included: Audit rows within the selected scope (if endpoint supports range).`);
+          lines.push(`<br/>Outputs: CSV Export only (audit_logs.csv).`);
+        } else {
+          lines.push(`Select a report type.`);
+        }
+
+        return lines.join("<br/>");
+      }
+
+      function updateScopeInputsUI(){
+        const scope = getReportScope();
+
+        const singleWrap = $("scopeSingleWrap");
+        const rangeFromWrap = $("scopeRangeFromWrap");
+        const rangeToWrap = $("scopeRangeToWrap");
+        const rollWrap = $("scopeRollWrap");
+
+        if (singleWrap) singleWrap.classList.toggle("hidden", scope !== "single");
+        if (rangeFromWrap) rangeFromWrap.classList.toggle("hidden", scope !== "range");
+        if (rangeToWrap) rangeToWrap.classList.toggle("hidden", scope !== "range");
+        if (rollWrap) rollWrap.classList.toggle("hidden", !(scope === "last_days" || scope === "last_hours"));
+
+        const rollLabel = $("repRollLabel");
+        const rollHelp = $("repRollHelp");
+        if (rollLabel) rollLabel.textContent = (scope === "last_hours") ? "Hours" : "Days";
+        if (rollHelp){
+          rollHelp.textContent =
+            (scope === "last_hours")
+              ? "Example: 4 = from the last 4 hours up to now."
+              : (scope === "last_days")
+                ? "Example: 3 = from (today-2) up to today."
+                : "-";
+        }
+
+        // Scope preview textbox
+        const scopeInfo = computeScopeRange();
+        const scopePreview = $("repScopePreview");
+        if (scopePreview){
+          scopePreview.value = (scopeInfo.from && scopeInfo.to) ? `${scopeInfo.from} -> ${scopeInfo.to}` : "-";
+        }
+      }
+
+      // Updates visibility/state of report controls and output panes.
+      function updateReportsMode(){
+        updateScopeInputsUI();
+
+        const type = getReportType();
+
+        // Wait reference row is not used for Custom Summary / Raw Tickets
+        const waitRow = $("repWaitRefRow");
+        if (waitRow) waitRow.style.display = "none";
+
+        // Output panels
+        const outTitle = $("repOutTitle");
+        if (outTitle) {
+          outTitle.textContent =
+            (type === "custom_summary") ? "Custom Summary" :
+            (type === "raw_tickets") ? "Raw Data (Tickets)" :
+            (type === "daily_summary") ? "Daily Summary" :
+            (type === "audit_logs") ? "Audit Logs" : "Report Output";
+        }
+
+        const sumOut = $("sumOut");
+        const csvOnly = $("repCsvOnlyOut");
+        const customOut = $("customOut");
+        const rawOut = $("rawOut");
+        const dailyOut = $("dailyOut");
+        const execWrap = $("execOutWrap"); // legacy tables; keep hidden
+
+        const isInteractive = (type === "custom_summary" || type === "raw_tickets" || type === "daily_summary");
+        if (sumOut) sumOut.style.display = isInteractive ? "" : "none";
+        if (customOut) customOut.style.display = (type === "custom_summary") ? "" : "none";
+        if (rawOut) rawOut.style.display = (type === "raw_tickets") ? "" : "none";
+        if (dailyOut) dailyOut.style.display = (type === "daily_summary") ? "" : "none";
+        if (execWrap) execWrap.style.display = "none";
+        if (csvOnly) csvOnly.style.display = isInteractive ? "none" : "";
+
+        // Buttons
+        const btnGen = $("btnRepGenerate");
+        const btnPrint = $("btnRepPrint");
+        if (btnGen) btnGen.disabled = !isInteractive;
+        if (btnPrint) btnPrint.disabled = !(type === "custom_summary" && REPORT_HAS_OUTPUT);
+
+        // Meta + includes
+        const meta = $("repMeta");
+        if (meta){
+          const { from, to } = getReportDates();
+          meta.textContent = (from && to) ? `Range: ${from} -> ${to}` : "Range: -";
+        }
+
+        const inc = $("repIncludes");
+        if (inc) inc.innerHTML = buildIncludesText();
+      }
+
+      // Marks report output stale whenever scope/type inputs change.
+      function onReportsChanged(opts){
+        const keepPreset = !!(opts && opts.keepPreset);
+        if (!keepPreset) {
+          REPORT_ACTIVE_PRESET = "";
+          UPLOAD_ACTIVE_PRESET = "";
+        }
+        REPORT_HAS_OUTPUT = false;
+        setReportsStale(true);
+        updateReportsMode();
+        updateUploadScopePreview();
+      }
+
+      function applyReportPreset(kind){
+        const today = manilaTodayYMD();
+        const k = String(kind || "").trim().toLowerCase();
+        UPLOAD_ACTIVE_PRESET = "";
+        if (k === "today") {
+          if ($("repScope")) $("repScope").value = "single";
+          if ($("repDateSingle")) $("repDateSingle").value = today;
+        } else if (k === "yesterday") {
+          if ($("repScope")) $("repScope").value = "single";
+          if ($("repDateSingle")) $("repDateSingle").value = ymdAddDays(today, -1);
+        } else if (k === "last7") {
+          if ($("repScope")) $("repScope").value = "last_days";
+          if ($("repRollValue")) $("repRollValue").value = "7";
+        } else if (k === "mtd") {
+          if ($("repScope")) $("repScope").value = "range";
+          if ($("repFrom")) $("repFrom").value = manilaMonthStartYMD(today);
+          if ($("repTo")) $("repTo").value = today;
+        } else {
+          return;
+        }
+        REPORT_ACTIVE_PRESET = k;
+        onReportsChanged({ keepPreset: true });
+      }
+
+      function computeScopeLabel(scopeInfo, presetKind){
+        const preset = String(presetKind || "").trim().toLowerCase();
+        if (preset) return `preset_${preset}`;
+        const from = String(scopeInfo?.from || "").trim();
+        const to = String(scopeInfo?.to || "").trim();
+        if (from && to) return from === to ? from : `${from}_to_${to}`;
+        return "scope";
+      }
+
+      function applyUploadPreset(kind){
+        const k = String(kind || "").trim().toLowerCase();
+        if (!k) return;
+        UPLOAD_ACTIVE_PRESET = k;
+        applyReportPreset(k);
+        updateUploadScopePreview();
+      }
+
+      function updateUploadScopePreview(){
+        const el = $("uploadScopePreview");
+        if (!el) return;
+        const scopeInfo = computeScopeRange();
+        const preview = (scopeInfo.from && scopeInfo.to) ? `${scopeInfo.from} -> ${scopeInfo.to}` : "-";
+        const label = computeScopeLabel(scopeInfo, UPLOAD_ACTIVE_PRESET || REPORT_ACTIVE_PRESET);
+        el.textContent = `Scope: ${preview} (${label})`;
+      }
+
+      function getSelectedUploadReportKeys(){
+        const keys = [];
+        if ($("uploadRptTickets")?.checked) keys.push("tickets");
+        if ($("uploadRptDailyCsv")?.checked) keys.push("daily_summary_csv");
+        if ($("uploadRptDailyHtml")?.checked) keys.push("daily_summary_html");
+        if ($("uploadRptCustomCsv")?.checked) keys.push("custom_summary");
+        return keys;
+      }
+
+      // Initializes default report scope values when entering Reports tab.
+      function initReports(){
+        const d = String(LAST_BIZ || "").trim();
+        const today = manilaTodayYMD();
+
+        if ($("repDateSingle") && !$("repDateSingle").value) $("repDateSingle").value = d || today;
+        if ($("repFrom") && !$("repFrom").value) $("repFrom").value = d || today;
+        if ($("repTo") && !$("repTo").value) $("repTo").value = d || today;
+
+        // Default scope
+        if ($("repScope") && !$("repScope").value) $("repScope").value = "single";
+
+        REPORT_HAS_OUTPUT = false;
+        setReportsStale(true);
+        updateReportsMode();
+        updateUploadScopePreview();
+      }
+
+      // CSV export dispatcher by report type.
+      function exportFromBuilder(){
+        const type = getReportType();
+        const scopeInfo = computeScopeRange();
+        const from = scopeInfo.from, to = scopeInfo.to;
+        if (!from || !to) return toast("Reports", "Select a valid date scope.", "warn");
+        const scopeLabel = computeScopeLabel(scopeInfo, REPORT_ACTIVE_PRESET);
+        const scopeParam = `&scopeLabel=${encodeURIComponent(scopeLabel)}`;
+
+        // Optional time window hint (server may ignore if not supported)
+        const timeHint = (scopeInfo.scope === "last_hours")
+          ? `&sinceHours=${encodeURIComponent(scopeInfo.hours)}&sinceMs=${encodeURIComponent(scopeInfo.sinceMs)}`
+          : "";
+
+        let url = "";
+        if (type === "custom_summary") {
+          url = `/api/admin/reports/custom_summary.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}${scopeParam}`;
+        } else if (type === "raw_tickets") {
+          url = `/api/admin/reports/tickets.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}${scopeParam}`;
+        } else if (type === "daily_summary") {
+          url = `/api/admin/reports/daily_summary.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}${scopeParam}`;
+        } else if (type === "audit_logs") {
+          url = `/api/admin/reports/audit_logs.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}${scopeParam}`;
+        }
+
+        if (!url) return toast("Reports", "Invalid report type.", "warn");
+        downloadViaUrl(url);
+        toast("Reports", "Downloading CSV...", "ok");
+      }
+
+      function generateFromBuilder(){
+        const type = getReportType();
+        if (type === "custom_summary") return loadCustomSummary();
+        if (type === "raw_tickets") return loadRawTicketsPreview();
+        if (type === "daily_summary") return loadDailySummaryPreview();
+        return toast("Reports", "This report exports to CSV only. Use Export CSV.", "warn");
+      }
+
+
+// ---------- Report Summary (on-screen legacy helpers) ----------
+      function pad2(n){ return String(n).padStart(2,"0"); }
+      function bucketsRow(obj){
+        const b = obj || {};
+        const v1 = b["1"]||0, v2=b["2-3"]||0, v3=b["4-5"]||0, v4=b["6+"]||0;
+        return { v1, v2, v3, v4, total: v1+v2+v3+v4 };
+      }
+      function renderBucketsTable(tbodyId, byGroupByBucket){
+        const body = $(tbodyId);
+        const groups = Object.keys(byGroupByBucket || {}).sort();
+        const wanted = ["A","B","C","D","P"];
+        const ordered = [];
+        wanted.forEach(g=>{ if(groups.includes(g)) ordered.push(g); });
+        groups.forEach(g=>{ if(!ordered.includes(g)) ordered.push(g); });
+
+        if(!ordered.length){
+          body.innerHTML = `<tr><td colspan="6" class="muted">No data</td></tr>`;
+          return;
+        }
+
+        body.innerHTML = ordered.map(g=>{
+          const r = bucketsRow(byGroupByBucket[g]||{});
+          return `<tr>
+            <td><b>${g}</b></td>
+            <td>${r.v1}</td>
+            <td>${r.v2}</td>
+            <td>${r.v3}</td>
+            <td>${r.v4}</td>
+            <td><b>${r.total}</b></td>
+          </tr>`;
+        }).join("");
+      }
+
+      function renderAvgWaitTable(tbodyId, avgByGroup, refText){
+        const body = $(tbodyId);
+        const keys = Object.keys(avgByGroup || {}).sort();
+        const wanted = ["A","B","C","D","P"];
+        const ordered = [];
+        wanted.forEach(g=>{ if(keys.includes(g)) ordered.push(g); });
+        keys.forEach(g=>{ if(!ordered.includes(g)) ordered.push(g); });
+
+        if(!ordered.length){
+          body.innerHTML = `<tr><td colspan="4" class="muted">No data</td></tr>`;
+          return;
+        }
+        body.innerHTML = ordered.map(g=>{
+          const o = avgByGroup[g] || {};
+          const mins = (o.mins===null || o.mins===undefined) ? "-" : o.mins;
+          const n = o.n ?? 0;
+          return `<tr>
+            <td><b>${g}</b></td>
+            <td>${mins}</td>
+            <td>${n}</td>
+            <td>${refText}</td>
+          </tr>`;
+        }).join("");
+      }
+
+      function renderSimpleKeyValTable(tbodyId, obj, label){
+        const body = $(tbodyId);
+        const keys = Object.keys(obj || {}).sort();
+        const wanted = ["A","B","C","D","P"];
+        const ordered = [];
+        wanted.forEach(g=>{ if(keys.includes(g)) ordered.push(g); });
+        keys.forEach(g=>{ if(!ordered.includes(g)) ordered.push(g); });
+
+        if(!ordered.length){
+          body.innerHTML = `<tr><td colspan="2" class="muted">No data</td></tr>`;
+          return;
+        }
+        body.innerHTML = ordered.map(g=>`<tr><td><b>${g}</b></td><td>${obj[g]}</td></tr>`).join("");
+      }
+
+      async function generateSummary(){
+        const scopeInfo = computeScopeRange();
+        const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
+        if(!from || !to) return toast("Reports", "Select a valid date scope.", "warn");
+        const waitRef = getWaitRef();
+
+        // Optional time window hint (server may ignore if not supported)
+        const timeHint = (scopeInfo.scope === "last_hours") ? `&sinceHours=${encodeURIComponent(scopeInfo.hours)}&sinceMs=${encodeURIComponent(scopeInfo.sinceMs)}` : "";
+// status hidden
+
+        try{
+          const j = await jget(`/api/admin/reports/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&waitRef=${encodeURIComponent(waitRef)}${timeHint}`);
+          if(!j.ok){
+            // sumMeta hidden
+
+            return toast("Reports", j.error || "Failed", "err");
+          }
+
+          const refText = `${j.waitRef.type}:${j.waitRef.value}`;
+          // sumMeta hidden
+
+          $("sumOut").style.display = "";
+          $("sumPaxOverall").textContent = j.pax?.overall ?? 0;
+          $("sumPriOverall").textContent = j.priority?.total ?? 0;
+
+          renderBucketsTable("tblWaitlist", j.waitlist?.byGroupByBucket || {});
+          renderBucketsTable("tblSeated", j.seated?.byGroupByBucket || {});
+          renderAvgWaitTable("tblAvgWait", j.avgWait?.byGroup || {}, refText);
+          renderSimpleKeyValTable("tblPax", j.pax?.byGroup || {});
+          renderSimpleKeyValTable("tblPri", j.priority?.byGroup || {});
+
+          REPORT_HAS_OUTPUT = true;
+          setReportsStale(false);
+          updateReportsMode();
+          toast("Reports", "Summary updated.", "ok");
+        } catch(e){
+          // sumMeta hidden
+
+          toast("Reports", "Failed to load summary.", "err");
+        }
+      }
+
+      function exportSummaryCsv(){
+        const from = ( ($("sumFrom")?.value) || ($("repFrom")?.value) || "" ).trim();
+        const to = ( ($("sumTo")?.value) || ($("repTo")?.value) || "" ).trim();
+        if(!from || !to) return toast("Reports", "Enter from/to dates.", "warn");
+        const waitRef = getWaitRef();
+        const scopeInfo = computeScopeRange();
+        const scopeLabel = computeScopeLabel(scopeInfo, REPORT_ACTIVE_PRESET);
+        const url = `/api/admin/reports/summary.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&waitRef=${encodeURIComponent(waitRef)}&scopeLabel=${encodeURIComponent(scopeLabel)}`;
+        downloadViaUrl(url);
+        toast("Reports", "Downloading Summary CSV...", "ok");
+      }
+
+      
+async function loadCustomSummary(){
+  const scopeInfo = computeScopeRange();
+  const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
+  if(!from || !to) return toast("Reports", "Select a valid date scope.", "warn");
+
+  const timeHint = (scopeInfo.scope === "last_hours")
+    ? `&sinceHours=${encodeURIComponent(scopeInfo.hours)}&sinceMs=${encodeURIComponent(scopeInfo.sinceMs)}`
+    : "";
+
+  try{
+    const j = await jget(`/api/admin/reports/custom_summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}`);
+    if(!j.ok) return toast("Reports", j.error || "Failed", "err");
+
+    // Support BOTH response shapes:
+    // (A) { ok:true, rows:[...] }  <-- what your Step 1 shows
+    // (B) { ok:true, result:{ rows:[...] } }  <-- safer if you later wrap it
+    const rawRows = Array.isArray(j.rows) ? j.rows : (j.result?.rows || []);
+
+    // Normalize server keys -> UI keys expected by the table template
+    const rows = rawRows.map(r => ({
+      groupCode: r.groupCode,
+      totalReservations: r.waitlistCount,
+      totalPaxReserved: r.totalPax,
+      totalPriorityReservations: r.priorityCount,
+      seatedCountGroup: r.seatedCount,
+      seatedPaxTotal: r.seatedPax,
+      avgWaitToCalledMins: r.avgToCalledMins,
+      avgWaitToSeatedMins: r.avgToSeatedMins,
+    }));
+
+    $("sumOut").style.display = "";
+    const tb = $("tblCustomSummary");
+    if (tb){
+      tb.innerHTML = "";
+
+      // Totals
+      let paxOverall = 0;
+      let priOverall = 0;
+      for (const rr of rows){
+        paxOverall += Number(rr.totalPaxReserved || 0) || 0;
+        priOverall += Number(rr.totalPriorityReservations || 0) || 0;
+      }
+      $("sumPaxOverall").textContent = String(paxOverall);
+      $("sumPriOverall").textContent = String(priOverall);
+
+      if(!rows.length){
+        tb.innerHTML = `<tr><td colspan="8" class="muted">No data in selected range</td></tr>`;
+      } else {
+        for (const r of rows){
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><b>${escapeHtml(r.groupCode)}</b></td>
+            <td>${escapeHtml(r.totalReservations)}</td>
+            <td>${escapeHtml(r.totalPaxReserved)}</td>
+            <td>${escapeHtml(r.totalPriorityReservations)}</td>
+            <td>${escapeHtml(r.seatedCountGroup)}</td>
+            <td>${escapeHtml(r.seatedPaxTotal)}</td>
+            <td>${escapeHtml(r.avgWaitToCalledMins)}</td>
+            <td>${escapeHtml(r.avgWaitToSeatedMins)}</td>
+          `;
+          tb.appendChild(tr);
+        }
+      }
+    }
+
+    REPORT_HAS_OUTPUT = true;
+    setReportsStale(false);
+    updateReportsMode();
+    toast("Reports", "Custom Summary updated.", "ok");
+  } catch(e){
+    toast("Reports", "Failed to load Custom Summary.", "err");
+  }
+}
+
+async function loadRawTicketsPreview(){
+  const scopeInfo = computeScopeRange();
+  const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
+  if(!from || !to) return toast("Reports", "Select a valid date scope.", "warn");
+
+  const timeHint = (scopeInfo.scope === "last_hours")
+    ? `&sinceHours=${encodeURIComponent(scopeInfo.hours)}&sinceMs=${encodeURIComponent(scopeInfo.sinceMs)}`
+    : "";
+  try{
+    const j = await jget(`/api/admin/reports/tickets?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}`);
+    if(!j?.ok) return toast("Reports", j?.error || "Failed to load raw tickets.", "err");
+
+    RAW_TICKETS_CACHE = Array.isArray(j.rows) ? j.rows : [];
+    RAW_TICKETS_PAGE = 1;
+    renderRawTicketsPage();
+    REPORT_HAS_OUTPUT = true;
+    setReportsStale(false);
+    updateReportsMode();
+    toast("Reports", `Raw tickets updated (${RAW_TICKETS_CACHE.length} rows).`, "ok");
+  } catch(e){
+    toast("Reports", "Failed to load Raw Tickets.", "err");
+  }
+}
+
+function renderRawTicketsPage(){
+  const tb = $("tblRawTickets");
+  const info = $("rawPageInfo");
+  const prev = $("btnRawPrev");
+  const next = $("btnRawNext");
+  const total = RAW_TICKETS_CACHE.length;
+  const size = Math.max(1, Number(RAW_TICKETS_PAGE_SIZE || 50));
+  const pages = Math.max(1, Math.ceil(total / size));
+  RAW_TICKETS_PAGE = Math.min(Math.max(1, RAW_TICKETS_PAGE), pages);
+  const start = (RAW_TICKETS_PAGE - 1) * size;
+  const pageRows = RAW_TICKETS_CACHE.slice(start, start + size);
+
+  if (tb){
+    tb.innerHTML = "";
+    if (!total){
+      tb.innerHTML = `<tr><td colspan="14" class="muted">No data in selected range</td></tr>`;
+    } else {
+      for (const r of pageRows){
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(r.businessDate ?? "")}</td>
+          <td>${escapeHtml(r.groupCode ?? "")}</td>
+          <td>${escapeHtml(r.queueNum ?? "")}</td>
+          <td>${escapeHtml(r.priorityType ?? "")}</td>
+          <td>${escapeHtml(r.name ?? "")}</td>
+          <td>${escapeHtml(r.pax ?? "")}</td>
+          <td>${escapeHtml(r.status ?? "")}</td>
+          <td>${escapeHtml(r.createdAtLocalHuman ?? "")}</td>
+          <td>${escapeHtml(r.calledAtHuman ?? "")}</td>
+          <td>${escapeHtml(r.timesCalled ?? 0)}</td>
+          <td>${escapeHtml(r.seatedAtHuman ?? "")}</td>
+          <td>${escapeHtml(r.skippedAtHuman ?? "")}</td>
+          <td>${escapeHtml(r.waitMinsToCalled ?? "")}</td>
+          <td>${escapeHtml(r.waitMinsToSeated ?? "")}</td>
+        `;
+        tb.appendChild(tr);
+      }
+    }
+  }
+
+  if (info){
+    if (!total) info.textContent = "Rows: 0";
+    else info.textContent = `Rows: ${total} | Page ${RAW_TICKETS_PAGE} of ${pages}`;
+  }
+  if (prev) prev.disabled = (RAW_TICKETS_PAGE <= 1 || total === 0);
+  if (next) next.disabled = (RAW_TICKETS_PAGE >= pages || total === 0);
+}
+
+async function loadDailySummaryPreview(){
+  const scopeInfo = computeScopeRange();
+  const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
+  if(!from || !to) return toast("Reports", "Select a valid date scope.", "warn");
+
+  const timeHint = (scopeInfo.scope === "last_hours")
+    ? `&sinceHours=${encodeURIComponent(scopeInfo.hours)}&sinceMs=${encodeURIComponent(scopeInfo.sinceMs)}`
+    : "";
+  try{
+    const j = await jget(`/api/admin/reports/daily_summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}`);
+    if(!j?.ok) return toast("Reports", j?.error || "Failed to load daily summary.", "err");
+
+    DAILY_SUMMARY_CACHE = Array.isArray(j.rows) ? j.rows : [];
+    if (!DAILY_SUMMARY_CACHE.length) {
+      try {
+        const rt = await jget(`/api/admin/reports/tickets?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}`);
+        if (rt?.ok && Array.isArray(rt.rows) && rt.rows.length) {
+          const map = new Map();
+          for (const r of rt.rows) {
+            const d = String(r.businessDate || "").trim();
+            const g = String(r.groupCode || "").trim();
+            if (!d || !g) continue;
+            const key = `${d}__${g}`;
+            if (!map.has(key)) {
+              map.set(key, {
+                schemaVersion: 1,
+                businessDate: d,
+                groupCode: g,
+                registeredCount: 0,
+                calledCount: 0,
+                seatedCount: 0,
+                skippedCount: 0,
+                overrideCalledCount: 0,
+                _waitSum: 0,
+                _waitN: 0,
+              });
+            }
+            const row = map.get(key);
+            row.registeredCount += 1;
+            const st = String(r.status || "").toUpperCase();
+            if (r.calledAtHuman) row.calledCount += 1;
+            if (st === "SEATED") row.seatedCount += 1;
+            if (st === "SKIPPED") row.skippedCount += 1;
+            const w = Number(r.waitMinsToSeated);
+            if (Number.isFinite(w) && w >= 0) {
+              row._waitSum += w;
+              row._waitN += 1;
+            }
+          }
+          DAILY_SUMMARY_CACHE = Array.from(map.values())
+            .sort((a, b) => {
+              if (a.businessDate !== b.businessDate) return a.businessDate < b.businessDate ? -1 : 1;
+              const ord = { P:0, A:1, B:2, C:3, D:4 };
+              return (ord[a.groupCode] ?? 9) - (ord[b.groupCode] ?? 9);
+            })
+            .map((r) => ({
+              schemaVersion: r.schemaVersion,
+              businessDate: r.businessDate,
+              groupCode: r.groupCode,
+              registeredCount: r.registeredCount,
+              calledCount: r.calledCount,
+              seatedCount: r.seatedCount,
+              skippedCount: r.skippedCount,
+              overrideCalledCount: r.overrideCalledCount,
+              avgWaitMinutes: r._waitN ? Math.round(r._waitSum / r._waitN) : "",
+              ema14WaitMinutes: "",
+            }));
+        }
+      } catch {}
+    }
+    DAILY_SUMMARY_PAGE = 1;
+    renderDailySummaryPage();
+    try {
+      const cs = await jget(`/api/admin/reports/custom_summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${timeHint}`);
+      if (cs?.ok) {
+        const paxOverall = Number(cs.paxOverall || 0);
+        const priorityTotal = Number(cs.priorityTotal || 0);
+        if ($("sumPaxOverall")) $("sumPaxOverall").textContent = String(Number.isFinite(paxOverall) ? paxOverall : 0);
+        if ($("sumPriOverall")) $("sumPriOverall").textContent = String(Number.isFinite(priorityTotal) ? priorityTotal : 0);
+      }
+    } catch {}
+    REPORT_HAS_OUTPUT = true;
+    setReportsStale(false);
+    updateReportsMode();
+    toast("Reports", `Daily Summary updated (${DAILY_SUMMARY_CACHE.length} rows).`, "ok");
+  } catch(e){
+    toast("Reports", "Failed to load Daily Summary.", "err");
+  }
+}
+
+function renderDailySummaryPage(){
+  const tb = $("tblDailySummary");
+  const info = $("dailyPageInfo");
+  const prev = $("btnDailyPrev");
+  const next = $("btnDailyNext");
+  const total = DAILY_SUMMARY_CACHE.length;
+  const size = Math.max(1, Number(DAILY_SUMMARY_PAGE_SIZE || 50));
+  const pages = Math.max(1, Math.ceil(total / size));
+  DAILY_SUMMARY_PAGE = Math.min(Math.max(1, DAILY_SUMMARY_PAGE), pages);
+  const start = (DAILY_SUMMARY_PAGE - 1) * size;
+  const pageRows = DAILY_SUMMARY_CACHE.slice(start, start + size);
+
+  if (tb){
+    tb.innerHTML = "";
+    if (!total){
+      tb.innerHTML = `<tr><td colspan="9" class="muted">No data in selected range</td></tr>`;
+    } else {
+      let prevDate = "";
+      let dateBand = 0;
+      for (const r of pageRows){
+        const d = String(r.businessDate || "");
+        if (d !== prevDate) {
+          dateBand += 1;
+          const br = document.createElement("tr");
+          br.className = "dailyDateBreak";
+          br.innerHTML = `<td colspan="9">Date: ${escapeHtml(d)}</td>`;
+          tb.appendChild(br);
+          prevDate = d;
+        }
+        const tr = document.createElement("tr");
+        if (dateBand % 2 === 0) tr.classList.add("dailyDateAlt");
+        tr.innerHTML = `
+          <td class="muted2">-</td>
+          <td>${escapeHtml(r.groupCode ?? "")}</td>
+          <td class="num">${escapeHtml(r.registeredCount ?? 0)}</td>
+          <td class="num">${escapeHtml(r.calledCount ?? 0)}</td>
+          <td class="num">${escapeHtml(r.seatedCount ?? 0)}</td>
+          <td class="num">${escapeHtml(r.skippedCount ?? 0)}</td>
+          <td class="num">${escapeHtml(r.overrideCalledCount ?? 0)}</td>
+          <td class="num">${escapeHtml(r.avgWaitMinutes ?? "")}</td>
+          <td class="num">${escapeHtml(r.ema14WaitMinutes ?? "")}</td>
+        `;
+        tb.appendChild(tr);
+      }
+    }
+  }
+
+  if (info){
+    if (!total) info.textContent = "Rows: 0";
+    else info.textContent = `Rows: ${total} | Page ${DAILY_SUMMARY_PAGE} of ${pages}`;
+  }
+  if (prev) prev.disabled = (DAILY_SUMMARY_PAGE <= 1 || total === 0);
+  if (next) next.disabled = (DAILY_SUMMARY_PAGE >= pages || total === 0);
+}
+
+
+      function printCustomSummary(){
+        const meta = ($("repMeta")?.textContent || "");
+        const tb = $("tblCustomSummary");
+        const tableHtml = tb ? tb.closest("table")?.outerHTML : "";
+        if(!tableHtml) return toast("Reports", "Nothing to print yet. Click Generate first.", "warn");
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>QSys Custom Summary</title>
+<style>
+  body{ font-family: Arial, sans-serif; padding:18px; }
+  h2{ margin:0 0 6px; }
+  .meta{ color:#444; margin-bottom:14px; }
+  table{ width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:12px; }
+  th,td{ border:1px solid #333; padding:6px 8px; text-align:left; }
+  th{ background:#f2f2f2; }
+</style>
+</head>
+<body>
+  <h2>Custom Summary</h2>
+  <div class="meta">${escapeHtml(meta)}</div>
+  ${tableHtml}
+</body>
+</html>`;
+        const w = window.open("", "_blank");
+        if(!w) return toast("Reports", "Popup blocked. Allow popups to print.", "warn");
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        w.print();
+      }
+function printSummary(){
+        const meta = ($("repMeta")?.textContent || "");
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>QSys Report Summary</title>
+<style>
+  body{ font-family: Arial, sans-serif; padding:18px; }
+  h2{ margin:0 0 6px; }
+  .meta{ color:#444; margin-bottom:14px; }
+  table{ width:100%; border-collapse:collapse; margin:10px 0 18px; }
+  th,td{ border:1px solid #ccc; padding:6px 8px; text-align:left; }
+  th{ background:#f3f3f3; }
+</style>
+</head>
+<body>
+  <h2>QSys Report Summary</h2>
+  <div class="meta">${meta}</div>
+
+  <h3>Waitlist Count (WAITING)</h3>
+  ${document.querySelector("#tblWaitlist")?.closest("table")?.outerHTML || ""}
+
+  <h3>Seated Count (SEATED)</h3>
+  ${document.querySelector("#tblSeated")?.closest("table")?.outerHTML || ""}
+
+  <h3>Average Waiting Time</h3>
+  ${document.querySelector("#tblAvgWait")?.closest("table")?.outerHTML || ""}
+
+  <h3>Pax Totals</h3>
+  ${document.querySelector("#tblPax")?.closest("table")?.outerHTML || ""}
+
+  <h3>Priority Registrations</h3>
+  ${document.querySelector("#tblPri")?.closest("table")?.outerHTML || ""}
+</body>
+</html>`;
+        const w = window.open("", "_blank");
+        if(!w) return toast("Reports", "Pop-up blocked (allow pop-ups).", "warn");
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+        w.print();
+      }
+
+
+
+      async function uploadNow() {
+        const btn = $("btnUploadNow");
+        const loader = $("uploadLoader");
+        const loaderText = $("uploadLoaderText");
+        let pct = 0;
+        let pctTimer = null;
+        try {
+          const scopeInfo = computeScopeRange();
+          const waitRef = getWaitRef();
+          const reportKeys = getSelectedUploadReportKeys();
+          if (!reportKeys.length) return toast("Upload", "Select at least one report to upload.", "warn");
+          const scopeLabel = computeScopeLabel(scopeInfo, UPLOAD_ACTIVE_PRESET || REPORT_ACTIVE_PRESET);
+          const payload = {
+            from: scopeInfo.from,
+            to: scopeInfo.to,
+            waitRef,
+            scopeLabel,
+            reportKeys,
+          };
+          if (scopeInfo.scope === "last_hours") {
+            payload.sinceHours = scopeInfo.hours;
+            payload.sinceMs = scopeInfo.sinceMs;
+          }
+          if (btn) btn.disabled = true;
+          if (loader && loaderText) {
+            loader.classList.add("show");
+            loaderText.textContent = "Uploading... 0%";
+            pctTimer = setInterval(() => {
+              // Simulated progress while waiting for sync response.
+              pct = Math.min(95, pct + (pct < 60 ? 8 : 3));
+              loaderText.textContent = `Uploading... ${pct}%`;
+            }, 500);
+          }
+          $("uploadStatus").textContent = "Status: Uploading...";
+          const j = await jpost("/api/admin/upload", payload);
+          if (!j.ok) {
+            $("uploadStatus").textContent = "Status: Failed";
+            return toast("Upload", j.error || "Failed", "err");
+          }
+          if (loaderText) loaderText.textContent = "Uploading... 100%";
+          $("uploadStatus").textContent = "Status: Success";
+          toast("Upload", "Upload completed.", "ok");
+        } catch (e) {
+          $("uploadStatus").textContent = "Status: Failed";
+          toast("Upload", e?.message || "Upload failed.", "err");
+        } finally {
+          if (pctTimer) clearInterval(pctTimer);
+          if (loader) loader.classList.remove("show");
+          if (btn) btn.disabled = false;
+          loadUploadStatus();
+        }
+      }
+
+      async function loadUploadStatus() {
+        const setText = (id, txt) => { if ($(id)) $(id).textContent = txt; };
+        setText("uploadCfgReady", "Ready: Loading...");
+        setText("uploadCfgFolder", "Folder ID: Loading...");
+        setText("uploadCfgCreds", "Service Account Source: Loading...");
+        setText("uploadCfgFile", "Service Account File: Loading...");
+        setText("uploadLastAt", "Last Sync: Loading...");
+        setText("uploadLastResult", "Last Result: Loading...");
+        setText("uploadLastFiles", "Uploaded File IDs: Loading...");
+
+        try {
+          const j = await jget("/api/admin/upload/status");
+          if (!j?.ok) {
+            setText("uploadCfgReady", `Ready: Error (${j?.error || "Failed"})`);
+            setText("uploadCfgFolder", "Folder ID: -");
+            setText("uploadCfgCreds", "Service Account Source: -");
+            setText("uploadCfgFile", "Service Account File: -");
+            setText("uploadLastAt", "Last Sync: -");
+            setText("uploadLastResult", "Last Result: -");
+            setText("uploadLastFiles", "Uploaded File IDs: -");
+            return;
+          }
+
+          const c = j.config || {};
+          const mode = String(c.authMode || "service_account");
+          setText("uploadCfgReady", `Ready: ${c.ready ? "YES" : "NO"} (mode: ${mode})`);
+          setText("uploadCfgFolder", `Folder ID: ${c.folderIdSet ? String(c.folderId || "-") : "Missing"}`);
+          if (mode === "oauth") {
+            const o = c.oauth || {};
+            const readyBits = `clientId=${o.clientIdSet ? "Y" : "N"}, secret=${o.clientSecretSet ? "Y" : "N"}, refreshToken=${o.refreshTokenSet ? "Y" : "N"}`;
+            setText("uploadCfgCreds", `OAuth: ${readyBits}`);
+            setText("uploadCfgFile", `OAuth Redirect URI: ${String(o.redirectUri || "-")}`);
+          } else {
+            setText("uploadCfgCreds", `Service Account Source: ${String(c.serviceAccountSource || "missing")}`);
+            if (String(c.serviceAccountSource || "").includes("_file")) {
+              const p = String(c.serviceAccountFile || "-");
+              const exists = c.serviceAccountFileExists ? "exists" : "missing";
+              setText("uploadCfgFile", `Service Account File: ${p} (${exists})`);
+            } else {
+              setText("uploadCfgFile", "Service Account File: -");
+            }
+          }
+
+          const last = c.lastSync || null;
+          if (!last) {
+            setText("uploadLastAt", "Last Sync: Never");
+            setText("uploadLastResult", "Last Result: -");
+            setText("uploadLastFiles", "Uploaded File IDs: -");
+            return;
+          }
+
+          setText("uploadLastAt", `Last Sync: ${fmtTime(last.at)}`);
+          setText("uploadLastResult", `Last Result: ${last.ok ? "Success" : `Failed (${String(last.error || "Unknown error")})`}`);
+          const files = Array.isArray(last.uploaded) ? last.uploaded : [];
+          const ids = files.map(f => String(f?.id || "")).filter(Boolean);
+          setText("uploadLastFiles", `Uploaded File IDs: ${ids.length ? ids.join(", ") : "-"}`);
+        } catch (e) {
+          setText("uploadCfgReady", `Ready: Error (${String(e?.message || "Failed")})`);
+          setText("uploadCfgFolder", "Folder ID: -");
+          setText("uploadCfgCreds", "Service Account Source: -");
+          setText("uploadCfgFile", "Service Account File: -");
+          setText("uploadLastAt", "Last Sync: -");
+          setText("uploadLastResult", "Last Result: -");
+          setText("uploadLastFiles", "Uploaded File IDs: -");
+        }
+      }
+
+      // ---------- wiring ----------
+      document.querySelectorAll(".nav button[data-page]").forEach(btn => {
+        btn.addEventListener("click", () => setActive(btn.dataset.page));
+      });
+      $("btnLogout")?.addEventListener("click", logoutAdmin);
+
+      $("btnRefresh").addEventListener("click", refreshCurrentPage);
+      $("btnCloseDay")?.addEventListener("click", closeDay);
+
+      // Reports Builder
+      $("btnRepGenerate")?.addEventListener("click", generateFromBuilder);
+      $("btnRepExport")?.addEventListener("click", exportFromBuilder);
+      $("btnRepPrint")?.addEventListener("click", () => {
+        const type = getReportType();
+        if (type === "custom_summary") return printCustomSummary();
+                return toast("Reports", "Print is only available for Custom Summary.", "warn");
+      });
+      document.querySelectorAll("[data-rep-preset]").forEach(btn => {
+        btn.addEventListener("click", () => applyReportPreset(btn.getAttribute("data-rep-preset")));
+      });
+      document.querySelectorAll("[data-upload-preset]").forEach(btn => {
+        btn.addEventListener("click", () => applyUploadPreset(btn.getAttribute("data-upload-preset")));
+      });
+
+      ["repType","repScope","repDateSingle","repFrom","repTo","repRollValue","sumWaitRefType","sumWaitRefValue"].forEach(id=>{
+        $(id)?.addEventListener("change", onReportsChanged);
+        $(id)?.addEventListener("input", onReportsChanged);
+      });
+      $("rawPageSize")?.addEventListener("change", () => {
+        const n = Number($("rawPageSize")?.value || 50);
+        RAW_TICKETS_PAGE_SIZE = Number.isFinite(n) && n > 0 ? n : 50;
+        RAW_TICKETS_PAGE = 1;
+        renderRawTicketsPage();
+      });
+      $("btnRawPrev")?.addEventListener("click", () => {
+        RAW_TICKETS_PAGE = Math.max(1, RAW_TICKETS_PAGE - 1);
+        renderRawTicketsPage();
+      });
+      $("btnRawNext")?.addEventListener("click", () => {
+        RAW_TICKETS_PAGE = RAW_TICKETS_PAGE + 1;
+        renderRawTicketsPage();
+      });
+      $("dailyPageSize")?.addEventListener("change", () => {
+        const n = Number($("dailyPageSize")?.value || 50);
+        DAILY_SUMMARY_PAGE_SIZE = Number.isFinite(n) && n > 0 ? n : 50;
+        DAILY_SUMMARY_PAGE = 1;
+        renderDailySummaryPage();
+      });
+      $("btnDailyPrev")?.addEventListener("click", () => {
+        DAILY_SUMMARY_PAGE = Math.max(1, DAILY_SUMMARY_PAGE - 1);
+        renderDailySummaryPage();
+      });
+      $("btnDailyNext")?.addEventListener("click", () => {
+        DAILY_SUMMARY_PAGE = DAILY_SUMMARY_PAGE + 1;
+        renderDailySummaryPage();
+      });
+
+
+      $("btnSumCsv")?.addEventListener("click", exportSummaryCsv);
+      $("btnSumPrint")?.addEventListener("click", printSummary);
+$("btnUploadNow").addEventListener("click", uploadNow);
+      $("btnBackup")?.addEventListener("click", backupDb);
+      $("btnBackupExport")?.addEventListener("click", exportBackupDb);
+      $("btnOpenBackupFolder")?.addEventListener("click", openBackupFolder);
+      $("btnRestore")?.addEventListener("click", restoreDb);
+      $("btnSeedToday")?.addEventListener("click", seedTodayData);
+
+      $("btnSaveSetup").addEventListener("click", saveSetup);
+      $("btnUnlockBranchCode").addEventListener("click", unlockAndChangeBranchCode);
+      $("btnGenerateDisplayPairCode")?.addEventListener("click", generateDisplayPairCode);
+      $("btnRevokeAllDisplayPairing")?.addEventListener("click", revokeAllDisplayPairing);
+      document.querySelectorAll("[data-setup-pane]").forEach(btn => {
+        btn.addEventListener("click", () => setActiveSetupPane(btn.getAttribute("data-setup-pane")));
+      });
+      setActiveSetupPane(SETUP_ACTIVE_PANE);
+
+      $("btnPickMediaFolder")?.addEventListener("click", pickMediaFolder);
+      $("btnClearMediaFolder")?.addEventListener("click", clearMediaFolder);
+      $("gdriveAuthMode")?.addEventListener("change", updateGdriveAuthModeUi);
+      $("btnPickGdriveOAuthClient")?.addEventListener("click", pickGdriveOAuthClient);
+      $("btnClearGdriveOAuthClient")?.addEventListener("click", clearGdriveOAuthClient);
+      $("btnToggleOauthSecret")?.addEventListener("click", toggleOauthClientSecretVisibility);
+      $("btnPickGdriveServiceAccount")?.addEventListener("click", pickGdriveServiceAccount);
+      $("btnClearGdriveServiceAccount")?.addEventListener("click", clearGdriveServiceAccount);
+      $("btnStartGdriveOAuth")?.addEventListener("click", startGdriveOAuth);
+      $("btnClearGdriveOAuth")?.addEventListener("click", clearGdriveOAuth);
+      $("btnTestGdriveSync")?.addEventListener("click", testGdriveSync);
+      $("btnTestGdriveSyncOauth")?.addEventListener("click", testGdriveSync);
+      $("btnRefreshGdriveSummary")?.addEventListener("click", loadSetupUploadSummary);
+
+
+      $("btnCreateUser").addEventListener("click", createUser);
+      $("btnReloadUsers").addEventListener("click", loadUsers);
+
+      $("btnSavePerms").addEventListener("click", savePerms);
+
+      $("btnLoadAudit").addEventListener("click", loadAudit);
+      
+      $("btnPrintQr")?.addEventListener("click", printQrNow);
+      $("btnDownloadQr")?.addEventListener("click", downloadQrNow);
+
+      // QR Setup
+      $("btnSaveWifi")?.addEventListener("click", saveWifiSettings);
+      $("btnDownloadWifiQr")?.addEventListener("click", () => downloadImage(getWifiQrPngUrl(), "wifi-qr.png"));
+      $("btnDownloadQueueQr")?.addEventListener("click", () => downloadImage(`${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`, "queue-qr.png"));
+      $("btnPrintQrPair")?.addEventListener("click", () => {
+        const ssid = String($("wifiSsid")?.value || "").trim();
+        const wifiUrl = getWifiQrPngUrl();
+        const queueUrl = `${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`;
+        openPrintWindowForQrPair(wifiUrl, queueUrl, ssid);
+      });
+
+      // Live preview updates on change
+      ["wifiSec","wifiSsid","wifiPass","wifiHiddenNo","wifiHiddenYes"].forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener("input", () => setTimeout(refreshWifiQrPreview, 50));
+        el.addEventListener("change", () => setTimeout(refreshWifiQrPreview, 50));
+      });
+
+      // ---------- realtime SSE (Dashboard only) ----------
+      (function () {
+        try {
+          const es = new EventSource("/api/admin/stream");
+
+          es.addEventListener("overview", (ev) => {
+            try {
+              const data = JSON.parse(ev.data);
+              applyOverview(data);
+            } catch (e) {}
+          });
+
+          es.addEventListener("hello", () => {});
+          es.addEventListener("ping", () => {});
+
+          es.onerror = () => {
+            // auto-retry handled by browser
+          };
+        } catch (e) {
+          // ignore
+        }
+      })();
+
+      // boot
+      loadBasic();
+      setInterval(() => {
+        renderMetaWithTime();
+        renderSystemInfoWithTime();
+      }, 1000);
+    </script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+

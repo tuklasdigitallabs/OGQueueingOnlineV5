@@ -1,0 +1,848 @@
+<!-- display-portrait.html (CLEAN) -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>QSys Display (Portrait)</title>
+
+  
+  <style>
+    :root{
+      --servePanelSoft: rgba(128, 0, 0, 0.22);
+
+      --textDark: #000;
+
+      /* single spacing token */
+      --gap: 12px;
+
+      --topbar-h: 64px;
+      --radius: 22px;
+
+      /* === LANDSCAPE TOKENS === */
+      --bg: #800000;
+      --panel: #ffffffd9;
+      --line: #333;
+      --text: #fff;
+
+      --servePanelBg: rgba(128, 0, 0, 0.75);
+      --servePanelBorder: rgba(240, 240, 240, 0.22);
+
+      --priorityTileBg: #007a3f;
+
+      /* Derived helpers */
+      --panelSoft: rgba(28,28,28,0.92);
+      --panelSoft2: rgba(28,28,28,0.72);
+      --tileEmptyBg: rgba(235, 235, 235, 0.993);
+      --tileBorder: rgba(255,255,255,0.22);
+      --tileDashed: rgba(70, 70, 70, 0.35);
+
+      --screenH: 100vh; /* overwritten by JS to exact px height */
+      --tileH: 160px;
+
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{ height:100%; }
+    body{
+      margin:0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      overflow:hidden;
+    }
+
+    /* FULL UTILIZATION: no global scaling, minimal outer padding */
+    .app{
+      height:100vh;
+      width:100vw;
+      display:grid;
+      grid-template-rows: var(--topbar-h) 1fr;
+      gap: var(--gap);
+      padding: var(--gap);
+    }
+
+    /* Top bar */
+    .topbar{
+      display:grid;
+      grid-template-columns: 4fr 1fr;
+      align-items:center;
+      gap: var(--gap);
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.45);
+      border: 1px solid rgba(0,0,0,0.18);
+    }
+    .tbLeft,.tbRight{ display:flex; align-items:center; gap: calc(var(--gap) * 0.6); }
+    .tbLeft{ justify-content:flex-start; display: none !important}
+    .tbRight{ justify-content:flex-end; }
+    .tbCenter{
+      text-align:center;
+      font-weight: 1000;
+      letter-spacing: 0.10em;
+      font-size: clamp(30px, 4.5vmin, 60px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      color: var(--textDark);
+    }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      height: 38px;
+      padding: 0 10px;
+      border-radius: 50px;
+      border: 1px solid rgba(0,0,0,0.25);
+      background: rgba(255,255,255,0.55);
+      color: var(--textDark);
+      font-weight: 900;
+      cursor:pointer;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.icon{ width: 40px; padding:0; font-weight: 900; }
+    .btn.danger{ background: rgba(225,6,0,0.22); border-color: rgba(255,255,255,0.40); }
+
+    /* Electron window drag region (portrait) */
+.dragHandle{
+  width: 44px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.18);
+  background: rgba(255,255,255,0.35);
+
+  -webkit-app-region: drag;   /* THIS is the magic */
+}
+
+/* Anything clickable must be no-drag or it won’t click properly */
+.btn,
+.tbRight,
+.tbCenter{
+  -webkit-app-region: no-drag;
+}
+
+    /* Main layout */
+    .main{
+      display:grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: var(--gap);
+      height: 100%;
+      min-height:0;
+    }
+    .leftCol,.rightCol{ display:grid; gap: var(--gap); min-height:0; }
+    .leftCol{ grid-template-rows: 0.40fr 0.60fr; }
+    .rightCol{ grid-template-rows: repeat(4, 1fr); }
+
+    .card{
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      overflow:hidden;
+      min-height:0;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.12) inset;
+    }
+
+    /* Now Serving */
+    .nowServing{
+      display:grid;
+      grid-template-rows: auto 1fr;
+      padding: var(--gap);
+      gap: calc(var(--gap) * 0.8);
+    }
+    .nowHdr{color: var(--textDark);
+      
+      text-align:center;
+      font-weight: 1000;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      font-size: clamp(30px, 6vmin, 60px);
+    
+      background: transparent;
+    }
+    .nowTicket{
+  border-radius: calc(var(--radius) - 6px);
+  background: rgb(141, 6, 1) !important;  /* darker than panel, lighter than root */
+  border: none;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: clamp(10px, 1.2vh, 18px);
+  gap: clamp(6px, 1.0vh, 12px);
+  color: #000000;
+
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.808),
+    0 10px 26px rgb(255, 255, 255);
+}
+
+/* Now Serving background changes ONLY when called queue is priority */
+#calledGlobal.isPriorityCalled{
+  background: var(--priorityTileBg) !important; /* same as waiting priority tiles */
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.45);
+}
+
+
+.heroLetter{
+  flex: 0.4;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  font-weight: 1000;
+  letter-spacing: 0.06em;
+
+  font-size: clamp(140px, calc(var(--screenH) * 0.14), 420px);
+line-height: 0.92;
+padding-bottom: clamp(2px, 0.6vh, 8px);
+
+
+  color: #ffffff;  
+}
+
+.heroNum{
+  flex: 0.6;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+  font-size: clamp(170px, calc(var(--screenH) * 0.17), 520px);
+line-height: 0.86;
+
+
+  color: #ffffff;
+  outline: #000000;
+}
+
+    /* give the nowServing card a subtle maroon header strip like landscape */
+    .nowServing{ background: var(--panel); }
+    .nowServing .nowTicket{
+      background: var(--maroon);
+    }
+
+    /* Video */
+    .videoWrap{
+      padding: 0;
+      gap: 0;
+      display:block;
+      background: transparent;
+    }
+    .videoHdr{ display:none; }
+    video#adPlayer{
+      width: 100%;
+      height: 100%;
+      display:block;
+      object-fit: cover;
+      background: #000;
+      border: none;
+      border-radius: var(--radius);
+    }
+
+    /* Groups */
+    .grp{
+      display:grid;
+      grid-template-rows: auto 1fr;
+      padding: var(--gap);
+      gap: var(--gap);
+    }
+    .grpHdr{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: var(--gap);
+    }
+    .grpName{
+      font-weight: 1000;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: clamp(22px, 3vmin, 30px);
+      color: var(--textDark);
+    }
+    .grpCount{
+      font-weight: 1000;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.60);
+      color: var(--textDark);
+      font-size: clamp(22px, 3vmin, 30px);
+      letter-spacing: 0.04em;
+      border: 2px solid rgba(0,0,0,0.22);
+    }
+
+    /* Waiting tiles: 3x2 */
+    .queueList{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: var(--gap);
+      min-height:0;
+    }
+    .qTile{
+      border-radius: 14px;
+      border: 2px solid var(--line);
+      background: var(--panelSoft2);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap: calc(var(--gap) * 0.20);
+      overflow:hidden;
+      min-height:0;
+      color: var(--textLight);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.22) inset;
+    }
+    /* regular filled tile (A/B/C/D) */
+    /* regular filled waiting tile */
+.qTile:not(.priSlot):not(.empty){
+  background: rgb(141, 6, 1);   /* dark red for regular */
+  color: #ffffff;              /* keep text white */
+  border-color: rgba(255,255,255,0.35);
+}
+
+
+    /* empty tile like landscape dotted outline + light fill */
+    .qTile.empty{
+      background: transparent;
+      border: 2px dashed var(--tileDashed);
+      color: rgba(255,255,255,0.45);
+      box-shadow:none;
+    }
+
+    /* priority slot green */
+    .qTile.priSlot{
+      background: var(--priorityTileBg);
+      border: 2px solid var(--servePanelBorder);
+      color: var(--text);
+      box-shadow:none;
+    }
+    /* empty priority slot green with dashed border (like landscape) */
+    .qTile.priSlot.empty{
+      background: var(--priorityTileBg);
+      border: 2px dashed rgba(0,0,0,0.25);
+      opacity: 0.95;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .qTile.ellipsis{
+      background: transparent;
+      border: 2px dashed var(--tileDashed);
+      color: rgba(255,255,255,0.55);
+      box-shadow:none;
+    }
+
+    .qLetter{ font-size: clamp(26px, calc(var(--tileH) * 0.22), 84px); font-weight: 1000; line-height: 1; }
+    .qNum{ font-size: clamp(34px, calc(var(--tileH) * 0.32), 120px); font-weight: 1000; line-height: 1; }
+
+    /* Status */
+    #status{
+      position: fixed;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      font-size: 12px;
+      opacity: 0.65;
+      text-align:center;
+      pointer-events:none;
+      color: rgba(255,255,255,0.55);
+    }
+
+    
+/* Settings panel (overlay) */
+#settingsPanel{
+  position: fixed;
+  inset: 0;
+  display: none;           /* toggled via .open */
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--gap) * 1.5);
+  z-index: 99999;          /* ALWAYS on top */
+  pointer-events: none;    /* enabled when open */
+}
+#settingsPanel.open{
+  display: flex;
+  pointer-events: auto;
+}
+#settingsPanel .settingsBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+}
+#settingsPanel .settingsCard{
+  position: relative;
+  width: min(720px, 94vw);
+  max-height: min(900px, 92vh);
+  overflow: auto;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.20);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.45);
+  padding: calc(var(--gap) * 1.2);
+  color: #111;
+}
+#settingsPanel .settingsTitle{
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 18px;
+  margin: 0 0 var(--gap) 0;
+}
+#settingsPanel .settingsGrid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+}
+#settingsPanel .row{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+#settingsPanel label{
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+#settingsPanel input[type="text"],
+#settingsPanel input[type="number"]{
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.22);
+  background: rgba(255,255,255,0.95);
+  font-weight: 800;
+  font-size: 14px;
+  outline: none;
+}
+#settingsPanel input[type="range"]{
+  width: 100%;
+}
+#settingsPanel .hint{
+  font-size: 12px;
+  opacity: 0.70;
+  line-height: 1.3;
+}
+#settingsPanel .actions{
+  display: flex;
+  gap: calc(var(--gap) * 0.7);
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: calc(var(--gap) * 0.5);
+  flex-wrap: wrap;
+}
+#settingsPanel .btn.small{
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+
+/* Imperative recall pulse (Call Again) */
+@keyframes qsysPulse {
+  0%   { transform: scale(1); box-shadow: none; }
+  35%  { transform: scale(1.06); box-shadow: 0 0 0 3px rgba(255,255,255,0.55), 0 0 24px rgba(255,255,255,0.25); }
+  70%  { transform: scale(0.99); box-shadow: 0 0 0 2px rgba(255,255,255,0.35), 0 0 18px rgba(255,255,255,0.18); }
+  100% { transform: scale(1); box-shadow: none; }
+}
+/* Apply on the called ticket box (preferred) */
+#calledGlobal.qsysPulse {
+  animation: qsysPulse 650ms ease-in-out 1;
+  will-change: transform, box-shadow;
+}
+
+</style>
+
+</head>
+
+<body class="orient-portrait mode-video">
+  <div class="app">
+    <div class="topbar">
+      <div class="tbLeft">
+        <button class="btn icon" id="btnSettings" title="Settings">⚙</button>
+      </div>
+      <div class="tbCenter" id="branchName">BRANCH NAME</div>
+      <div class="tbRight">
+  <div class="dragHandle" title="Drag window"></div>
+
+  <button class="btn" id="btnMove" title="Move">MOVE</button>
+  <button class="btn" id="btnFull" title="Fullscreen">FULLSCREEN</button>
+  <button class="btn danger" id="btnClose" title="Close">CLOSE</button>
+</div>
+
+    </div>
+
+    <div class="main">
+      <div class="leftCol">
+        <div class="card nowServing">
+  <div class="nowHdr">NOW SERVING</div>
+  <div class="nowTicket" id="calledGlobal">
+    <div class="heroLetter" id="heroLetter">—</div>
+    <div class="heroNum" id="heroNum">—</div>
+  </div>
+</div>
+
+
+        <div class="card videoWrap">
+<!-- IMPORTANT: core expects id="adPlayer" -->
+          <video id="adPlayer" autoplay muted playsinline></video>
+        </div>
+      </div>
+
+      <div class="rightCol">
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">1 Pax</div><div class="grpCount" id="count-A">WAITING: 0</div></div>
+          <div class="queueList" id="list-A"></div>
+        </div>
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">2–3 Pax</div><div class="grpCount" id="count-B">WAITING: 0</div></div>
+          <div class="queueList" id="list-B"></div>
+        </div>
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">4–5 Pax</div><div class="grpCount" id="count-C">WAITING: 0</div></div>
+          <div class="queueList" id="list-C"></div>
+        </div>
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">6++ Pax</div><div class="grpCount" id="count-D">WAITING: 0</div></div>
+          <div class="queueList" id="list-D"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+<div id="settingsPanel" aria-hidden="true">
+  <div class="settingsBackdrop" id="settingsBackdrop"></div>
+  <div class="settingsCard" role="dialog" aria-modal="true" aria-label="Display Settings">
+    <div class="settingsTitle">Display Settings</div>
+
+    <!-- If display-core injects its own settings UI, it can mount inside this container. -->
+    <div id="settingsCoreMount" class="settingsGrid">
+      <div class="row">
+        <label for="inpDisplayKey">Display Key</label>
+        <input id="inpDisplayKey" type="text" autocomplete="off" placeholder="Enter display key"/>
+        <div class="hint">Used to authorize display state fetches. Stored locally on this device.</div>
+      </div>
+
+      <div class="row">
+        <label for="rngScale">UI Scale</label>
+        <input id="rngScale" type="range" min="80" max="140" step="1" value="100"/>
+        <div class="hint">Adjusts the overall UI size (80%–140%).</div>
+      </div>
+
+      <div class="row">
+        <label for="chkVideo">Video Mode</label>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <input id="chkVideo" type="checkbox" style="transform: scale(1.25);"/>
+          <div class="hint" style="margin:0;">Enable/disable the ad video area.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn small" id="btnSettingsReload" type="button">RELOAD</button>
+        <button class="btn small" id="btnSettingsSave" type="button">SAVE</button>
+        <button class="btn small danger" id="btnSettingsClose" type="button">CLOSE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Core expects this -->
+  <audio id="chime" src="/static/chime.mp3" preload="auto"></audio>
+  <div id="status">Loading…</div>
+
+  <!-- IMPORTANT ORDER:
+       1) socket.io
+       2) DisplayUI renderer
+       3) display-core (boots everything, incl. video playlist) -->
+  <script src="/socket.io/socket.io.js">
+  // 🔔 Recall attention: replay pulse + chime even if same ticket
+  socket.on("QUEUE_RECALL", () => {
+    try{
+      if (typeof pulseHero === "function") pulseHero();
+      if (typeof playChime === "function") playChime();
+    }catch(e){}
+  });
+
+</script>
+  <script src="/static/js/display-ui-portrait.js">
+  // 🔔 Recall attention: replay pulse + chime even if same ticket
+  socket.on("QUEUE_RECALL", () => {
+    try{
+      if (typeof pulseHero === "function") pulseHero();
+      if (typeof playChime === "function") playChime();
+    }catch(e){}
+  });
+
+</script>
+  <script src="/static/js/display-core.js">
+  // 🔔 Recall attention: replay pulse + chime even if same ticket
+  socket.on("QUEUE_RECALL", () => {
+    try{
+      if (typeof pulseHero === "function") pulseHero();
+      if (typeof playChime === "function") playChime();
+    }catch(e){}
+  });
+
+</script>
+
+<script>
+(function(){
+  'use strict';
+
+  // Keys MUST match display-core.js
+  const SETTINGS_KEY = "qsys_display_settings";
+  const UI_SCALE_KEY = "qsys_ui_scale";
+  const DISPLAY_KEY_STORAGE = "YakinikuLikeTheBest2026!";
+
+  const $ = (id) => document.getElementById(id);
+
+  function safeJsonParse(str, fallback){
+    try { return JSON.parse(str); } catch { return fallback; }
+  }
+
+  function openSettings(){
+    const p = $('settingsPanel');
+    if (!p) return;
+    p.classList.add('open');
+    p.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeSettings(){
+    const p = $('settingsPanel');
+    if (!p) return;
+    p.classList.remove('open');
+    p.setAttribute('aria-hidden', 'true');
+  }
+
+  function loadSettingsToUI(){
+    const keyEl = $('inpDisplayKey');
+    const scaleEl = $('rngScale');
+    const videoEl = $('chkVideo');
+
+    if (keyEl){
+      try { keyEl.value = String(localStorage.getItem(DISPLAY_KEY_STORAGE) || "").trim(); } catch {}
+    }
+
+    const scale = (function(){
+      try {
+        const raw = String(localStorage.getItem(UI_SCALE_KEY) || "").trim();
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : 1;
+      } catch { return 1; }
+    })();
+
+    if (scaleEl){
+      scaleEl.value = String(Math.round(scale * 100));
+    }
+
+    const st = (function(){
+      try { return safeJsonParse(localStorage.getItem(SETTINGS_KEY) || "{}", {}); }
+      catch { return {}; }
+    })();
+
+    // common flag used in our display-core variants
+    const isVideo = st.videoEnabled !== false; // default true
+    if (videoEl) videoEl.checked = !!isVideo;
+  }
+
+  function saveFromUI(){
+    const keyEl = $('inpDisplayKey');
+    const scaleEl = $('rngScale');
+    const videoEl = $('chkVideo');
+
+    if (keyEl){
+      try { localStorage.setItem(DISPLAY_KEY_STORAGE, String(keyEl.value || "").trim()); } catch {}
+    }
+
+    if (scaleEl){
+      const v = Number(scaleEl.value || 100);
+      const s = Math.min(1.4, Math.max(0.8, v / 100));
+      try { localStorage.setItem(UI_SCALE_KEY, String(s)); } catch {}
+    }
+
+    const st = (function(){
+      try { return safeJsonParse(localStorage.getItem(SETTINGS_KEY) || "{}", {}); }
+      catch { return {}; }
+    })();
+
+    if (videoEl){
+      st.videoEnabled = !!videoEl.checked;
+    }
+
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(st)); } catch {}
+  }
+
+  async function closeKiosk(){
+  // ✅ Hide display window via server so tray can re-open it
+  const key = (function(){
+    try { return String(localStorage.getItem(DISPLAY_KEY_STORAGE) || "").trim(); }
+    catch { return ""; }
+  })();
+
+  try{
+    const res = await fetch("/api/system/display/close", {
+      method: "POST",
+      headers: key ? { "x-display-key": key } : {}
+    });
+
+    if (res.ok) return;
+
+    // Useful debug (don’t break UI)
+    console.warn("[DISPLAY] close rejected:", res.status);
+  }catch(e){
+    console.warn("[DISPLAY] /api/system/display/close failed", e);
+  }
+
+  // Fallback: if you have a preload bridge
+  try{
+    if (window.qsys && typeof window.qsys.hide === "function") return window.qsys.hide();
+    if (window.api  && typeof window.api.hide  === "function") return window.api.hide();
+
+    if (window.require){
+      const { ipcRenderer } = window.require("electron");
+      if (ipcRenderer && typeof ipcRenderer.send === "function"){
+        ipcRenderer.send("display:hide");
+        return;
+      }
+    }
+  }catch(e){
+    console.warn("[DISPLAY] fallback hide failed", e);
+  }
+
+  // Absolute last resort (may destroy window)
+  try{ window.close(); }catch{}
+}
+
+
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const btnSettings = $('btnSettings');
+    const btnClose = $('btnClose');
+    const backdrop = $('settingsBackdrop');
+    const btnSave = $('btnSettingsSave');
+    const btnClosePanel = $('btnSettingsClose');
+    const btnReload = $('btnSettingsReload');
+
+    if (btnSettings){
+      btnSettings.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        loadSettingsToUI();
+        openSettings();
+      });
+    }
+
+    if (backdrop){
+      backdrop.addEventListener('click', closeSettings);
+    }
+
+    if (btnClosePanel){
+      btnClosePanel.addEventListener('click', () => {
+        closeSettings();
+      });
+    }
+
+    if (btnSave){
+      btnSave.addEventListener('click', () => {
+        saveFromUI();
+        closeSettings();
+        // core may react to localStorage, but safest is reload
+        location.reload();
+      });
+    }
+
+    if (btnReload){
+      btnReload.addEventListener('click', () => location.reload());
+    }
+
+    // ESC closes settings
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeSettings();
+    });
+
+    if (btnClose){
+  btnClose.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await closeKiosk();
+  });
+}
+
+  });
+})();
+
+  // 🔔 Recall attention: replay pulse + chime even if same ticket
+  socket.on("QUEUE_RECALL", () => {
+    try{
+      if (typeof pulseHero === "function") pulseHero();
+      if (typeof playChime === "function") playChime();
+    }catch(e){}
+  });
+
+</script>
+
+<script>
+(function(){
+  function updateTileVars(){
+    const first = document.querySelector('.queueList .qTile:not(.empty)');
+    const sample = first || document.querySelector('.queueList .qTile');
+    if (!sample) return;
+
+    const h = Math.max(80, Math.round(sample.getBoundingClientRect().height));
+    document.documentElement.style.setProperty('--tileH', h + 'px');
+  }
+
+  // react to layout changes (TV resolution/orientation/etc.)
+  const ro = new ResizeObserver(() => updateTileVars());
+  ro.observe(document.documentElement);
+
+  // also observe one group if available
+  const list = document.querySelector('.queueList');
+  if (list) ro.observe(list);
+
+  window.addEventListener('DOMContentLoaded', updateTileVars);
+  window.addEventListener('resize', updateTileVars);
+  setTimeout(updateTileVars, 250);
+})();
+
+  // 🔔 Recall attention: replay pulse + chime even if same ticket
+  socket.on("QUEUE_RECALL", () => {
+    try{
+      if (typeof pulseHero === "function") pulseHero();
+      if (typeof playChime === "function") playChime();
+    }catch(e){}
+  });
+
+</script>
+
+
+<script>
+(function(){
+  function setScreenVars(){
+    document.documentElement.style.setProperty('--screenH', window.innerHeight + 'px');
+  }
+  window.addEventListener('resize', setScreenVars);
+  window.addEventListener('DOMContentLoaded', setScreenVars);
+  setScreenVars();
+})();
+
+  // 🔔 Recall attention: replay pulse + chime even if same ticket
+  socket.on("QUEUE_RECALL", () => {
+    try{
+      if (typeof pulseHero === "function") pulseHero();
+      if (typeof playChime === "function") playChime();
+    }catch(e){}
+  });
+
+</script>
+
+</body>
+</html>

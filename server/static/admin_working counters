@@ -1,0 +1,1199 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --bg: #0f0f10;
+        --panel: #171719;
+        --panel2: #1d1d20;
+        --border: rgba(255,255,255,.10);
+        --text: #fff;
+        --muted: rgba(255,255,255,.65);
+        --muted2: rgba(255,255,255,.45);
+        --accent: #2dd4bf;
+        --danger: #fb7185;
+        --warn: #fbbf24;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, sans-serif;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        min-height: 100vh;
+      }
+      .sidebar {
+        border-right: 1px solid var(--border);
+        padding: 16px 14px;
+        background: #0c0c0d;
+      }
+      .brand {
+        font-weight: 900;
+        font-size: 18px;
+        letter-spacing: .4px;
+        margin-bottom: 12px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 16px;
+        line-height: 1.35;
+        white-space: pre-line;
+      }
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .nav button {
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.03);
+        color: var(--text);
+        cursor: pointer;
+        font-weight: 800;
+      }
+      .nav button.active {
+        border-color: rgba(45,212,191,.55);
+        background: rgba(45,212,191,.12);
+      }
+      .content {
+        padding: 18px;
+      }
+      .topbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .crumb {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .crumb h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 900;
+      }
+      .crumb .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.03);
+        color: var(--text);
+        cursor: pointer;
+        font-weight: 800;
+      }
+      .btn:hover { background: rgba(255,255,255,.06); }
+      .btn.primary {
+        border-color: rgba(45,212,191,.55);
+        background: rgba(45,212,191,.12);
+      }
+      .btn.danger {
+        border-color: rgba(251,113,133,.55);
+        background: rgba(251,113,133,.10);
+      }
+      .btn.small {
+        padding: 8px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 14px;
+        min-height: 60px;
+      }
+      .card h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 900;
+        color: rgba(255,255,255,.92);
+      }
+      .muted { color: var(--muted); }
+      .muted2 { color: var(--muted2); }
+      .kpi {
+        font-size: 26px;
+        font-weight: 900;
+        margin-top: 2px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.03);
+        font-weight: 800;
+        font-size: 12px;
+        color: rgba(255,255,255,.88);
+      }
+      .pill.ok { border-color: rgba(45,212,191,.45); }
+      .pill.warn { border-color: rgba(251,191,36,.55); }
+      .pill.bad { border-color: rgba(251,113,133,.55); }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 10px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+        text-align: left;
+        font-size: 13px;
+      }
+      th { color: rgba(255,255,255,.85); font-weight: 900; }
+      td { color: rgba(255,255,255,.80); }
+      input, select, textarea {
+        width: 100%;
+        padding: 10px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.03);
+        color: var(--text);
+        outline: none;
+      }
+      textarea { min-height: 90px; resize: vertical; }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .three {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+      }
+      .hidden { display: none; }
+      .tag {
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.03);
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        font-weight: 900;
+        color: rgba(255,255,255,.85);
+      }
+      .tag.on { border-color: rgba(45,212,191,.45); }
+      .tag.off { border-color: rgba(251,113,133,.55); }
+
+      /* toast */
+      #toastWrap {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        display: grid;
+        gap: 10px;
+        z-index: 9999;
+      }
+      .toast {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px 12px;
+        background: rgba(23,23,25,.92);
+        box-shadow: 0 10px 28px rgba(0,0,0,.35);
+        max-width: 420px;
+        color: rgba(255,255,255,.92);
+        font-size: 13px;
+      }
+      .toast b { display:block; margin-bottom: 2px; }
+      .toast.ok { border-color: rgba(45,212,191,.55); }
+      .toast.err { border-color: rgba(251,113,133,.55); }
+      .toast.warn { border-color: rgba(251,191,36,.60); }
+
+      @media (max-width: 980px) {
+        .layout { grid-template-columns: 1fr; }
+        .sidebar { position: sticky; top:0; z-index: 10; }
+        .two, .three { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">QSys Local • Admin</div>
+        <div class="sub" id="sideMeta">Loading…</div>
+
+        <div class="nav">
+          <button class="active" data-page="dashboard">Dashboard</button>
+          <button data-page="setup">Setup</button>
+          <button data-page="users">Users</button>
+          <button data-page="permissions">Permissions</button>
+          <button data-page="reports">Reports</button>
+          <button data-page="audit">Audit Logs</button>
+          <button data-page="upload">Upload / Sync</button>
+          <button data-page="system">System</button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <div class="topbar">
+          <div class="crumb">
+            <h1 id="pageTitle">Dashboard</h1>
+            <div class="meta" id="topMeta">—</div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="btnRefresh">Refresh</button>
+            <button class="btn danger" id="btnCloseDay">Close Day</button>
+          </div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <section id="page-dashboard">
+          <div class="grid">
+            <div class="card" style="grid-column: span 3;">
+              <h3>Registered (Today)</h3>
+              <div class="kpi" id="kpiRegistered">—</div>
+              <div class="muted2">Total created tickets</div>
+            </div>
+            <div class="card" style="grid-column: span 3;">
+              <h3>Seated (Today)</h3>
+              <div class="kpi" id="kpiSeated">—</div>
+              <div class="muted2">Status = SEATED</div>
+            </div>
+            <div class="card" style="grid-column: span 3;">
+              <h3>Skipped (Today)</h3>
+              <div class="kpi" id="kpiSkipped">—</div>
+              <div class="muted2">Status = SKIPPED</div>
+            </div>
+            <div class="card" style="grid-column: span 3;">
+              <h3>Waiting Now</h3>
+              <div class="kpi" id="kpiWaiting">—</div>
+              <div class="muted2">Status = WAITING + CALLED</div>
+            </div>
+
+            <div class="card" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between;">
+                <div>
+                  <h3 style="margin-bottom:6px;">Per Group</h3>
+                  <div class="muted">EMA(14) loads from /api/admin/stats/ema14 once you have data.</div>
+                </div>
+                <div class="row">
+                  <span class="pill ok" id="pillOnline">Network: —</span>
+                  <span class="pill" id="pillBizDate">Business Date: —</span>
+                </div>
+              </div>
+
+              <div style="margin-top:10px; overflow:auto;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Group</th>
+                      <th>Waiting</th>
+                      <th>Called</th>
+                      <th>Seated</th>
+                      <th>Skipped</th>
+                      <th>Avg Wait Today</th>
+                      <th>EMA 14d</th>
+                      <th>Overrides</th>
+                    </tr>
+                  </thead>
+                  <tbody id="groupTable">
+                    <tr><td colspan="8" class="muted">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SETUP -->
+        <section id="page-setup" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <h3>Branch Setup</h3>
+              <div class="two">
+                <div>
+                  <label class="muted2">Branch Name</label>
+                  <input id="branchName" placeholder="e.g., Yakiniku Like • MOA" />
+                </div>
+                <div>
+                  <label class="muted2">Branch Code</label>
+                  <input id="branchCode" placeholder="e.g., MOA" />
+                </div>
+              </div>
+              <div class="two" style="margin-top:10px;">
+                <div>
+                  <label class="muted2">Timezone</label>
+                  <input id="timezone" value="Asia/Manila" />
+                </div>
+                <div>
+                  <label class="muted2">Max Pax</label>
+                  <input id="maxPax" type="number" value="50" min="1" max="200" />
+                </div>
+              </div>
+              <div class="two" style="margin-top:10px;">
+                <div>
+                  <label class="muted2">Auto Close Day (Midnight Manila)</label>
+                  <select id="autoCloseDay">
+                    <option value="true">ON</option>
+                    <option value="false">OFF</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="muted2">Allow Override Call (global)</label>
+                  <select id="allowOverride">
+                    <option value="true">ON</option>
+                    <option value="false">OFF</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <button class="btn primary" id="btnSaveSetup">Save Setup</button>
+              </div>
+              <div class="muted" style="margin-top:10px;">
+                Saves:
+                <span class="muted2">/api/admin/branch</span> and <span class="muted2">/api/admin/settings</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- USERS -->
+        <section id="page-users" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 7;">
+              <div class="row" style="justify-content: space-between;">
+                <h3 style="margin:0;">Users</h3>
+                <button class="btn small" id="btnReloadUsers">Reload</button>
+              </div>
+              <div style="overflow:auto; margin-top:10px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Role</th>
+                      <th>Active</th>
+                      <th>Last Login</th>
+                      <th style="width: 260px;"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersTable">
+                    <tr><td colspan="5" class="muted">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card" style="grid-column: span 5;">
+              <h3>Add User</h3>
+              <div style="display:grid; gap:10px;">
+                <div>
+                  <label class="muted2">Full Name</label>
+                  <input id="newUserName" placeholder="e.g., Juan Dela Cruz" />
+                </div>
+                <div>
+                  <label class="muted2">Role</label>
+                  <select id="newUserRole">
+                    <option value="STAFF">STAFF</option>
+                    <option value="SUPERVISOR">SUPERVISOR</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                </div>
+                <div class="two">
+                  <div>
+                    <label class="muted2">6-digit PIN</label>
+                    <input id="newUserPin" inputmode="numeric" maxlength="6" placeholder="******" />
+                  </div>
+                  <div>
+                    <label class="muted2">Confirm PIN</label>
+                    <input id="newUserPin2" inputmode="numeric" maxlength="6" placeholder="******" />
+                  </div>
+                </div>
+                <button class="btn primary" id="btnCreateUser">Create User</button>
+                <div class="muted2">PIN is stored hashed (bcrypt) server-side.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PERMISSIONS -->
+        <section id="page-permissions" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between;">
+                <div>
+                  <h3 style="margin:0;">Role Permissions</h3>
+                  <div class="muted" style="margin-top:6px;">Edit per role. Save writes audit log.</div>
+                </div>
+                <div class="row">
+                  <button class="btn small" id="btnReloadPerms">Reload</button>
+                  <button class="btn primary" id="btnSavePerms">Save Permissions</button>
+                </div>
+              </div>
+
+              <div style="overflow:auto; margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Permission</th>
+                      <th>STAFF</th>
+                      <th>SUPERVISOR</th>
+                      <th>ADMIN</th>
+                    </tr>
+                  </thead>
+                  <tbody id="permTable">
+                    <tr><td colspan="4" class="muted">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- REPORTS -->
+        <section id="page-reports" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <h3>CSV Reports</h3>
+              <div class="three" style="margin-top:10px;">
+                <div>
+                  <label class="muted2">From</label>
+                  <input id="repFrom" placeholder="YYYY-MM-DD" />
+                </div>
+                <div>
+                  <label class="muted2">To</label>
+                  <input id="repTo" placeholder="YYYY-MM-DD" />
+                </div>
+                <div>
+                  <label class="muted2">Type</label>
+                  <select id="repType">
+                    <option value="tickets">Ticket Details (tickets.csv)</option>
+                    <option value="daily_summary">Daily Summary (daily_summary.csv)</option>
+                    <option value="audit_logs">Audit Logs (audit_logs.csv)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:12px;">
+                <button class="btn primary" id="btnExportRange">Export CSV (Range)</button>
+                <button class="btn" id="btnExportToday">Export CSV (Today)</button>
+              </div>
+
+              <div class="muted" style="margin-top:10px;">
+                Downloads from:
+                <span class="muted2">/api/admin/reports/*.csv</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- AUDIT -->
+        <section id="page-audit" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between;">
+                <div>
+                  <h3 style="margin:0;">Audit Logs</h3>
+                  <div class="muted2" style="margin-top:6px;">Loads latest entries (paged).</div>
+                </div>
+                <div class="row">
+                  <button class="btn small" id="btnLoadAudit">Load Latest</button>
+                </div>
+              </div>
+              <div style="overflow:auto; margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Action</th>
+                      <th>Payload</th>
+                    </tr>
+                  </thead>
+                  <tbody id="auditTable">
+                    <tr><td colspan="3" class="muted">No data loaded</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- UPLOAD -->
+        <section id="page-upload" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <h3>Upload / Sync</h3>
+              <div class="muted">
+                Upload local data to cloud (placeholder endpoint right now).
+              </div>
+              <div class="row" style="margin-top:12px;">
+                <button class="btn primary" id="btnUploadNow">Upload Now</button>
+                <span class="muted2" id="uploadStatus">Status: —</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SYSTEM -->
+        <section id="page-system" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 12;">
+              <h3>System Info</h3>
+              <div class="muted" id="sysInfo">—</div>
+              <div class="muted2" style="margin-top:10px;">
+                (Backup/restore endpoints not included in your server.js yet.)
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <div id="toastWrap"></div>
+
+    <script>
+      // ---------- helpers ----------
+      const $ = (id) => document.getElementById(id);
+
+      function toast(title, msg, type) {
+        const wrap = $("toastWrap");
+        const t = document.createElement("div");
+        t.className = "toast " + (type || "");
+        t.innerHTML = `<b>${escapeHtml(title)}</b><div class="muted">${escapeHtml(msg || "")}</div>`;
+        wrap.appendChild(t);
+        setTimeout(() => t.remove(), 4200);
+      }
+
+      function escapeHtml(s) {
+        return String(s || "")
+          .replaceAll("&","&amp;").replaceAll("<","&lt;")
+          .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      async function jget(url) {
+        const r = await fetch(url);
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+        return j;
+      }
+
+      async function jpost(url, body) {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {})
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+        return j;
+      }
+
+      function fmtTime(ms) {
+        if (!ms) return "—";
+        try { return new Date(ms).toLocaleString(); } catch { return String(ms); }
+      }
+
+      function prettyJsonMaybe(s) {
+        try {
+          const obj = typeof s === "string" ? JSON.parse(s) : s;
+          return JSON.stringify(obj, null, 2);
+        } catch {
+          return String(s || "");
+        }
+      }
+
+      function setActive(page) {
+        document.querySelectorAll(".nav button").forEach(b => {
+          b.classList.toggle("active", b.dataset.page === page);
+        });
+        document.querySelectorAll("main section").forEach(sec => sec.classList.add("hidden"));
+        $("page-" + page).classList.remove("hidden");
+        $("pageTitle").textContent = page.charAt(0).toUpperCase() + page.slice(1).replace("_"," ");
+        onPageShown(page);
+      }
+
+      // ---------- state ----------
+      let LAST_BIZ = null;
+      let LAST_BRANCH = null;
+
+      const labels = {
+        P: "PRIORITY",
+        A: "A (1 Pax)",
+        B: "B (2–3 Pax)",
+        C: "C (4–5 Pax)",
+        D: "D (6+ Pax)"
+      };
+
+      // ---------- overview renderer ----------
+      // Server shape: { ok:true, businessDate, groups:{P:{registered,waiting,called,seated,skipped,overrides,avgWaitMinutes},...}, overrideCount, updatedAt }
+      function applyOverview(o, ema14) {
+        if (!o) return;
+
+        $("pillOnline").textContent = "Network: Local";
+        $("pillOnline").classList.add("ok");
+
+        if (o.businessDate) $("pillBizDate").textContent = "Business Date: " + o.businessDate;
+
+        const gmap = {};
+        if (o.groups && typeof o.groups === "object") {
+          Object.keys(o.groups).forEach(k => {
+            const r = o.groups[k] || {};
+            gmap[k] = {
+              registered: r.registered ?? 0,
+              waiting: r.waiting ?? 0,
+              called: r.called ?? 0,
+              seated: r.seated ?? 0,
+              skipped: r.skipped ?? 0,
+              avgWaitTodayMins: (r.avgWaitMinutes ?? "—"),
+              overrides: (r.overrides ?? "—")
+            };
+          });
+        }
+
+        // totals
+        let totalReserved = 0, totalSeated = 0, totalSkipped = 0, currentlyWaiting = 0;
+        Object.keys(labels).forEach(g => {
+          const r = gmap[g] || { registered:0, seated:0, skipped:0, waiting:0, called:0 };
+          totalReserved += Number(r.registered || 0);
+          totalSeated   += Number(r.seated || 0);
+          totalSkipped  += Number(r.skipped || 0);
+          currentlyWaiting += Number(r.waiting || 0) + Number(r.called || 0);
+        });
+
+        $("kpiRegistered").textContent = totalReserved;
+        $("kpiSeated").textContent     = totalSeated;
+        $("kpiSkipped").textContent    = totalSkipped;
+        $("kpiWaiting").textContent    = currentlyWaiting;
+
+        const tb = $("groupTable");
+        tb.innerHTML = "";
+        Object.keys(labels).forEach(g => {
+          const r = gmap[g] || {};
+          const emaVal = (ema14 && ema14[g] != null) ? ema14[g] : "—";
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><b>${labels[g]}</b></td>
+            <td>${r.waiting ?? 0}</td>
+            <td>${r.called ?? 0}</td>
+            <td>${r.seated ?? 0}</td>
+            <td>${r.skipped ?? 0}</td>
+            <td>${r.avgWaitTodayMins ?? "—"}</td>
+            <td>${emaVal}</td>
+            <td>${r.overrides ?? (o.overrideCount ?? "—")}</td>
+          `;
+          tb.appendChild(tr);
+        });
+      }
+
+      // ---------- dashboard load ----------
+      async function loadMeta() {
+        const biz = await jget("/api/admin/business-date");
+        if (biz.ok) {
+          LAST_BIZ = biz.currentBusinessDate || null;
+          LAST_BRANCH = biz.branchCode || null;
+          $("pillBizDate").textContent = "Business Date: " + (biz.currentBusinessDate || "—");
+          $("topMeta").textContent = `Branch: ${biz.branchCode || "—"} • Business Date: ${biz.currentBusinessDate || "—"} • Manila Today: ${biz.todayManila || "—"}`;
+          $("sideMeta").textContent = `Branch: ${biz.branchCode || "—"}\nBusiness Date: ${biz.currentBusinessDate || "—"}\nManila Today: ${biz.todayManila || "—"}`;
+          $("repFrom").value = biz.currentBusinessDate || "";
+          $("repTo").value = biz.currentBusinessDate || "";
+        }
+      }
+
+      async function loadDashboard() {
+        try {
+          await loadMeta();
+
+          const today = await jget("/api/admin/stats/today");
+          let ema14 = null;
+          try {
+            const e = await jget("/api/admin/stats/ema14");
+            if (e && e.ok && e.ema14) ema14 = e.ema14;
+          } catch {}
+
+          applyOverview(today, ema14);
+        } catch (e) {
+          toast("Dashboard", e.message || "Failed to load dashboard", "err");
+        }
+      }
+
+      // ---------- setup ----------
+      async function loadSetup() {
+        try {
+          const b = await jget("/api/admin/branch");
+          if (b.ok && b.branch) {
+            $("branchName").value = b.branch.branchName || "";
+            $("branchCode").value = b.branch.branchCode || "";
+            $("timezone").value = b.branch.timezone || "Asia/Manila";
+          }
+
+          const s = await jget("/api/admin/settings");
+          if (s.ok && s.settings) {
+            const st = s.settings || {};
+            $("maxPax").value = Number(st.maxPax || 50);
+            $("autoCloseDay").value = String(st.autoCloseDay ?? "true");
+            $("allowOverride").value = String(st.allowOverride ?? "true");
+          }
+        } catch (e) {
+          toast("Setup", e.message || "Failed to load setup", "err");
+        }
+      }
+
+      async function saveSetup() {
+        const branchName = ($("branchName").value || "").trim();
+        const branchCode = ($("branchCode").value || "").trim();
+        const timezone = ($("timezone").value || "").trim() || "Asia/Manila";
+
+        const maxPax = Number(($("maxPax").value || "50").trim());
+        const autoCloseDay = $("autoCloseDay").value;
+        const allowOverride = $("allowOverride").value;
+
+        if (!branchName) return toast("Setup", "Branch Name is required.", "warn");
+        if (!branchCode) return toast("Setup", "Branch Code is required.", "warn");
+        if (!Number.isFinite(maxPax) || maxPax < 1 || maxPax > 200) return toast("Setup", "Max Pax must be 1–200.", "warn");
+
+        if (!confirm("Save setup changes?")) return;
+
+        try {
+          const r1 = await jpost("/api/admin/branch", { branchName, branchCode, timezone });
+          if (!r1.ok) throw new Error(r1.error || "Branch save failed");
+
+          const r2 = await jpost("/api/admin/settings", {
+            maxPax: String(maxPax),
+            autoCloseDay: String(autoCloseDay),
+            allowOverride: String(allowOverride),
+          });
+          if (!r2.ok) throw new Error(r2.error || "Settings save failed");
+
+          toast("Setup", "Saved successfully.", "ok");
+          await loadMeta();
+        } catch (e) {
+          toast("Setup", e.message || "Save failed", "err");
+        }
+      }
+
+      // ---------- users ----------
+      async function loadUsers() {
+        try {
+          const r = await jget("/api/admin/users");
+          const tb = $("usersTable");
+          tb.innerHTML = "";
+
+          const rows = (r.users || []);
+          if (!rows.length) {
+            tb.innerHTML = `<tr><td colspan="5" class="muted">No users yet</td></tr>`;
+            return;
+          }
+
+          rows.forEach(u => {
+            const tr = document.createElement("tr");
+            const active = u.isActive ? 1 : 0;
+            tr.innerHTML = `
+              <td>
+                <div style="font-weight:900;">${escapeHtml(u.fullName || "—")}</div>
+                <div class="muted2" style="font-size:12px;">${escapeHtml(u.userId || "")}</div>
+              </td>
+              <td>${escapeHtml(u.roleId || "—")}</td>
+              <td>${active ? `<span class="tag on">ACTIVE</span>` : `<span class="tag off">DISABLED</span>`}</td>
+              <td>${fmtTime(u.lastLoginAt)}</td>
+              <td>
+                <div class="row" style="justify-content:flex-end;">
+                  <button class="btn small" data-act="edit" data-id="${escapeHtml(u.userId)}">Edit</button>
+                  <button class="btn small" data-act="pin" data-id="${escapeHtml(u.userId)}">Reset PIN</button>
+                  <button class="btn small ${active ? "danger" : ""}" data-act="toggle" data-id="${escapeHtml(u.userId)}">
+                    ${active ? "Disable" : "Enable"}
+                  </button>
+                </div>
+              </td>
+            `;
+            tb.appendChild(tr);
+          });
+
+          tb.querySelectorAll("button[data-act]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const act = btn.dataset.act;
+              const userId = btn.dataset.id;
+
+              const user = rows.find(x => x.userId === userId);
+              if (!user) return;
+
+              if (act === "edit") {
+                const newName = prompt("Full Name:", user.fullName || "");
+                if (newName === null) return;
+                const role = prompt("Role (STAFF / SUPERVISOR / ADMIN):", user.roleId || "STAFF");
+                if (role === null) return;
+
+                if (!confirm("Save user changes?")) return;
+
+                try {
+                  await jpost("/api/admin/users/update", {
+                    userId,
+                    fullName: String(newName || "").trim(),
+                    roleId: String(role || "").trim().toUpperCase(),
+                  });
+                  toast("Users", "User updated.", "ok");
+                  await loadUsers();
+                } catch (e) {
+                  toast("Users", e.message || "Update failed", "err");
+                }
+              }
+
+              if (act === "pin") {
+                const pin = prompt("Enter new 6-digit PIN:");
+                if (pin === null) return;
+                if (!/^\d{6}$/.test(String(pin).trim())) return toast("Users", "PIN must be 6 digits.", "warn");
+                if (!confirm("Reset PIN now?")) return;
+
+                try {
+                  await jpost("/api/admin/users/reset-pin", { userId, pin: String(pin).trim() });
+                  toast("Users", "PIN reset successfully.", "ok");
+                } catch (e) {
+                  toast("Users", e.message || "Reset PIN failed", "err");
+                }
+              }
+
+              if (act === "toggle") {
+                const nextActive = user.isActive ? 0 : 1;
+                const label = nextActive ? "Enable" : "Disable";
+                if (!confirm(`${label} this user?`)) return;
+
+                try {
+                  await jpost("/api/admin/users/update", { userId, isActive: nextActive });
+                  toast("Users", `User ${label.toLowerCase()}d.`, "ok");
+                  await loadUsers();
+                } catch (e) {
+                  toast("Users", e.message || "Failed", "err");
+                }
+              }
+            });
+          });
+        } catch (e) {
+          toast("Users", e.message || "Failed to load users", "err");
+          $("usersTable").innerHTML = `<tr><td colspan="5" class="muted">Failed to load</td></tr>`;
+        }
+      }
+
+      async function createUser() {
+        const name = ($("newUserName").value || "").trim();
+        const role = ($("newUserRole").value || "STAFF").trim();
+        const pin1 = ($("newUserPin").value || "").trim();
+        const pin2 = ($("newUserPin2").value || "").trim();
+
+        if (!name) return toast("Users", "Name is required.", "warn");
+        if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
+        if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
+
+        if (!confirm("Create this user?")) return;
+
+        try {
+          const j = await jpost("/api/admin/users/create", { fullName: name, roleId: role, pin: pin1 });
+          toast("Users", "User created.", "ok");
+          $("newUserName").value = "";
+          $("newUserPin").value = "";
+          $("newUserPin2").value = "";
+          await loadUsers();
+        } catch (e) {
+          toast("Users", e.message || "Create failed", "err");
+        }
+      }
+
+      // ---------- permissions ----------
+      let PERM_STATE = null; // { roles, permissions, matrix }
+
+      async function loadPerms() {
+        try {
+          const r = await jget("/api/admin/permissions");
+          PERM_STATE = r;
+
+          const tb = $("permTable");
+          tb.innerHTML = "";
+
+          const perms = r.permissions || [];
+          if (!perms.length) {
+            tb.innerHTML = `<tr><td colspan="4" class="muted">No permissions found</td></tr>`;
+            return;
+          }
+
+          perms.forEach(p => {
+            const key = p.permKey;
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>
+                <div style="font-weight:900;">${escapeHtml(p.permName || key)}</div>
+                <div class="muted2" style="font-size:12px;">${escapeHtml(key)} • ${escapeHtml(p.description || "")}</div>
+              </td>
+              <td><input type="checkbox" data-role="STAFF" data-perm="${escapeHtml(key)}"></td>
+              <td><input type="checkbox" data-role="SUPERVISOR" data-perm="${escapeHtml(key)}"></td>
+              <td><input type="checkbox" data-role="ADMIN" data-perm="${escapeHtml(key)}"></td>
+            `;
+            tb.appendChild(tr);
+
+            ["STAFF","SUPERVISOR","ADMIN"].forEach(roleId => {
+              const v = (((r.matrix || {})[roleId] || {})[key]) ? 1 : 0;
+              const cb = tr.querySelector(`input[data-role="${roleId}"][data-perm="${CSS.escape(key)}"]`);
+              if (cb) cb.checked = !!v;
+            });
+          });
+        } catch (e) {
+          toast("Permissions", e.message || "Failed to load permissions", "err");
+          $("permTable").innerHTML = `<tr><td colspan="4" class="muted">Failed to load</td></tr>`;
+        }
+      }
+
+      async function savePerms() {
+        if (!PERM_STATE) return toast("Permissions", "Load permissions first.", "warn");
+        if (!confirm("Save permissions matrix?")) return;
+
+        const perms = PERM_STATE.permissions || [];
+        const matrix = { STAFF:{}, SUPERVISOR:{}, ADMIN:{} };
+
+        perms.forEach(p => {
+          const key = p.permKey;
+          ["STAFF","SUPERVISOR","ADMIN"].forEach(roleId => {
+            const cb = document.querySelector(`#permTable input[data-role="${roleId}"][data-perm="${CSS.escape(key)}"]`);
+            matrix[roleId][key] = cb && cb.checked ? 1 : 0;
+          });
+        });
+
+        try {
+          await jpost("/api/admin/permissions", { matrix });
+          toast("Permissions", "Saved successfully.", "ok");
+        } catch (e) {
+          toast("Permissions", e.message || "Save failed", "err");
+        }
+      }
+
+      // ---------- audit ----------
+      async function loadAudit() {
+        try {
+          const r = await jget("/api/admin/audit?limit=120&offset=0");
+          const rows = r.rows || [];
+          const tb = $("auditTable");
+          tb.innerHTML = "";
+
+          if (!rows.length) {
+            tb.innerHTML = `<tr><td colspan="3" class="muted">No audit logs found</td></tr>`;
+            return;
+          }
+
+          rows.forEach(a => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td style="white-space:nowrap;">${fmtTime(a.createdAt)}</td>
+              <td><b>${escapeHtml(a.action || "—")}</b></td>
+              <td><pre style="margin:0; white-space:pre-wrap; font-size:12px; color:rgba(255,255,255,.82);">${escapeHtml(prettyJsonMaybe(a.payload))}</pre></td>
+            `;
+            tb.appendChild(tr);
+          });
+
+          toast("Audit Logs", "Loaded latest.", "ok");
+        } catch (e) {
+          toast("Audit Logs", e.message || "Failed to load audit logs", "err");
+        }
+      }
+
+      // ---------- upload ----------
+      async function uploadNow() {
+        if (!confirm("Run Upload / Sync now?")) return;
+        try {
+          $("uploadStatus").textContent = "Status: Uploading…";
+          const j = await jpost("/api/admin/upload", {});
+          if (!j.ok) throw new Error(j.error || "Upload failed");
+          $("uploadStatus").textContent = "Status: Success";
+          toast("Upload", "Upload completed.", "ok");
+        } catch (e) {
+          $("uploadStatus").textContent = "Status: Failed";
+          toast("Upload", e.message || "Upload failed", "err");
+        }
+      }
+
+      // ---------- actions ----------
+      async function closeDay() {
+        if (!confirm("Close Day now?\n\nThis will set business date to Manila 'today' if different, and trigger refresh.")) return;
+        try {
+          const j = await jpost("/api/admin/close-day", {});
+          toast("Close Day", j.message || "Done", "ok");
+          await loadDashboard();
+        } catch (e) {
+          toast("Close Day", e.message || "Request failed", "err");
+        }
+      }
+
+      function downloadViaUrl(url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+
+      function exportRange() {
+        const from = ($("repFrom").value || "").trim();
+        const to = ($("repTo").value || "").trim();
+        const type = $("repType").value;
+        if (!from || !to) return toast("Reports", "Enter from/to dates.", "warn");
+
+        let url = "";
+        if (type === "tickets") url = `/api/admin/reports/tickets.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+        if (type === "daily_summary") url = `/api/admin/reports/daily_summary.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+        if (type === "audit_logs") url = `/api/admin/reports/audit_logs.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+
+        downloadViaUrl(url);
+        toast("Reports", "Downloading CSV…", "ok");
+      }
+
+      function exportToday() {
+        const d = ($("repFrom").value || "").trim();
+        if (!d) return toast("Reports", "Business date not loaded.", "warn");
+        const type = $("repType").value;
+
+        let url = "";
+        if (type === "tickets") url = `/api/admin/reports/tickets.csv?from=${encodeURIComponent(d)}&to=${encodeURIComponent(d)}`;
+        if (type === "daily_summary") url = `/api/admin/reports/daily_summary.csv?from=${encodeURIComponent(d)}&to=${encodeURIComponent(d)}`;
+        if (type === "audit_logs") url = `/api/admin/reports/audit_logs.csv?from=${encodeURIComponent(d)}&to=${encodeURIComponent(d)}`;
+
+        downloadViaUrl(url);
+        toast("Reports", "Downloading CSV…", "ok");
+      }
+
+      // ---------- page lifecycle ----------
+      const PAGE_LOADED = { dashboard:false, setup:false, users:false, permissions:false, reports:false, audit:false, upload:false, system:false };
+
+      async function onPageShown(page) {
+        // lazy-load per page (but dashboard can keep live-updated via SSE)
+        try {
+          if (page === "dashboard") {
+            if (!PAGE_LOADED.dashboard) {
+              await loadDashboard();
+              PAGE_LOADED.dashboard = true;
+            }
+          }
+          if (page === "setup") {
+            await loadSetup();
+            PAGE_LOADED.setup = true;
+          }
+          if (page === "users") {
+            await loadUsers();
+            PAGE_LOADED.users = true;
+          }
+          if (page === "permissions") {
+            await loadPerms();
+            PAGE_LOADED.permissions = true;
+          }
+          if (page === "audit") {
+            // don’t auto-load; user clicks load (less noisy)
+            PAGE_LOADED.audit = true;
+          }
+          if (page === "system") {
+            $("sysInfo").textContent = `Branch: ${LAST_BRANCH || "—"} • Business Date: ${LAST_BIZ || "—"} • Updated: ${new Date().toLocaleString()}`;
+            PAGE_LOADED.system = true;
+          }
+        } catch (e) {
+          toast("Admin", e.message || "Page load error", "err");
+        }
+      }
+
+      async function refreshCurrent() {
+        const active = document.querySelector(".nav button.active");
+        const page = active ? active.dataset.page : "dashboard";
+        if (page === "dashboard") return loadDashboard();
+        if (page === "setup") return loadSetup();
+        if (page === "users") return loadUsers();
+        if (page === "permissions") return loadPerms();
+        if (page === "audit") return loadAudit();
+        if (page === "system") return onPageShown("system");
+        toast("Refresh", "Nothing to refresh here.", "warn");
+      }
+
+      // ---------- wiring ----------
+      document.querySelectorAll(".nav button").forEach(btn => {
+        btn.addEventListener("click", () => setActive(btn.dataset.page));
+      });
+
+      $("btnRefresh").addEventListener("click", refreshCurrent);
+      $("btnCloseDay").addEventListener("click", closeDay);
+
+      $("btnExportRange").addEventListener("click", exportRange);
+      $("btnExportToday").addEventListener("click", exportToday);
+
+      $("btnUploadNow").addEventListener("click", uploadNow);
+
+      $("btnSaveSetup").addEventListener("click", saveSetup);
+
+      $("btnCreateUser").addEventListener("click", createUser);
+      $("btnReloadUsers").addEventListener("click", loadUsers);
+
+      $("btnReloadPerms").addEventListener("click", loadPerms);
+      $("btnSavePerms").addEventListener("click", savePerms);
+
+      $("btnLoadAudit").addEventListener("click", loadAudit);
+
+      // ---------- realtime SSE (Dashboard auto-refresh) ----------
+      (function () {
+        const es = new EventSource("/api/admin/stream");
+
+        es.addEventListener("overview", (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            // keep EMA from endpoint; don’t spam it via SSE
+            applyOverview(data, null);
+          } catch (e) {}
+        });
+
+        es.addEventListener("hello", () => {
+          $("pillOnline").textContent = "Network: Local";
+          $("pillOnline").classList.add("ok");
+        });
+
+        es.addEventListener("ping", () => {});
+
+        es.onerror = () => {
+          // auto-retry happens; just mark pill
+          $("pillOnline").textContent = "Network: Reconnecting…";
+          $("pillOnline").classList.remove("ok");
+          $("pillOnline").classList.add("warn");
+        };
+      })();
+
+      // boot
+      (async function boot() {
+        try {
+          await loadMeta();
+          await loadDashboard();
+          PAGE_LOADED.dashboard = true;
+        } catch (e) {
+          toast("Admin", e.message || "Boot failed", "err");
+        }
+      })();
+    </script>
+  </body>
+</html>
