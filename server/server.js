@@ -17,6 +17,7 @@ const { openDb } = require("./db");
 const session = require("express-session");
 const os = require("os");
 const QRCode = require("qrcode");
+const helmet = require("helmet");
 
 
 /* -------------------- helpers -------------------- */
@@ -496,8 +497,9 @@ function ensureAdminSchema(db) {
 }
 
 /* -------------------- Admin seeds -------------------- */
-function ensureAdminSeeds(db) {
+function ensureAdminSeeds(db, opts = {}) {
   const now = Date.now();
+  const disableDefaultAdminSeed = !!opts.disableDefaultAdminSeed;
 
   // roles (must exist BEFORE users because schema.sql enforces FK)
   const roleCount = db.prepare(`SELECT COUNT(*) AS n FROM roles`).get()?.n || 0;
@@ -564,7 +566,7 @@ function ensureAdminSeeds(db) {
   const adminCount =
     db.prepare(`SELECT COUNT(*) AS n FROM users WHERE upper(roleId)='ADMIN'`).get()?.n || 0;
 
-  if (adminCount === 0) {
+  if (adminCount === 0 && !disableDefaultAdminSeed) {
     const fullName = "admin";
     const pin = "000000"; // requested default PIN for fresh installs
     const pinHash = bcrypt.hashSync(pin, 10);
@@ -576,6 +578,9 @@ function ensureAdminSeeds(db) {
     ).run(userId, fullName, pinHash, "ADMIN", now, now);
 
     console.log(`[QSysLocal] Seeded ADMIN user: username=admin pin=000000`);
+  }
+  if (adminCount === 0 && disableDefaultAdminSeed) {
+    console.warn("[QSysLocal] Default ADMIN seed is disabled in production. Create an admin user explicitly.");
   }
 
   // Ensure branch_config row exists (id=1), safe defaults
@@ -592,6 +597,7 @@ function ensureAdminSeeds(db) {
 /* -------------------- server -------------------- */
 
 function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
+  const isProduction = String(process.env.NODE_ENV || "").toLowerCase() === "production";
   const db = openDb(baseDir);
   loadSchema(db);
 
@@ -611,7 +617,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
 
   // Ensure admin tables have baseline data
   try {
-    ensureAdminSeeds(db);
+    ensureAdminSeeds(db, { disableDefaultAdminSeed: isProduction });
   } catch (e) {
     console.warn("[AdminSeeds] warning:", e.message || e);
   }
@@ -621,6 +627,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   global.__app = app;
   app.set("query parser", "simple");
   app.set("trust proxy", true);
+  app.use(helmet());
 
   // Persistent SQLite session store (avoids default MemoryStore limitations).
   class SQLiteSessionStore extends session.Store {
@@ -721,8 +728,12 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   const sessionStore = new SQLiteSessionStore(db, { defaultTtlMs: 1000 * 60 * 60 * 12 });
 
   // ✅ Session (SECURITY ADDON)
-  const sessionSecret = String(process.env.SESSION_SECRET || "").trim() || randomBytes(32).toString("hex");
-  if (!process.env.SESSION_SECRET) {
+  const configuredSessionSecret = String(process.env.SESSION_SECRET || "").trim();
+  if (isProduction && !configuredSessionSecret) {
+    throw new Error("[SECURITY] SESSION_SECRET must be set in production.");
+  }
+  const sessionSecret = configuredSessionSecret || randomBytes(32).toString("hex");
+  if (!configuredSessionSecret) {
     console.warn("[SECURITY] SESSION_SECRET not set. Using ephemeral secret for this process.");
   }
   app.use(
@@ -741,15 +752,8 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
     })
   );
 
-// For PAGE routes (redirect)
-function requireStaffPage(req, res, next) {
-  const u = getSessionUser(req);
-  if (!u) return res.redirect("/staff-login");
-  next();
-}
-
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "256kb" }));
+  app.use(express.urlencoded({ extended: true, limit: "256kb" }));
 
   // ✅ Prevent direct static access entirely (SECURITY ADDON)
   // Allow ONLY:
@@ -1273,7 +1277,7 @@ app.get("/qr/guest", async (req, res) => {
   }
 });
 
-app.get("/qr/wifi", async (req, res) => {
+app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   try {
     // Wi‑Fi QR payload uses app_settings (saved from Admin → QR Setup)
     const secRaw = String(getAppSetting("wifi_security") || "WPA").trim();
@@ -1354,7 +1358,7 @@ app.get("/api/admin/qrcode.png", requireAuth, (req, res) => {
 });
 
 /* ---------- Admin: Wi‑Fi QR (PNG) ---------- */
-app.get("/api/admin/wifi-qrcode.png", requireAuth, (req, res) => {
+app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res) => {
   try {
     // Internally redirect so we keep ONE source of truth
     req.url = "/qr/wifi";
@@ -1721,7 +1725,6 @@ function setDisplayAuthCookie(res, token) {
 function extractDisplayToken(req) {
   return (
     String(req.headers["x-display-token"] || "").trim() ||
-    String(req.query.token || "").trim() ||
     String(getCookieValue(req, "qsys_display_token") || "").trim()
   );
 }
@@ -1767,9 +1770,7 @@ function requireDisplayAuth(req, res, next) {
   // Legacy fallback if DISPLAY_KEY still exists in environment.
   const expected = String(process.env.DISPLAY_KEY || "").trim();
   if (expected) {
-    const got =
-      String(req.headers["x-display-key"] || "").trim() ||
-      String(req.query.key || "").trim();
+    const got = String(req.headers["x-display-key"] || "").trim();
     if (got && got === expected) return next();
   }
 
@@ -2280,7 +2281,7 @@ app.post("/api/admin/gdrive/oauth/clear", requirePerm("SETTINGS_MANAGE"), (req, 
   }
 });
 
-app.get("/api/admin/gdrive/oauth/callback", async (req, res) => {
+app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   try {
     const htmlEsc = (v) =>
       String(v || "")
@@ -5447,7 +5448,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
   // SECURITY ADDON:
   // - If current user has QUEUE_CALL_OVERRIDE -> allow
   // - Else require supervisorUserId + supervisorPin (step-up)
-  app.post("/api/staff/call-specific", requireAuth, (req, res) => {
+  app.post("/api/staff/call-specific", requirePerm("QUEUE_CALL_NEXT"), (req, res) => {
     const now = Date.now();
 
     try {
@@ -5861,9 +5862,6 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
 
   try {
     const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
-    const mediaAuthQuery = req.displayToken
-      ? `token=${encodeURIComponent(String(req.displayToken || ""))}`
-      : (req.query.key ? `key=${encodeURIComponent(String(req.query.key || ""))}` : "");
 
     // 1) Try custom folder
     const sourceDir = String(getAppSetting("media.sourceDir") || "").trim();
@@ -5875,7 +5873,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
             .filter((f) => exts.test(f))
             .map(
               (f) =>
-                `/media/custom/${encodeURIComponent(f)}${mediaAuthQuery ? `?${mediaAuthQuery}` : ""}`,
+                `/media/custom/${encodeURIComponent(f)}`,
             );
 
           if (customFiles.length) {
