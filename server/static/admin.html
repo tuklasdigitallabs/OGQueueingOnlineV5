@@ -243,6 +243,31 @@ margin:0;
   .pill.ok{ border-color: rgba(34,197,94,.45); }
   .pill.warn{ border-color: rgba(245,158,11,.55); }
   .pill.bad{ border-color: rgba(239,68,68,.55); }
+  .detailGrid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap:10px;
+    margin-top:8px;
+  }
+  .detailItem{
+    padding:12px 14px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background: rgba(255,255,255,.62);
+  }
+  .detailItem .label{
+    color: var(--muted2);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    margin-bottom:6px;
+  }
+  .detailItem .value{
+    font-size:14px;
+    font-weight:800;
+    line-height:1.4;
+    word-break:break-word;
+  }
 
   .setup-pills{
     display:flex;
@@ -1176,6 +1201,132 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               </div>
             </div>
 
+            <div class="card" id="cardReportInsights" style="grid-column: span 6; display:none;">
+              <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
+                <div>
+                  <h3 style="margin:0;">Advanced Reporting Insights</h3>
+                  <div class="muted2" id="reportInsightsNotes" style="margin-top:6px;">Compare the selected rolling window with the immediately preceding window of the same length.</div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <select id="reportInsightsDays" style="width:110px;">
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30" selected>30 days</option>
+                    <option value="60">60 days</option>
+                    <option value="90">90 days</option>
+                  </select>
+                  <button class="btn" id="btnReportInsights" type="button">Refresh</button>
+                </div>
+              </div>
+              <div class="help" id="reportsFeatureNotes" style="margin-top:10px;">Use this view to spot changes in wait time, completion, skips, throughput, and call volume before you export detailed reports.</div>
+              <div class="help" id="reportInsightsCompareHelp" style="margin-top:8px;">
+                Comparison rule: if you select 7 days, QSys compares the most recent 7-day window with the 7 days immediately before it. 30 days compares against the previous 30 days, 60 days compares against the previous 60 days, and so on. A full trend needs twice the selected history range.
+              </div>
+              <div style="overflow:auto; margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Value</th>
+                      <th>Trend</th>
+                      <th>Window</th>
+                    </tr>
+                  </thead>
+                  <tbody id="reportInsightsTable">
+                    <tr><td colspan="4" class="muted">No analytics loaded.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card" id="cardReportSchedule" style="grid-column: span 6; display:none;">
+              <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
+                <div>
+                  <h3 style="margin:0;">Scheduled CSV Export</h3>
+                  <div class="muted2" id="reportScheduleNotes" style="margin-top:6px;">Save a recurring local export for the selected report set.</div>
+                </div>
+                <button class="btn" id="btnReportScheduleRun" type="button">Run Now</button>
+              </div>
+              <div class="detailGrid" style="margin-top:12px;">
+                <div class="detailItem">
+                  <div class="label">Status</div>
+                  <div class="value" id="reportScheduleSummaryStatus">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Schedule</div>
+                  <div class="value" id="reportScheduleSummaryTiming">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Scope</div>
+                  <div class="value" id="reportScheduleSummaryScope">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Last Run</div>
+                  <div class="value" id="reportScheduleSummaryLastRun">-</div>
+                </div>
+                <div class="detailItem" style="grid-column: 1 / -1;">
+                  <div class="label">Export Folder</div>
+                  <div class="value" id="reportScheduleSummaryFolder">-</div>
+                </div>
+              </div>
+              <div class="three" style="margin-top:12px;">
+                <div>
+                  <label class="muted2">Enabled</label>
+                  <select id="reportScheduleEnabled">
+                    <option value="1">Enabled</option>
+                    <option value="0">Disabled</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="muted2">Frequency</label>
+                  <select id="reportScheduleFrequency">
+                    <option value="daily">Daily</option>
+                    <option value="hourly">Hourly</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="muted2">Scope Preset</label>
+                  <select id="reportScheduleScope">
+                    <option value="yesterday">Yesterday</option>
+                    <option value="today">Today</option>
+                    <option value="last7">Last 7 Days</option>
+                    <option value="month_to_date">Month-to-date</option>
+                  </select>
+                </div>
+              </div>
+              <div class="three" style="margin-top:12px;">
+                <div>
+                  <label class="muted2">Hour</label>
+                  <input id="reportScheduleHour" type="number" min="0" max="23" />
+                </div>
+                <div>
+                  <label class="muted2">Minute</label>
+                  <input id="reportScheduleMinute" type="number" min="0" max="59" />
+                </div>
+                <div>
+                  <label class="muted2">Export Folder</label>
+                  <div class="row" style="gap:8px; flex-wrap:nowrap;">
+                    <input id="reportScheduleFolder" />
+                    <button class="btn" id="btnReportSchedulePickFolder" type="button">Choose…</button>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <div class="muted2">Reports to include</div>
+                <div class="row" style="margin-top:6px; gap:12px; flex-wrap:wrap;">
+                  <label><input type="checkbox" id="reportScheduleIncludeTickets" /> Tickets CSV</label>
+                  <label><input type="checkbox" id="reportScheduleIncludeDaily" /> Daily Summary CSV</label>
+                  <label><input type="checkbox" id="reportScheduleIncludeCustom" /> Custom Summary CSV</label>
+                  <label><input type="checkbox" id="reportScheduleIncludeSummary" /> Report Summary CSV</label>
+                  <label><input type="checkbox" id="reportScheduleIncludeAudit" /> Audit Logs CSV</label>
+                  <label><input type="checkbox" id="reportScheduleIncludeAuditExport" /> Audit Export CSV</label>
+                </div>
+              </div>
+              <div class="row" style="margin-top:12px;">
+                <button class="btn primary" id="btnReportScheduleSave" type="button">Save Schedule</button>
+              </div>
+            </div>
+
             <!-- Output -->
             <div class="card" style="grid-column: span 12;">
               <h3 id="repOutTitle">Report Output</h3>
@@ -1448,6 +1599,89 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <span id="seedLoaderText">Seeding test data... 0%</span>
               </div>
             </div>
+            <div class="card" id="cardOpsHealth" style="grid-column: span 6; display:none;">
+              <h3>Operations Health</h3>
+              <div class="muted" id="opsHealthInfo">-</div>
+              <div class="row" style="margin-top:12px;">
+                <button class="btn" id="btnSupportBundle">Download Support Bundle</button>
+              </div>
+            </div>
+            <div class="card" id="cardOpsAutomation" style="grid-column: span 6; display:none;">
+              <h3>Automation Tools</h3>
+              <div class="muted" id="opsAutomationInfo">-</div>
+              <div id="autoBackupConfigBlock" style="margin-top:12px; display:none;">
+                <div class="three" style="margin-top:12px;">
+                  <div>
+                    <label class="muted2">Auto Backup</label>
+                    <select id="autoBackupEnabled">
+                      <option value="1">Enabled</option>
+                      <option value="0">Disabled</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="muted2">Interval Hours</label>
+                    <input id="autoBackupIntervalHours" type="number" min="1" max="720" />
+                  </div>
+                  <div>
+                    <label class="muted2">Retention Count</label>
+                    <input id="autoBackupRetentionCount" type="number" min="1" max="100" />
+                  </div>
+                </div>
+                <div class="help" id="autoBackupCurrentSetting" style="margin-top:8px;">Current setting: -</div>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn" id="btnSaveAutoBackupConfig">Save Auto Backup Schedule</button>
+                </div>
+              </div>
+              <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
+                <button class="btn" id="btnRunAutoBackup">Run Auto Backup</button>
+                <button class="btn" id="btnRunIntegrityCheck">Run Integrity Check</button>
+                <button class="btn" id="btnRunSelfTest">Run Startup Self-Test</button>
+              </div>
+            </div>
+            <div class="card" id="cardLicensing" style="grid-column: span 12; display:none;">
+              <h3>Licensing</h3>
+              <div class="detailGrid">
+                <div class="detailItem">
+                  <div class="label">Status</div>
+                  <div class="value" id="licStatus">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Install ID</div>
+                  <div class="value" id="licInstallId">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">License ID</div>
+                  <div class="value" id="licLicenseId">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Activated By</div>
+                  <div class="value" id="licActivatedBy">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Activated At</div>
+                  <div class="value" id="licActivatedAt">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">License Expires</div>
+                  <div class="value" id="licExpiresAt">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Last Renewed</div>
+                  <div class="value" id="licLastRenewed">-</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Current Token Revoked</div>
+                  <div class="value" id="licTokenRevoked">-</div>
+                </div>
+              </div>
+              <div class="muted2" id="licensingInfo" style="margin-top:10px;">-</div>
+              <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
+                <input id="revokeTokenInput" placeholder="Activation / renewal token" style="flex:1 1 280px; min-width:240px;" />
+                <input id="revokeTokenReason" placeholder="Reason (optional)" style="flex:1 1 220px; min-width:200px;" />
+                <button class="btn" id="btnRevokeToken">Revoke Token</button>
+                <button class="btn danger" id="btnTransferRelease">Release For Transfer</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1566,30 +1800,33 @@ async function jpost(url, body) {
       }
 
       function setActive(page) {
-        CURRENT_PAGE = String(page || "dashboard");
+        const target = String(page || "dashboard");
+        const allowed = new Set(allowedPages());
+        if (!allowed.has(target)) return;
+        CURRENT_PAGE = target;
         document.querySelectorAll(".nav button[data-page]").forEach(b => {
-          b.classList.toggle("active", b.dataset.page === page);
+          b.classList.toggle("active", b.dataset.page === target);
         });
         document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
-        const sec = $("page-" + page);
+        const sec = $("page-" + target);
         if (sec) sec.classList.remove("hidden");
 
-        let title = page.charAt(0).toUpperCase() + page.slice(1).replaceAll("_"," ");
-        if (page === "dashboard") title = "LIVE OPS OVERVIEW";
+        let title = target.charAt(0).toUpperCase() + target.slice(1).replaceAll("_"," ");
+        if (target === "dashboard") title = "LIVE OPS OVERVIEW";
         $("pageTitle").textContent = title;
 
 
         // page loaders
-        if (page === "setup") loadSetup();
-        if (page === "users") loadUsers();
-        if (page === "permissions") loadPerms();
-        if (page === "audit") loadAudit();
-        if (page === "reports") initReports();
-        if (page === "upload") {
+        if (target === "setup") loadSetup();
+        if (target === "users") loadUsers();
+        if (target === "permissions") loadPerms();
+        if (target === "audit") loadAudit();
+        if (target === "reports") initReports();
+        if (target === "upload") {
           loadUploadStatus();
           updateUploadScopePreview();
         }
-        if (page === "system") loadSystemInfo();
+        if (target === "system") loadSystemInfo();
 
         maybeCloseDrawerAfterNav();
       }
@@ -1599,6 +1836,8 @@ async function jpost(url, body) {
       let SETTINGS_CACHE = null;   // map
       let PERM_CACHE = null;       // {roles, permissions, matrix}
       let LAST_BIZ = null;
+      let REPORT_INSIGHTS_CACHE = null;
+      let REPORT_SCHEDULE_CACHE = null;
       let REPORT_ACTIVE_PRESET = "";
       let UPLOAD_ACTIVE_PRESET = "";
       let SETUP_ACTIVE_PANE = "branch";
@@ -1606,6 +1845,107 @@ async function jpost(url, body) {
       let META_BRANCH_LABEL = "-";
       let META_BUSINESS_DATE_LABEL = "";
       let SYS_INFO_CACHE = null;
+      let CURRENT_USER = null;
+      let USER_PERMS = new Set();
+      let FEATURE_FLAGS = {};
+      const QS = new URLSearchParams(window.location.search);
+      const INTERNAL_MODE = QS.get("internal") || "";
+
+      const PAGE_PERMS = {
+        dashboard: null,
+        setup: "SETTINGS_MANAGE",
+        users: "USERS_MANAGE",
+        permissions: "PERMISSIONS_MANAGE",
+        reports: "REPORT_EXPORT_CSV",
+        audit: "AUDIT_VIEW",
+        upload: ["DATA_UPLOAD", "REPORT_EXPORT_CSV"],
+        system: "SETTINGS_MANAGE",
+      };
+      const PAGE_FEATURES = {
+        system: [
+          "operations.system_health",
+          "operations.support_bundle",
+          "operations.auto_backup",
+          "operations.backup_restore",
+          "operations.integrity_check",
+          "operations.startup_self_test",
+          "licensing.advanced_dashboard",
+          "licensing.renewal_reminders",
+          "licensing.audit_history",
+          "licensing.branch_transfer",
+          "licensing.token_revocation",
+          "licensing.one_time_tokens",
+        ],
+      };
+
+      function hasPerm(permKey) {
+        if (!permKey) return true;
+        if (Array.isArray(permKey)) return permKey.some((k) => USER_PERMS.has(String(k)));
+        return USER_PERMS.has(String(permKey));
+      }
+
+      function isSuperAdmin() {
+        return String(CURRENT_USER?.roleId || "").toUpperCase() === "SUPER_ADMIN";
+      }
+
+      function canUseInternal(mode) {
+        return isSuperAdmin() && INTERNAL_MODE === mode;
+      }
+
+      function hasFeature(featureKey) {
+        if (!featureKey) return true;
+        if (Array.isArray(featureKey)) return featureKey.some((k) => !!FEATURE_FLAGS[String(k)]);
+        return !!FEATURE_FLAGS[String(featureKey)];
+      }
+
+      function allowedPages() {
+        return Object.keys(PAGE_PERMS).filter((page) => {
+          if (!hasPerm(PAGE_PERMS[page]) || !hasFeature(PAGE_FEATURES[page] || null)) return false;
+          if (page === "permissions") return canUseInternal("permissions");
+          return true;
+        });
+      }
+
+      function applyNavPermissions() {
+        const allowed = new Set(allowedPages());
+        document.querySelectorAll(".nav button[data-page]").forEach((btn) => {
+          const page = String(btn.dataset.page || "");
+          btn.style.display = allowed.has(page) ? "" : "none";
+        });
+      }
+
+      function applyInternalAdminVisibility() {
+        const authBtn = document.querySelector('[data-setup-pane="auth"]');
+        if (authBtn) authBtn.style.display = canUseInternal("integrations") ? "" : "none";
+        const branchUnlock = $("btnUnlockBranchCode");
+        if (branchUnlock) branchUnlock.style.display = canUseInternal("branch") ? "" : "none";
+        const revokeDisplay = $("btnRevokeAllDisplayPairing");
+        if (revokeDisplay) revokeDisplay.style.display = canUseInternal("devices") ? "" : "none";
+        const createRole = $("newUserRole");
+        if (createRole) {
+          Array.from(createRole.options || []).forEach((opt) => {
+            const isAdminOpt = String(opt.value || "").toUpperCase() === "ADMIN";
+            opt.hidden = isAdminOpt && !canUseInternal("users");
+          });
+          if (!canUseInternal("users") && String(createRole.value || "").toUpperCase() === "ADMIN") {
+            createRole.value = "STAFF";
+          }
+        }
+      }
+
+      async function loadAccessContext() {
+        const me = await jget("/api/admin/auth/me");
+        if (!me?.ok) {
+          window.location.href = window.appUrl("/admin-login");
+          throw new Error(me?.error || "Not authenticated");
+        }
+        CURRENT_USER = me.user || null;
+        USER_PERMS = new Set(Array.isArray(me.permissions) ? me.permissions.map((p) => String(p)) : []);
+        const features = await jget("/api/admin/feature-flags");
+        FEATURE_FLAGS = features?.ok && features.features ? features.features : {};
+        applyNavPermissions();
+        applyInternalAdminVisibility();
+      }
 
       function nowTimeText() {
         return new Date().toLocaleTimeString();
@@ -1661,7 +2001,10 @@ async function jpost(url, body) {
       }
 
       function setActiveSetupPane(pane) {
-        const target = String(pane || "branch");
+        let target = String(pane || "branch");
+        if (target === "auth" && !canUseInternal("integrations")) {
+          target = "branch";
+        }
         SETUP_ACTIVE_PANE = target;
         document.querySelectorAll("[data-setup-pane]").forEach(btn => {
           btn.classList.toggle("active", btn.getAttribute("data-setup-pane") === target);
@@ -2632,6 +2975,8 @@ async function clearGdriveOAuth() {
           }
 
           for (const u of users) {
+            const roleCode = String(u.roleId || u.role || "-").trim().toUpperCase();
+            if (roleCode === "ADMIN" && !canUseInternal("users")) continue;
             const tr = document.createElement("tr");
 
             const name = escapeHtml(u.fullName || u.name || "-");
@@ -2653,6 +2998,11 @@ async function clearGdriveOAuth() {
               </td>
             `;
             tb.appendChild(tr);
+          }
+
+          if (!tb.children.length) {
+            tb.innerHTML = `<tr><td colspan="5" class="muted">No users available in this mode.</td></tr>`;
+            return;
           }
 
           // actions
@@ -2681,8 +3031,10 @@ async function clearGdriveOAuth() {
         const role = $("newUserRole").value;
         const pin1 = ($("newUserPin").value || "").trim();
         const pin2 = ($("newUserPin2").value || "").trim();
+        const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
 
         if (!name) return toast("Users", "Name is required.", "warn");
+        if (!allowedRoles.includes(String(role || "").toUpperCase())) return toast("Users", "Invalid role.", "warn");
         if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
         if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
 
@@ -2706,14 +3058,18 @@ async function clearGdriveOAuth() {
         const fullName = prompt("Edit Full Name:", user.fullName || "");
         if (fullName === null) return;
 
-        const roleId = prompt("Edit Role (STAFF / SUPERVISOR / ADMIN):", user.roleId || "STAFF");
+        const roleId = prompt(
+          canUseInternal("users") ? "Edit Role (STAFF / SUPERVISOR / ADMIN):" : "Edit Role (STAFF / SUPERVISOR):",
+          user.roleId || "STAFF"
+        );
         if (roleId === null) return;
 
         const role = String(roleId || "").trim().toUpperCase();
         const name = String(fullName || "").trim();
+        const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
 
         if (!name) return toast("Users", "Name cannot be empty.", "warn");
-        if (!["STAFF","SUPERVISOR","ADMIN"].includes(role)) return toast("Users", "Invalid role.", "warn");
+        if (!allowedRoles.includes(role)) return toast("Users", "Invalid role.", "warn");
 
         if (!confirm(`Save changes?\n\n${user.fullName} -> ${name}\n${user.roleId} -> ${role}`)) return;
 
@@ -2897,9 +3253,99 @@ async function clearGdriveOAuth() {
             currentBusinessDate: h.currentBusinessDate,
           };
           renderSystemInfoWithTime();
+          await loadAdvancedSystemInfo();
         } catch {
           SYS_INFO_CACHE = null;
           $("sysInfo").textContent = "Failed to load /api/health";
+        }
+      }
+
+      async function loadAdvancedSystemInfo() {
+        const opsHealthOn = hasFeature("operations.system_health") || hasFeature("operations.support_bundle");
+        const automationOn = hasFeature(["operations.auto_backup", "operations.integrity_check", "operations.startup_self_test"]);
+        const licensingOn = hasFeature([
+          "licensing.advanced_dashboard",
+          "licensing.renewal_reminders",
+          "licensing.audit_history",
+          "licensing.branch_transfer",
+          "licensing.token_revocation",
+          "licensing.one_time_tokens",
+        ]);
+
+        if ($("cardOpsHealth")) $("cardOpsHealth").style.display = opsHealthOn ? "" : "none";
+        if ($("cardOpsAutomation")) $("cardOpsAutomation").style.display = automationOn ? "" : "none";
+        if ($("cardLicensing")) $("cardLicensing").style.display = licensingOn ? "" : "none";
+
+        if (opsHealthOn) {
+          try {
+            const j = await jget("/api/admin/ops/health");
+            if (j?.ok) {
+              $("opsHealthInfo").textContent =
+                `Branch: ${j.branchCode || "-"}${j.branchName ? ` (${j.branchName})` : ""}\n` +
+                `Activation: ${j.activationStatus || "-"}\n` +
+                `Business Date: ${j.currentBusinessDate || "-"}\n` +
+                `Backups: ${j.backupCount ?? 0}\n` +
+                `Last Backup: ${fmtTime(j.lastBackupAt)}\n` +
+                `Last Restore: ${fmtTime(j.lastRestoreAt)}\n` +
+                `Support Bundles: ${j.supportBundleCount ?? 0}\n` +
+                `Last Audit: ${j.lastAuditAction || "-"} @ ${fmtTime(j.lastAuditAt)}`;
+            } else {
+              $("opsHealthInfo").textContent = j?.error || "Failed to load operations health.";
+            }
+          } catch {
+            $("opsHealthInfo").textContent = "Failed to load operations health.";
+          }
+        }
+
+        if (automationOn) {
+          try {
+            const j = await jget("/api/admin/ops/automation/status");
+            if (j?.ok) {
+              const ab = j.autoBackup || {};
+              const ic = j.integrityCheck || {};
+              const st = j.selfTest || {};
+              if ($("autoBackupConfigBlock")) $("autoBackupConfigBlock").style.display = hasFeature("operations.auto_backup") ? "" : "none";
+              if ($("autoBackupEnabled")) $("autoBackupEnabled").value = ab.enabled ? "1" : "0";
+              if ($("autoBackupIntervalHours")) $("autoBackupIntervalHours").value = Number(ab.intervalHours || 24);
+              if ($("autoBackupRetentionCount")) $("autoBackupRetentionCount").value = Number(ab.retentionCount || 10);
+              if ($("autoBackupCurrentSetting")) {
+                $("autoBackupCurrentSetting").textContent =
+                  `Current setting: ${ab.enabled ? "Enabled" : "Disabled"}, every ${Number(ab.intervalHours || 24)} hour(s), keep ${Number(ab.retentionCount || 10)} backup(s).`;
+              }
+              $("opsAutomationInfo").textContent =
+                `Auto Backup: ${ab.enabled ? "Enabled" : "Disabled"}${ab.intervalHours ? ` every ${ab.intervalHours}h` : ""}\n` +
+                `Last Auto Backup: ${fmtTime(ab.lastResult?.completedAt || ab.lastResult?.endedAt || 0)}\n` +
+                `Integrity Check: ${(typeof ic.ok === "boolean") ? (ic.ok ? "PASS" : "FAIL") : (ic.status || "-")} @ ${fmtTime(ic.checkedAt || ic.completedAt || ic.endedAt || 0)}\n` +
+                `Startup Self-Test: ${(typeof st.ok === "boolean") ? (st.ok ? "PASS" : "FAIL") : (st.status || "-")} @ ${fmtTime(st.checkedAt || st.completedAt || st.endedAt || 0)}`;
+            } else {
+              $("opsAutomationInfo").textContent = j?.error || "Failed to load automation status.";
+            }
+          } catch {
+            $("opsAutomationInfo").textContent = "Failed to load automation status.";
+          }
+        }
+
+        if (licensingOn) {
+          try {
+            const j = await jget("/api/admin/licensing/status");
+            if (j?.ok) {
+              if ($("licStatus")) $("licStatus").textContent = j.status || "-";
+              if ($("licInstallId")) $("licInstallId").textContent = j.installId || "-";
+              if ($("licLicenseId")) $("licLicenseId").textContent = j.activationLicenseId || "-";
+              if ($("licActivatedBy")) $("licActivatedBy").textContent = j.activatedBy || "-";
+              if ($("licActivatedAt")) $("licActivatedAt").textContent = fmtTime(j.activatedAt);
+              if ($("licExpiresAt")) {
+                $("licExpiresAt").textContent = `${fmtTime(j.licenseExpiresAt)}${j.daysRemaining != null ? ` (${j.daysRemaining} day(s) remaining)` : ""}`;
+              }
+              if ($("licLastRenewed")) $("licLastRenewed").textContent = fmtTime(j.lastRenewedAt);
+              if ($("licTokenRevoked")) $("licTokenRevoked").textContent = j.currentTokenRevoked ? "Yes" : "No";
+              $("licensingInfo").textContent = j.reminder?.message || "Licensing details loaded.";
+            } else {
+              $("licensingInfo").textContent = j?.error || "Failed to load licensing status.";
+            }
+          } catch {
+            $("licensingInfo").textContent = "Failed to load licensing status.";
+          }
         }
       }
 
@@ -3020,6 +3466,72 @@ async function clearGdriveOAuth() {
           btn.disabled = false;
           btn.textContent = prev;
         }
+      }
+
+      async function downloadSupportBundle() {
+        try {
+          window.location.href = window.appUrl("/api/admin/ops/support-bundle");
+          toast("System", "Downloading support bundle...", "ok");
+        } catch {
+          toast("System", "Failed to start support bundle download.", "err");
+        }
+      }
+
+      async function runAutoBackupNow() {
+        const j = await jpost("/api/admin/ops/auto-backup/run", {});
+        if (!j?.ok) return toast("System", j?.error || "Auto backup failed.", "err");
+        toast("System", "Auto backup finished.", "ok");
+        await loadAdvancedSystemInfo();
+      }
+
+      async function saveAutoBackupConfig() {
+        const enabled = String($("autoBackupEnabled")?.value || "0") === "1";
+        const intervalHours = Math.max(1, Math.min(720, Number($("autoBackupIntervalHours")?.value || 24) || 24));
+        const retentionCount = Math.max(1, Math.min(100, Number($("autoBackupRetentionCount")?.value || 10) || 10));
+        const j = await jpost("/api/admin/ops/auto-backup/config", {
+          enabled,
+          intervalHours,
+          retentionCount,
+        });
+        if (!j?.ok) return toast("System", j?.error || "Failed to save auto-backup schedule.", "err");
+        toast("System", "Auto-backup schedule saved.", "ok");
+        await loadAdvancedSystemInfo();
+      }
+
+      async function runIntegrityCheckNow() {
+        const j = await jpost("/api/admin/ops/integrity-check/run", {});
+        if (!j?.ok) return toast("System", j?.error || "Integrity check failed.", "err");
+        toast("System", "Integrity check finished.", "ok");
+        await loadAdvancedSystemInfo();
+      }
+
+      async function runSelfTestNow() {
+        const j = await jpost("/api/admin/ops/startup-self-test/run", {});
+        if (!j?.ok) return toast("System", j?.error || "Self-test failed.", "err");
+        toast("System", "Startup self-test finished.", "ok");
+        await loadAdvancedSystemInfo();
+      }
+
+      async function revokeLicensingToken() {
+        const token = String($("revokeTokenInput")?.value || "").trim();
+        const reason = String($("revokeTokenReason")?.value || "").trim();
+        if (!token) return toast("Licensing", "Enter a token to revoke.", "warn");
+        const j = await jpost("/api/admin/licensing/revoke-token", { token, reason });
+        if (!j?.ok) return toast("Licensing", j?.error || "Token revoke failed.", "err");
+        $("revokeTokenInput").value = "";
+        $("revokeTokenReason").value = "";
+        toast("Licensing", "Token revoked.", "ok");
+        await loadAdvancedSystemInfo();
+      }
+
+      async function releaseBranchTransfer() {
+        const confirmText = prompt("Type TRANSFER to release this installation for transfer:", "");
+        if (confirmText === null) return;
+        const j = await jpost("/api/admin/licensing/transfer-release", { confirmText });
+        if (!j?.ok) return toast("Licensing", j?.error || "Transfer release failed.", "err");
+        toast("Licensing", "Installation released for transfer.", "ok");
+        await loadBasic();
+        await loadSystemInfo();
       }
 
       // ---------- actions ----------
@@ -3235,6 +3747,10 @@ async function clearGdriveOAuth() {
         updateScopeInputsUI();
 
         const type = getReportType();
+        const advancedReportsOn = hasFeature("reporting.advanced_center");
+        const scheduledOn = hasFeature("reporting.scheduled_csv");
+        const analyticsOn = hasFeature("reporting.historical_analytics");
+        const trendsOn = hasFeature("reporting.branch_trends");
 
         // Wait reference row is not used for Custom Summary / Raw Tickets
         const waitRow = $("repWaitRefRow");
@@ -3280,6 +3796,16 @@ async function clearGdriveOAuth() {
 
         const inc = $("repIncludes");
         if (inc) inc.innerHTML = buildIncludesText();
+
+        if ($("cardReportInsights")) $("cardReportInsights").style.display = (advancedReportsOn || analyticsOn || trendsOn) ? "" : "none";
+        if ($("cardReportSchedule")) $("cardReportSchedule").style.display = scheduledOn ? "" : "none";
+        if ($("reportsFeatureNotes")) {
+          const notes = [];
+          if (advancedReportsOn) notes.push("Advanced Reports Center enabled");
+          if (analyticsOn) notes.push("Historical Analytics enabled");
+          if (trendsOn) notes.push("Branch Trends enabled");
+          $("reportsFeatureNotes").textContent = notes.length ? notes.join(" • ") : "Advanced reporting is not provisioned.";
+        }
       }
 
       // Marks report output stale whenever scope/type inputs change.
@@ -3370,6 +3896,171 @@ async function clearGdriveOAuth() {
         setReportsStale(true);
         updateReportsMode();
         updateUploadScopePreview();
+        loadReportInsights();
+        loadReportSchedule();
+      }
+
+      function renderReportInsights() {
+        const tb = $("reportInsightsTable");
+        if (!tb) return;
+        const insight = REPORT_INSIGHTS_CACHE?.insights || null;
+        const notes = $("reportInsightsNotes");
+        const featureNotes = $("reportsFeatureNotes");
+        if (!insight) {
+          tb.innerHTML = `<tr><td colspan="4" class="muted">No analytics loaded.</td></tr>`;
+          if (notes) notes.textContent = "Advanced insights are unavailable.";
+          if (featureNotes) featureNotes.textContent = "Enable advanced reporting features and refresh to compare queue performance over time.";
+          return;
+        }
+        if (notes) notes.textContent = insight.comparisonLabel || `Comparing the last ${insight.days || "-"} days with the previous period.`;
+        if (featureNotes) featureNotes.textContent = "Best used as a quick management snapshot before drilling into Daily Summary, Custom Summary, and raw ticket exports.";
+        const overview = insight.overview || {};
+        const trend = insight.trend || {};
+        const hasFullComparisonWindow = !!insight.hasFullComparisonWindow;
+        const fmtNumber = (value, decimals = 1) => {
+          const n = Number(value);
+          if (!Number.isFinite(n)) return "-";
+          return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        };
+        const fmtPercent = (value) => {
+          const n = Number(value);
+          if (!Number.isFinite(n)) return "-";
+          return `${n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+        };
+        const fmtSigned = (value, suffix = "", decimals = 1) => {
+          if (value === null || value === undefined || value === "") return "No baseline";
+          const n = Number(value);
+          if (!Number.isFinite(n)) return "No baseline";
+          if (n === 0) return `No change${suffix ? ` ${suffix}` : ""}`;
+          const sign = n > 0 ? "+" : "";
+          return `${sign}${n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${suffix}`;
+        };
+        const rows = [
+          { label: "Selected Window", value: `${insight.days ?? "-"} days`, trend: hasFullComparisonWindow ? (notes?.textContent || "-") : "Insufficient prior history", window: "Rolling comparison" },
+          { label: "Average Wait", value: overview.overallAvgWait != null ? `${fmtNumber(overview.overallAvgWait)} min` : "-", trend: fmtSigned(trend.avgWaitDeltaMins, " min"), window: "Average created-to-seated time" },
+          { label: "Completion Rate", value: fmtPercent(overview.seatedRatePct), trend: fmtSigned(hasFullComparisonWindow ? trend.seatedDeltaPct : null, "%"), window: "Seated tickets vs registered" },
+          { label: "Skip Rate", value: fmtPercent(overview.skipRatePct), trend: fmtSigned(hasFullComparisonWindow ? trend.skipDeltaPct : null, "%"), window: "Skipped tickets vs registered" },
+          { label: "Throughput", value: overview.totalSeated != null ? `${Number(overview.totalSeated || 0).toLocaleString()}` : "-", trend: fmtSigned(hasFullComparisonWindow ? trend.seatedDeltaPct : null, "%"), window: "Total seated in selected window" },
+          { label: "Total Called", value: overview.totalCalled != null ? `${Number(overview.totalCalled || 0).toLocaleString()}` : "-", trend: fmtSigned(hasFullComparisonWindow ? trend.calledDeltaPct : null, "%"), window: "Total calls in selected window" },
+        ];
+        tb.innerHTML = rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.label)}</td>
+            <td>${escapeHtml(row.value)}</td>
+            <td>${escapeHtml(row.trend)}</td>
+            <td>${escapeHtml(row.window)}</td>
+          </tr>
+        `).join("");
+      }
+
+      async function loadReportInsights() {
+        if (!hasFeature(["reporting.advanced_center", "reporting.historical_analytics", "reporting.branch_trends"])) {
+          REPORT_INSIGHTS_CACHE = null;
+          renderReportInsights();
+          return;
+        }
+        const days = Number($("reportInsightsDays")?.value || 30) || 30;
+        REPORT_INSIGHTS_CACHE = await jget(`/api/admin/reports/analytics?days=${encodeURIComponent(days)}`);
+        renderReportInsights();
+      }
+
+      function setScheduleCheckbox(id, enabled) {
+        if ($(id)) $(id).checked = !!enabled;
+      }
+
+      function renderReportSchedule() {
+        const schedule = REPORT_SCHEDULE_CACHE?.schedule || {};
+        const config = schedule.config || {};
+        const lastResult = schedule.lastResult || null;
+        const scopeLabels = {
+          yesterday: "Yesterday",
+          today: "Today",
+          last7: "Last 7 Days",
+          month_to_date: "Month-to-date",
+        };
+        if ($("reportScheduleEnabled")) $("reportScheduleEnabled").value = config.enabled ? "1" : "0";
+        if ($("reportScheduleFrequency")) $("reportScheduleFrequency").value = config.frequency || "daily";
+        if ($("reportScheduleScope")) $("reportScheduleScope").value = config.scopePreset || "yesterday";
+        if ($("reportScheduleHour")) $("reportScheduleHour").value = Number(config.hourLocal || 6);
+        if ($("reportScheduleMinute")) $("reportScheduleMinute").value = Number(config.minuteLocal || 0);
+        if ($("reportScheduleFolder")) $("reportScheduleFolder").value = config.exportFolder || schedule.exportFolder || "";
+        const reportKeys = Array.isArray(config.reportKeys) ? config.reportKeys : [];
+        setScheduleCheckbox("reportScheduleIncludeTickets", reportKeys.includes("tickets"));
+        setScheduleCheckbox("reportScheduleIncludeDaily", reportKeys.includes("daily_summary_csv"));
+        setScheduleCheckbox("reportScheduleIncludeCustom", reportKeys.includes("custom_summary"));
+        setScheduleCheckbox("reportScheduleIncludeSummary", reportKeys.includes("summary"));
+        setScheduleCheckbox("reportScheduleIncludeAudit", reportKeys.includes("audit_logs"));
+        setScheduleCheckbox("reportScheduleIncludeAuditExport", reportKeys.includes("audit_export"));
+        const enabledLabel = config.enabled ? "Enabled" : "Disabled";
+        const timingLabel = config.frequency === "hourly"
+          ? `Hourly at minute ${String(config.minuteLocal ?? 0).padStart(2, "0")}`
+          : `Daily at ${String(config.hourLocal ?? 6).padStart(2, "0")}:${String(config.minuteLocal ?? 0).padStart(2, "0")}`;
+        const folderLabel = schedule.exportFolder || config.exportFolder || "Internal scheduled reports folder";
+        if ($("reportScheduleSummaryStatus")) $("reportScheduleSummaryStatus").textContent = enabledLabel;
+        if ($("reportScheduleSummaryTiming")) $("reportScheduleSummaryTiming").textContent = timingLabel;
+        if ($("reportScheduleSummaryScope")) $("reportScheduleSummaryScope").textContent = scopeLabels[config.scopePreset] || "Yesterday";
+        if ($("reportScheduleSummaryLastRun")) $("reportScheduleSummaryLastRun").textContent = fmtTime(lastResult?.startedAt || 0);
+        if ($("reportScheduleSummaryFolder")) $("reportScheduleSummaryFolder").textContent = folderLabel;
+        if ($("reportScheduleNotes")) {
+          $("reportScheduleNotes").textContent = "Use this scheduler for unattended CSV exports to a stable local folder.";
+        }
+      }
+
+      async function loadReportSchedule() {
+        if (!hasFeature("reporting.scheduled_csv")) {
+          REPORT_SCHEDULE_CACHE = null;
+          return;
+        }
+        REPORT_SCHEDULE_CACHE = await jget("/api/admin/reports/schedule");
+        renderReportSchedule();
+      }
+
+      function getScheduledReportKeysFromUi() {
+        const keys = [];
+        if ($("reportScheduleIncludeTickets")?.checked) keys.push("tickets");
+        if ($("reportScheduleIncludeDaily")?.checked) keys.push("daily_summary_csv");
+        if ($("reportScheduleIncludeCustom")?.checked) keys.push("custom_summary");
+        if ($("reportScheduleIncludeSummary")?.checked) keys.push("summary");
+        if ($("reportScheduleIncludeAudit")?.checked) keys.push("audit_logs");
+        if ($("reportScheduleIncludeAuditExport")?.checked) keys.push("audit_export");
+        return keys;
+      }
+
+      async function saveReportSchedule() {
+        const j = await jpost("/api/admin/reports/schedule", {
+          enabled: String($("reportScheduleEnabled")?.value || "0") === "1",
+          frequency: String($("reportScheduleFrequency")?.value || "daily"),
+          hourLocal: Number($("reportScheduleHour")?.value || 6),
+          minuteLocal: Number($("reportScheduleMinute")?.value || 0),
+          scopePreset: String($("reportScheduleScope")?.value || "yesterday"),
+          exportFolder: String($("reportScheduleFolder")?.value || "").trim(),
+          reportKeys: getScheduledReportKeysFromUi(),
+        });
+        if (!j?.ok) return toast("Reports", j?.error || "Failed to save scheduled export.", "err");
+        REPORT_SCHEDULE_CACHE = j;
+        renderReportSchedule();
+        toast("Reports", "Scheduled CSV settings saved.", "ok");
+      }
+
+      async function runReportSchedule() {
+        const j = await jpost("/api/admin/reports/schedule/run", {});
+        if (!j?.ok) return toast("Reports", j?.error || "Failed to run scheduled export.", "err");
+        REPORT_SCHEDULE_CACHE = j.schedule ? { ok: true, schedule: j.schedule } : REPORT_SCHEDULE_CACHE;
+        renderReportSchedule();
+        toast("Reports", `Scheduled export wrote ${Array.isArray(j.result?.files) ? j.result.files.length : 0} file(s).`, "ok");
+      }
+
+      async function pickReportScheduleFolder() {
+        const j = await jpost("/api/admin/reports/schedule/folder/select", {});
+        if (!j?.ok) {
+          const raw = String(j?.error || "");
+          const msg = raw.includes("Cannot POST") || raw.includes("<!DOCTYPE")
+            ? "Folder picker is unavailable right now. Restart the app in Electron, or enter the export path manually."
+            : (raw || "Failed to open folder picker.");
+          return toast("Reports", msg, "err");
+        }
+        if (j.canceled) return;
+        if ($("reportScheduleFolder")) $("reportScheduleFolder").value = j.folder || "";
       }
 
       // CSV export dispatcher by report type.
@@ -4100,6 +4791,13 @@ $("btnUploadNow").addEventListener("click", uploadNow);
       $("btnOpenBackupFolder")?.addEventListener("click", openBackupFolder);
       $("btnRestore")?.addEventListener("click", restoreDb);
       $("btnSeedToday")?.addEventListener("click", seedTodayData);
+      $("btnSupportBundle")?.addEventListener("click", downloadSupportBundle);
+      $("btnSaveAutoBackupConfig")?.addEventListener("click", saveAutoBackupConfig);
+      $("btnRunAutoBackup")?.addEventListener("click", runAutoBackupNow);
+      $("btnRunIntegrityCheck")?.addEventListener("click", runIntegrityCheckNow);
+      $("btnRunSelfTest")?.addEventListener("click", runSelfTestNow);
+      $("btnRevokeToken")?.addEventListener("click", revokeLicensingToken);
+      $("btnTransferRelease")?.addEventListener("click", releaseBranchTransfer);
 
       $("btnSaveSetup").addEventListener("click", saveSetup);
       $("btnUnlockBranchCode").addEventListener("click", unlockAndChangeBranchCode);
@@ -4131,6 +4829,11 @@ $("btnUploadNow").addEventListener("click", uploadNow);
       $("btnSavePerms").addEventListener("click", savePerms);
 
       $("btnLoadAudit").addEventListener("click", loadAudit);
+      $("btnReportInsights")?.addEventListener("click", loadReportInsights);
+      $("reportInsightsDays")?.addEventListener("change", loadReportInsights);
+      $("btnReportScheduleSave")?.addEventListener("click", saveReportSchedule);
+      $("btnReportScheduleRun")?.addEventListener("click", runReportSchedule);
+      $("btnReportSchedulePickFolder")?.addEventListener("click", pickReportScheduleFolder);
       
       $("btnPrintQr")?.addEventListener("click", printQrNow);
       $("btnDownloadQr")?.addEventListener("click", downloadQrNow);
@@ -4178,7 +4881,18 @@ $("btnUploadNow").addEventListener("click", uploadNow);
       })();
 
       // boot
-      loadBasic();
+      (async function bootAdmin() {
+        try {
+          await loadAccessContext();
+          await loadBasic();
+          const allowed = allowedPages();
+          if (allowed.length && !allowed.includes(CURRENT_PAGE)) {
+            setActive(allowed[0]);
+          }
+        } catch (e) {
+          console.error("[admin/boot]", e);
+        }
+      })();
       setInterval(() => {
         renderMetaWithTime();
         renderSystemInfoWithTime();
