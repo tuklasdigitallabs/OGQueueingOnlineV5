@@ -42,6 +42,25 @@ function setPrivateSurfaceNoIndex(res) {
   res.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
 }
 
+function buildPrivateRobotsTxt() {
+  return [
+    "User-agent: *",
+    `Disallow: ${pathWithBase("/staff")}`,
+    `Disallow: ${pathWithBase("/staff-login")}`,
+    `Disallow: ${pathWithBase("/admin")}`,
+    `Disallow: ${pathWithBase("/admin-login")}`,
+    `Disallow: ${pathWithBase("/super-admin")}`,
+    `Disallow: ${pathWithBase("/super-admin-login")}`,
+    `Disallow: ${pathWithBase("/super-admin-recover")}`,
+    `Disallow: ${pathWithBase("/internal-tools")}`,
+    `Disallow: ${pathWithBase("/provider-setup")}`,
+    `Disallow: ${pathWithBase("/display")}`,
+    `Disallow: ${pathWithBase("/display-landscape.html")}`,
+    `Disallow: ${pathWithBase("/display-portrait.html")}`,
+    "",
+  ].join("\n");
+}
+
 function stripBasePathFromUrl(url) {
   const raw = String(url || "");
   if (!APP_BASE_PATH) return raw || "/";
@@ -906,23 +925,13 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
     contentSecurityPolicy: false,
   }));
   app.get("/robots.txt", (_req, res) => {
-    res.type("text/plain").send([
-      "User-agent: *",
-      `Disallow: ${pathWithBase("/staff")}`,
-      `Disallow: ${pathWithBase("/staff-login")}`,
-      `Disallow: ${pathWithBase("/admin")}`,
-      `Disallow: ${pathWithBase("/admin-login")}`,
-      `Disallow: ${pathWithBase("/super-admin")}`,
-      `Disallow: ${pathWithBase("/super-admin-login")}`,
-      `Disallow: ${pathWithBase("/super-admin-recover")}`,
-      `Disallow: ${pathWithBase("/internal-tools")}`,
-      `Disallow: ${pathWithBase("/provider-setup")}`,
-      `Disallow: ${pathWithBase("/display")}`,
-      `Disallow: ${pathWithBase("/display-landscape.html")}`,
-      `Disallow: ${pathWithBase("/display-portrait.html")}`,
-      "",
-    ].join("\n"));
+    res.type("text/plain").send(buildPrivateRobotsTxt());
   });
+  if (APP_BASE_PATH) {
+    app.get(pathWithBase("/robots.txt"), (_req, res) => {
+      res.type("text/plain").send(buildPrivateRobotsTxt());
+    });
+  }
 
   // Persistent SQLite session store (avoids default MemoryStore limitations).
   class SQLiteSessionStore extends session.Store {
