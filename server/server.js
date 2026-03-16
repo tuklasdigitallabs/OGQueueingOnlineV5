@@ -1328,6 +1328,17 @@ app.get("/static/js/:file", (req, res) => {
     return !!(row && row.allowed);
   }
 
+  function verifyPinAgainstStoredHash(pin, pinHash) {
+    const rawPin = String(pin || "");
+    const storedHash = String(pinHash || "").trim();
+    if (!rawPin || !storedHash) return false;
+    try {
+      return bcrypt.compareSync(rawPin, storedHash);
+    } catch {
+      return false;
+    }
+  }
+
   function requireAuth(req, res, next) {
     const u = getSessionUser(req);
     if (!u) return res.status(401).json({ ok: false, error: "Not authenticated" });
@@ -1468,7 +1479,7 @@ function requireSuperAdminPage(req, res, next) {
         return res.status(403).json({ ok: false, error: "Not allowed for Staff app" });
       }
 
-      const ok = bcrypt.compareSync(pin, u.pinHash);
+      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
       if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const now = Date.now();
@@ -1506,7 +1517,7 @@ function requireSuperAdminPage(req, res, next) {
         return res.status(403).json({ ok: false, error: "Not allowed for Admin app" });
       }
 
-      const ok = bcrypt.compareSync(pin, u.pinHash);
+      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
       if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const now = Date.now();
@@ -1539,7 +1550,7 @@ function requireSuperAdminPage(req, res, next) {
       const role = String(u.roleId || "").toUpperCase();
       if (role !== "SUPER_ADMIN") return res.status(403).json({ ok: false, error: "Super admin only" });
 
-      const ok = bcrypt.compareSync(pin, u.pinHash);
+      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
       if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const now = Date.now();
@@ -1574,7 +1585,7 @@ function requireSuperAdminPage(req, res, next) {
       if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const role = String(u.roleId || "").toUpperCase();
-      const ok = bcrypt.compareSync(pin, u.pinHash);
+      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
       if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const now = Date.now();
