@@ -593,11 +593,24 @@ function ensureBusinessDate(db) {
   return cur;
 }
 
+function syncDefaultBranchBusinessDate(db, businessDate) {
+  try {
+    const branchId = String(getOrBootstrapDefaultBranchId(db) || "").trim();
+    if (!branchId) return;
+    db.prepare(
+      `INSERT INTO branch_business_dates(branchId, businessDate, updatedAt)
+       VALUES(?,?,?)
+       ON CONFLICT(branchId) DO UPDATE SET businessDate=excluded.businessDate, updatedAt=excluded.updatedAt`
+    ).run(branchId, String(businessDate || ""), Date.now());
+  } catch {}
+}
+
 function maybeAutoRolloverBusinessDate(db, app) {
   const today = getTodayManila();
   const cur = ensureBusinessDate(db);
   if (cur !== today) {
     setState(db, "currentBusinessDate", today);
+    syncDefaultBranchBusinessDate(db, today);
     setState(db, "lastAutoRolloverAt", Date.now());
     emitChanged(app, db, "AUTO_ROLLOVER");
     console.log(`[QSysLocal] Auto rollover business date: ${cur} -> ${today}`);
@@ -760,6 +773,163 @@ function ensureActivationTokenTables(db) {
   `);
 }
 
+function ensureMultiBranchFoundationSchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      orgId TEXT PRIMARY KEY,
+      orgCode TEXT NOT NULL UNIQUE,
+      orgName TEXT NOT NULL,
+      status TEXT NOT NULL,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS branches (
+      branchId TEXT PRIMARY KEY,
+      orgId TEXT NOT NULL,
+      branchCode TEXT NOT NULL,
+      branchName TEXT NOT NULL,
+      timezone TEXT NOT NULL,
+      status TEXT NOT NULL,
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      UNIQUE(orgId, branchCode)
+    );
+    CREATE INDEX IF NOT EXISTS idx_branches_orgId ON branches(orgId);
+
+    CREATE TABLE IF NOT EXISTS user_branch_access (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      branchId TEXT NOT NULL,
+      roleScope TEXT NOT NULL,
+      createdAt INTEGER NOT NULL,
+      UNIQUE(userId, branchId)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_branch_access_branchId ON user_branch_access(branchId);
+
+    CREATE TABLE IF NOT EXISTS branch_business_dates (
+      branchId TEXT PRIMARY KEY,
+      businessDate TEXT NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS branch_settings (
+      branchId TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT,
+      updatedAt INTEGER NOT NULL,
+      PRIMARY KEY (branchId, key)
+    );
+  `);
+}
+
+function upsertUserBranchAccess(db, { userId, branchId, roleScope }) {
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO user_branch_access(id, userId, branchId, roleScope, createdAt)
+     VALUES(?,?,?,?,?)
+     ON CONFLICT(userId, branchId) DO UPDATE SET roleScope=excluded.roleScope`
+  ).run(randomUUID(), String(userId || ""), String(branchId || ""), String(roleScope || "STAFF").trim().toUpperCase(), now);
+}
+
+function bootstrapDefaultOrganizationAndBranch(db) {
+  const now = Date.now();
+  const cfg = db.prepare(`SELECT branchCode, branchName, timezone FROM branch_config WHERE id=1`).get() || {};
+  const branchCode = String(cfg.branchCode || BRANCH_CODE_PLACEHOLDER).trim().toUpperCase() || BRANCH_CODE_PLACEHOLDER;
+  const branchName = String(cfg.branchName || "").trim() || "Unassigned Branch";
+  const timezone = String(cfg.timezone || "Asia/Manila").trim() || "Asia/Manila";
+  const businessDate = ensureBusinessDate(db);
+
+  const settingsUpsert = db.prepare(
+    `INSERT INTO app_settings(key, value, updatedAt)
+     VALUES(?,?,?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value, updatedAt=excluded.updatedAt`
+  );
+
+  let org = db.prepare(`SELECT orgId FROM organizations WHERE orgCode='DEFAULT' LIMIT 1`).get();
+  if (!org?.orgId) {
+    const fallbackOrg = db.prepare(`SELECT orgId FROM organizations ORDER BY createdAt ASC LIMIT 1`).get();
+    if (fallbackOrg?.orgId) {
+      org = fallbackOrg;
+      db.prepare(`UPDATE organizations SET orgCode='DEFAULT', orgName=?, status='ACTIVE', updatedAt=? WHERE orgId=?`).run(
+        branchName,
+        now,
+        org.orgId
+      );
+    } else {
+      org = { orgId: randomUUID() };
+      db.prepare(
+        `INSERT INTO organizations(orgId, orgCode, orgName, status, createdAt, updatedAt)
+         VALUES(?,?,?,?,?,?)`
+      ).run(org.orgId, "DEFAULT", branchName, "ACTIVE", now, now);
+    }
+  } else {
+    db.prepare(`UPDATE organizations SET orgName=?, status='ACTIVE', updatedAt=? WHERE orgId=?`).run(branchName, now, org.orgId);
+  }
+
+  let branch = db.prepare(`SELECT branchId FROM branches WHERE orgId=? AND branchCode=? LIMIT 1`).get(org.orgId, branchCode);
+  if (!branch?.branchId) {
+    const defaultBranch = db.prepare(`SELECT branchId FROM branches WHERE orgId=? AND isDefault=1 LIMIT 1`).get(org.orgId);
+    if (defaultBranch?.branchId) {
+      branch = defaultBranch;
+      db.prepare(
+        `UPDATE branches
+         SET branchCode=?, branchName=?, timezone=?, status='ACTIVE', isDefault=1, updatedAt=?
+         WHERE branchId=?`
+      ).run(branchCode, branchName, timezone, now, branch.branchId);
+    } else {
+      branch = { branchId: randomUUID() };
+      db.prepare(
+        `INSERT INTO branches(branchId, orgId, branchCode, branchName, timezone, status, isDefault, createdAt, updatedAt)
+         VALUES(?,?,?,?,?,'ACTIVE',1,?,?)`
+      ).run(branch.branchId, org.orgId, branchCode, branchName, timezone, now, now);
+    }
+  } else {
+    db.prepare(
+      `UPDATE branches
+       SET branchName=?, timezone=?, status='ACTIVE', isDefault=1, updatedAt=?
+       WHERE branchId=?`
+    ).run(branchName, timezone, now, branch.branchId);
+  }
+
+  db.prepare(`UPDATE branches SET isDefault=CASE WHEN branchId=? THEN 1 ELSE 0 END WHERE orgId=?`).run(branch.branchId, org.orgId);
+
+  db.prepare(
+    `INSERT INTO branch_business_dates(branchId, businessDate, updatedAt)
+     VALUES(?,?,?)
+     ON CONFLICT(branchId) DO UPDATE SET businessDate=excluded.businessDate, updatedAt=excluded.updatedAt`
+  ).run(branch.branchId, businessDate, now);
+
+  settingsUpsert.run("multibranch.defaultOrgId", org.orgId, now);
+  settingsUpsert.run("multibranch.defaultBranchId", branch.branchId, now);
+
+  const users = db.prepare(`SELECT userId, roleId FROM users`).all();
+  for (const user of users) {
+    upsertUserBranchAccess(db, {
+      userId: user.userId,
+      branchId: branch.branchId,
+      roleScope: user.roleId,
+    });
+  }
+
+  return {
+    orgId: org.orgId,
+    branchId: branch.branchId,
+    branchCode,
+    branchName,
+    timezone,
+    businessDate,
+  };
+}
+
+function getOrBootstrapDefaultBranchId(db) {
+  const row = db.prepare(`SELECT value FROM app_settings WHERE key='multibranch.defaultBranchId' LIMIT 1`).get();
+  const branchId = String(row?.value || "").trim();
+  if (branchId) return branchId;
+  return String(bootstrapDefaultOrganizationAndBranch(db).branchId || "").trim();
+}
+
 /* -------------------- Admin seeds -------------------- */
 function ensureAdminSeeds(db, opts = {}) {
   const now = Date.now();
@@ -893,6 +1063,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   ensureAdminSchema(db);
   ensureActivationState(db);
   ensureActivationTokenTables(db);
+  ensureMultiBranchFoundationSchema(db);
 
   // ✅ Ensure optional note column exists for override calls
   ensureColumn(db, "queue_items", "calledNote", "TEXT");
@@ -911,6 +1082,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   // Ensure admin tables have baseline data
   try {
     ensureAdminSeeds(db, { disableDefaultAdminSeed: isProduction });
+    bootstrapDefaultOrganizationAndBranch(db);
   } catch (e) {
     console.warn("[AdminSeeds] warning:", e.message || e);
   }
@@ -1160,6 +1332,154 @@ app.get("/static/js/:file", (req, res) => {
   function getBranchName() {
     return String(getBranchConfigSafe().branchName || "").trim();
   }
+  function getDefaultBranchRecord() {
+    try {
+      const defaultBranchId = String(getDbSetting("multibranch.defaultBranchId") || "").trim();
+      if (defaultBranchId) {
+        const row = db.prepare(
+          `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
+           FROM branches
+           WHERE branchId=?
+           LIMIT 1`
+        ).get(defaultBranchId);
+        if (row) return row;
+      }
+      const row = db.prepare(
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
+         FROM branches
+         WHERE isDefault=1
+         ORDER BY updatedAt DESC, createdAt DESC
+         LIMIT 1`
+      ).get();
+      if (row) return row;
+    } catch {}
+    const cfg = getBranchConfigSafe();
+    return {
+      branchId: getOrBootstrapDefaultBranchId(db),
+      orgId: String(getDbSetting("multibranch.defaultOrgId") || "").trim(),
+      branchCode: String(cfg.branchCode || branchCode).trim() || branchCode,
+      branchName: String(cfg.branchName || "").trim(),
+      timezone: String(cfg.timezone || "Asia/Manila"),
+      status: "ACTIVE",
+      isDefault: 1,
+    };
+  }
+  function getBranchById(branchId) {
+    const id = String(branchId || "").trim();
+    if (!id) return null;
+    try {
+      return db.prepare(
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
+         FROM branches
+         WHERE branchId=?
+         LIMIT 1`
+      ).get(id) || null;
+    } catch {
+      return null;
+    }
+  }
+  function getBranchByCode(branchCodeInput) {
+    const code = String(branchCodeInput || "").trim().toUpperCase();
+    if (!code) return null;
+    try {
+      return db.prepare(
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
+         FROM branches
+         WHERE upper(branchCode)=?
+         ORDER BY isDefault DESC, updatedAt DESC, createdAt DESC
+         LIMIT 1`
+      ).get(code) || null;
+    } catch {
+      return null;
+    }
+  }
+  function listUserBranchAccess(userId) {
+    const id = String(userId || "").trim();
+    if (!id) return [];
+    try {
+      return db.prepare(
+        `SELECT b.branchId, b.orgId, b.branchCode, b.branchName, b.timezone, b.status, b.isDefault, uba.roleScope
+         FROM user_branch_access uba
+         JOIN branches b ON b.branchId = uba.branchId
+         WHERE uba.userId=?
+         ORDER BY b.isDefault DESC, b.branchName ASC, b.branchCode ASC`
+      ).all(id);
+    } catch {
+      return [];
+    }
+  }
+  function listActiveBranches() {
+    try {
+      return db.prepare(
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
+         FROM branches
+         WHERE upper(coalesce(status,'ACTIVE'))='ACTIVE'
+         ORDER BY isDefault DESC, branchName ASC, branchCode ASC`
+      ).all();
+    } catch {
+      const fallback = getDefaultBranchRecord();
+      return fallback ? [fallback] : [];
+    }
+  }
+  function ensureSessionBranchContext(user) {
+    if (!user || !user.userId) return user || null;
+    const branches = listUserBranchAccess(user.userId);
+    const allowedBranchIds = branches.map((row) => String(row.branchId || "").trim()).filter(Boolean);
+    let selectedBranchId = String(user.selectedBranchId || "").trim();
+    if (!selectedBranchId || !allowedBranchIds.includes(selectedBranchId)) {
+      if (allowedBranchIds.length === 1) selectedBranchId = allowedBranchIds[0];
+      else {
+        const defaultRow = branches.find((row) => Number(row.isDefault || 0) === 1) || branches[0];
+        selectedBranchId = String(defaultRow?.branchId || "").trim();
+      }
+    }
+    return {
+      ...user,
+      allowedBranchIds,
+      selectedBranchId,
+      branchCount: allowedBranchIds.length,
+    };
+  }
+  function getSelectedBranchIdForUser(req, user) {
+    const sessSelected = String(user?.selectedBranchId || "").trim();
+    if (sessSelected) return sessSelected;
+    const branches = listUserBranchAccess(user?.userId);
+    if (branches.length === 1) return String(branches[0].branchId || "").trim();
+    const defaultRow = branches.find((row) => Number(row.isDefault || 0) === 1) || branches[0];
+    return String(defaultRow?.branchId || "").trim();
+  }
+  function resolveRequestBranch(req) {
+    const routeCode = String(req?.params?.branchCode || "").trim().toUpperCase();
+    if (routeCode) {
+      const byCode = getBranchByCode(routeCode);
+      if (byCode) return byCode;
+    }
+    const queryCode = String(req?.query?.branchCode || "").trim().toUpperCase();
+    if (queryCode) {
+      const byCode = getBranchByCode(queryCode);
+      if (byCode) return byCode;
+    }
+    const user = getSessionUser(req);
+    if (user?.userId) {
+      const branchId = getSelectedBranchIdForUser(req, user);
+      const byId = getBranchById(branchId);
+      if (byId) return byId;
+    }
+    return getDefaultBranchRecord();
+  }
+  function getRequestBranch(req) {
+    if (req?.qsysBranch?.branchId) return req.qsysBranch;
+    return resolveRequestBranch(req);
+  }
+  function getRequestBranchCode(req) {
+    return String(getRequestBranch(req)?.branchCode || getBranchCode()).trim() || getBranchCode();
+  }
+  function getRequestBranchName(req) {
+    return String(getRequestBranch(req)?.branchName || getBranchName()).trim() || getBranchName();
+  }
+  function getRequestBranchTimezone(req) {
+    return String(getRequestBranch(req)?.timezone || getBranchConfigSafe().timezone || "Asia/Manila").trim() || "Asia/Manila";
+  }
   function getDbSetting(key) {
     try {
       const row = db.prepare(`SELECT value FROM app_settings WHERE key=? LIMIT 1`).get(String(key || ""));
@@ -1276,6 +1596,20 @@ app.get("/static/js/:file", (req, res) => {
     if (scope === "admin") delete req.session.adminUser;
     else if (scope === "staff") delete req.session.staffUser;
     else delete req.session.user;
+  }
+  function updateSessionSelectedBranch(req, scope, branchId) {
+    if (!req?.session) return null;
+    const nextBranchId = String(branchId || "").trim();
+    if (!nextBranchId) return null;
+    const current = scope === "admin"
+      ? req.session.adminUser
+      : scope === "staff"
+        ? req.session.staffUser
+        : req.session.user;
+    if (!current) return null;
+    const nextUser = ensureSessionBranchContext({ ...current, selectedBranchId: nextBranchId });
+    setSessionUser(req, scope, nextUser);
+    return nextUser;
   }
 
   // In-memory IP throttling to reduce brute force/spam pressure.
@@ -1420,18 +1754,18 @@ function requirePermPage(permKey) {
   };
 }
 
-  function requireStaffPage(req, res, next) {
+function requireStaffPage(req, res, next) {
   const u = getSessionUser(req);
-  if (!u) return res.redirect(pathWithBase("/staff-login"));
+  if (!u) return res.redirect(buildStaffLoginPath(req?.params?.branchCode));
   next();
 }
 
 function requireAdminPage(req, res, next) {
   const u = getSessionUser(req);
-  if (!u) return res.redirect(pathWithBase("/admin-login"));
+  if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (!["ADMIN", "SUPER_ADMIN"].includes(roleId)) return res.redirect(pathWithBase("/staff")); // or res.status(403).send("Forbidden");
+  if (!["ADMIN", "SUPER_ADMIN"].includes(roleId)) return res.redirect(buildStaffEntryPath(req?.params?.branchCode)); // or res.status(403).send("Forbidden");
   next();
 }
 
@@ -1444,9 +1778,10 @@ function requireSuperAdminPage(req, res, next) {
 
   function finalizeLoginSession(req, scope, sessUser) {
     return new Promise((resolve, reject) => {
+      const nextUser = ensureSessionBranchContext(sessUser);
       if (!req || !req.session || typeof req.session.regenerate !== "function") {
         try {
-          setSessionUser(req, scope, sessUser);
+          setSessionUser(req, scope, nextUser);
           return resolve();
         } catch (e) {
           return reject(e);
@@ -1455,7 +1790,7 @@ function requireSuperAdminPage(req, res, next) {
       req.session.regenerate((err) => {
         if (err) return reject(err);
         try {
-          setSessionUser(req, scope, sessUser);
+          setSessionUser(req, scope, nextUser);
           req.session.save((saveErr) => {
             if (saveErr) return reject(saveErr);
             return resolve();
@@ -1465,6 +1800,20 @@ function requireSuperAdminPage(req, res, next) {
         }
       });
     });
+  }
+
+  function resolveRequestedLoginBranchId(req, userId) {
+    const requestedCode = String(
+      req?.body?.branchCode ||
+      req?.query?.branchCode ||
+      req?.params?.branchCode ||
+      ""
+    ).trim().toUpperCase();
+    if (!requestedCode || !userId) return "";
+    const branch = getBranchByCode(requestedCode);
+    if (!branch?.branchId) return "";
+    const allowed = listUserBranchAccess(userId).some((row) => String(row.branchId || "") === String(branch.branchId || ""));
+    return allowed ? String(branch.branchId || "").trim() : "";
   }
 
   function actorFromReq(req) {
@@ -1486,6 +1835,15 @@ function requireSuperAdminPage(req, res, next) {
     if (!req || !req.session) return;
     delete req.session.staffUndo;
   }
+
+  app.use((req, _res, next) => {
+    try {
+      req.qsysBranch = resolveRequestBranch(req);
+    } catch {
+      req.qsysBranch = getDefaultBranchRecord();
+    }
+    next();
+  });
 
   /* ---------- AUTH: login/me/logout (SESSION SEPARATED: staff vs admin) ---------- */
   // Staff login (STAFF / SUPERVISOR)
@@ -1516,10 +1874,16 @@ function requireSuperAdminPage(req, res, next) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
-      const sessUser = { userId: u.userId, fullName: u.fullName, roleId: role };
+      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId);
+      const sessUser = ensureSessionBranchContext({
+        userId: u.userId,
+        fullName: u.fullName,
+        roleId: role,
+        ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
+      });
       await finalizeLoginSession(req, "staff", sessUser);
 
-      return res.json({ ok: true, scope: "staff", user: sessUser });
+      return res.json({ ok: true, scope: "staff", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches: listUserBranchAccess(u.userId) });
     } catch (e) {
       console.error("[staff/auth/login]", e);
       return res.status(500).json({ ok: false, error: "Server error" });
@@ -1554,10 +1918,16 @@ function requireSuperAdminPage(req, res, next) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
-      const sessUser = { userId: u.userId, fullName: u.fullName, roleId: role };
+      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId);
+      const sessUser = ensureSessionBranchContext({
+        userId: u.userId,
+        fullName: u.fullName,
+        roleId: role,
+        ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
+      });
       await finalizeLoginSession(req, "admin", sessUser);
 
-      return res.json({ ok: true, scope: "admin", user: sessUser });
+      return res.json({ ok: true, scope: "admin", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches: listUserBranchAccess(u.userId) });
     } catch (e) {
       console.error("[admin/auth/login]", e);
       return res.status(500).json({ ok: false, error: "Server error" });
@@ -1622,11 +1992,17 @@ function requireSuperAdminPage(req, res, next) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
-      const sessUser = { userId: u.userId, fullName: u.fullName, roleId: role };
+      const sessUser = ensureSessionBranchContext({ userId: u.userId, fullName: u.fullName, roleId: role });
       if (role === "ADMIN") await finalizeLoginSession(req, "admin", sessUser);
       else await finalizeLoginSession(req, "staff", sessUser);
 
-      return res.json({ ok: true, scope: (role === "ADMIN" ? "admin" : "staff"), user: sessUser });
+      return res.json({
+        ok: true,
+        scope: (role === "ADMIN" ? "admin" : "staff"),
+        user: sessUser,
+        branch: getBranchById(sessUser.selectedBranchId),
+        allowedBranches: listUserBranchAccess(u.userId),
+      });
     } catch (e) {
       console.error("[auth/login]", e);
       return res.status(500).json({ ok: false, error: "Server error" });
@@ -1635,15 +2011,19 @@ function requireSuperAdminPage(req, res, next) {
 
   // "me" endpoints are separated to prevent cross-app session bleed.
   app.get("/api/staff/auth/me", requireAuth, (req, res) => {
-    const u = getSessionUser(req);
+    const u = ensureSessionBranchContext(getSessionUser(req));
+    if (u) setSessionUser(req, "staff", u);
     const perms = getUserPerms(getRoleId(u));
-    res.json({ ok: true, user: u, permissions: perms });
+    const branch = getRequestBranch(req);
+    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches: listUserBranchAccess(u?.userId) });
   });
 
   app.get("/api/admin/auth/me", requireAuth, (req, res) => {
-    const u = getSessionUser(req);
+    const u = ensureSessionBranchContext(getSessionUser(req));
+    if (u) setSessionUser(req, "admin", u);
     const perms = getUserPerms(getRoleId(u));
-    res.json({ ok: true, user: u, permissions: perms });
+    const branch = getRequestBranch(req);
+    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches: listUserBranchAccess(u?.userId) });
   });
 
   app.get("/api/admin/feature-flags", requireAuth, (_req, res) => {
@@ -1658,14 +2038,14 @@ function requireSuperAdminPage(req, res, next) {
 
   app.get("/api/super-admin/auth/me", requireSuperAdminApi, (req, res) => {
     const u = getSessionUser(req);
-    res.json({ ok: true, user: u });
+    res.json({ ok: true, user: u, branch: getRequestBranch(req) });
   });
 
   // Legacy /api/auth/me kept (uses getSessionUser routing by URL)
   app.get("/api/auth/me", requireAuth, (req, res) => {
-    const u = getSessionUser(req);
+    const u = ensureSessionBranchContext(getSessionUser(req));
     const perms = getUserPerms(getRoleId(u));
-    res.json({ ok: true, user: u, permissions: perms });
+    res.json({ ok: true, user: u, permissions: perms, branch: getRequestBranch(req), allowedBranches: listUserBranchAccess(u?.userId) });
   });
 
   // Logout (separated)
@@ -1712,6 +2092,48 @@ function requireSuperAdminPage(req, res, next) {
       console.error("[auth/supervisors]", e);
       res.status(500).json({ ok: false, error: "Server error" });
     }
+  });
+
+  app.get("/api/staff/branches", requireAuth, (req, res) => {
+    const u = ensureSessionBranchContext(getSessionUser(req));
+    if (u) setSessionUser(req, "staff", u);
+    return res.json({
+      ok: true,
+      selectedBranchId: String(u?.selectedBranchId || ""),
+      branches: listUserBranchAccess(u?.userId),
+    });
+  });
+
+  app.post("/api/staff/select-branch", requireAuth, express.json(), (req, res) => {
+    const u = ensureSessionBranchContext(getSessionUser(req));
+    const branchId = String(req.body?.branchId || "").trim();
+    const allowed = new Set((u?.allowedBranchIds || []).map((id) => String(id || "").trim()));
+    if (!branchId || !allowed.has(branchId)) {
+      return res.status(400).json({ ok: false, error: "Branch not assigned to this user." });
+    }
+    const nextUser = updateSessionSelectedBranch(req, "staff", branchId);
+    return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+  });
+
+  app.get("/api/admin/branches", requireAuth, (req, res) => {
+    const u = ensureSessionBranchContext(getSessionUser(req));
+    if (u) setSessionUser(req, "admin", u);
+    return res.json({
+      ok: true,
+      selectedBranchId: String(u?.selectedBranchId || ""),
+      branches: listUserBranchAccess(u?.userId),
+    });
+  });
+
+  app.post("/api/admin/select-branch", requireAuth, express.json(), (req, res) => {
+    const u = ensureSessionBranchContext(getSessionUser(req));
+    const branchId = String(req.body?.branchId || "").trim();
+    const allowed = new Set((u?.allowedBranchIds || []).map((id) => String(id || "").trim()));
+    if (!branchId || !allowed.has(branchId)) {
+      return res.status(400).json({ ok: false, error: "Branch not assigned to this user." });
+    }
+    const nextUser = updateSessionSelectedBranch(req, "admin", branchId);
+    return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
   });
 
   app.post("/api/internal/super-admin/recover", express.json(), (req, res) => {
@@ -1786,7 +2208,7 @@ function requireSuperAdminPage(req, res, next) {
     // send initial dashboard snapshot immediately
     try {
       const bd = ensureBusinessDate(db);
-      sseSend(res, "overview", computeAdminTodayStats(db, getBranchCode(), bd));
+      sseSend(res, "overview", computeAdminTodayStats(db, getRequestBranchCode(req), bd));
     } catch {}
 
     sseClients.add(res);
@@ -1824,21 +2246,50 @@ function requireSuperAdminPage(req, res, next) {
   /* ---------- QR: Dynamic Guest Registration ---------- */
 app.set("trust proxy", true); // needed for deployed environments
 
+function buildGuestEntryPath(branchCodeInput = "") {
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  if (!code) return pathWithBase("/guest");
+  return pathWithBase(`/b/${encodeURIComponent(code)}/guest`);
+}
+
+function buildStaffLoginPath(branchCodeInput = "") {
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  if (!code) return pathWithBase("/staff-login");
+  return pathWithBase(`/b/${encodeURIComponent(code)}/staff-login`);
+}
+
+function buildStaffEntryPath(branchCodeInput = "") {
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  if (!code) return pathWithBase("/staff");
+  return pathWithBase(`/b/${encodeURIComponent(code)}/staff`);
+}
+
+function buildAdminLoginPath(branchCodeInput = "") {
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  if (!code) return pathWithBase("/admin-login");
+  return pathWithBase(`/b/${encodeURIComponent(code)}/admin-login`);
+}
+
+function buildAdminEntryPath(branchCodeInput = "") {
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  if (!code) return pathWithBase("/admin");
+  return pathWithBase(`/b/${encodeURIComponent(code)}/admin`);
+}
+
+function buildGuestEntryUrl(req, branchCodeInput = "") {
+  const proto =
+    (req.headers["x-forwarded-proto"] || req.protocol || "http")
+      .split(",")[0]
+      .trim();
+  const host = String(req.get("host") || "");
+  return `${proto}://${host}${buildGuestEntryPath(branchCodeInput)}`;
+}
+
 app.get("/qr/guest", async (req, res) => {
   try {
-    const proto =
-      (req.headers["x-forwarded-proto"] || req.protocol || "http")
-        .split(",")[0]
-        .trim();
-
-        const host = String(req.get("host") || ""); // includes port if any
-    const hostPort = host.includes(":") ? host.split(":")[1] : "";
-    const portStr = hostPort || String(port || 3000);
-
-    const lan = getLanIPv4();
-    const baseHost = lan ? `${lan}:${portStr}` : host;
-
-    const guestUrl = `${proto}://${baseHost}${pathWithBase("/guest")}`;
+    const requestedBranchCode = String(req.query.branchCode || "").trim().toUpperCase();
+    const branchCode = requestedBranchCode || getRequestBranchCode(req);
+    const guestUrl = buildGuestEntryUrl(req, branchCode);
 
 
     const png = await QRCode.toBuffer(guestUrl, {
@@ -1960,13 +2411,17 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
 app.get("/staff", requireStaffPage, (_, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")))
 );
+app.get("/b/:branchCode/staff", requireStaffPage, (_req, res) =>
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")))
+);
 
 /* ---------- Admin: QR (PNG for preview / print / download) ---------- */
 app.get("/api/admin/qrcode.png", requireAuth, (req, res) => {
   try {
     // Reuse the same QR logic used by /qr/guest
     // Internally redirect so we keep ONE source of truth
-    req.url = "/qr/guest";
+    const branchCode = String(req.query.branchCode || getRequestBranchCode(req) || "").trim().toUpperCase();
+    req.url = branchCode ? `/qr/guest?branchCode=${encodeURIComponent(branchCode)}` : "/qr/guest";
     app.handle(req, res);
   } catch (e) {
     console.error("[admin/qrcode]", e);
@@ -1986,8 +2441,14 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
   }
 });
 
-
-  app.get("/guest", (_, res) => res.sendFile(path.join(__dirname, "static", "guest.html")));
+  app.get("/guest", (_req, res) => res.sendFile(path.join(__dirname, "static", "guest.html")));
+  app.get("/b/:branchCode/guest", (req, res) => {
+    const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
+    if (!branchCode || !getBranchByCode(branchCode)) {
+      return res.status(404).send("Branch not found");
+    }
+    return res.sendFile(path.join(__dirname, "static", "guest.html"));
+  });
   app.get("/test", (_req, res) =>
     res.sendFile(path.join(__dirname, "static", "test.html"))
   );
@@ -1996,10 +2457,18 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
    app.get("/admin", requireAdminPage, (_, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")))
 );
+ app.get("/b/:branchCode/admin", requireAdminPage, (_req, res) =>
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")))
+);
 
-app.get("/admin-login", (_, res) =>
+app.get("/admin-login", (_req, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")))
 );
+app.get("/b/:branchCode/admin-login", (req, res) => {
+  const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
+  if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
+});
 
 app.get("/super-admin-login", (_req, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin-login.html")))
@@ -2022,9 +2491,14 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 );
 
 
-  app.get("/staff-login", (_, res) =>
+  app.get("/staff-login", (_req, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")))
 );
+app.get("/b/:branchCode/staff-login", (req, res) => {
+  const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
+  if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
+});
 
 
   /* ---------- GUEST: Ticket details (for ticket.html) ---------- */
@@ -2079,18 +2553,19 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 
   /* ---------- admin/business date ---------- */
 
-  app.get("/api/public/business-date", (_, res) => {
+  app.get("/api/public/business-date", (req, res) => {
     try {
       const cur = ensureBusinessDate(db);
-      const cfg = getBranchConfigSafe();
       const st = refreshActivationState();
       const visibleCode = getVisibleBranchCode();
+      const branch = getRequestBranch(req);
       res.json({
         ok: true,
         activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
-        branchCode: visibleCode || getBranchCode(),
-        branchName: visibleCode ? String(cfg.branchName || "").trim() : String(cfg.branchName || "").trim(),
-        timezone: String(cfg.timezone || "Asia/Manila"),
+        branchCode: visibleCode || getRequestBranchCode(req),
+        branchName: visibleCode ? getRequestBranchName(req) : getRequestBranchName(req),
+        timezone: getRequestBranchTimezone(req),
+        branchId: String(branch?.branchId || ""),
         currentBusinessDate: cur,
         todayManila: getTodayManila(),
       });
@@ -2100,19 +2575,37 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
     }
   });
 
-  app.get("/api/provider/install-info", (_req, res) => {
+  app.get("/api/public/branches", (_req, res) => {
+    try {
+      const rows = listActiveBranches().map((row) => ({
+        branchId: String(row.branchId || ""),
+        branchCode: String(row.branchCode || "").trim().toUpperCase(),
+        branchName: String(row.branchName || "").trim(),
+        timezone: String(row.timezone || "Asia/Manila").trim() || "Asia/Manila",
+        isDefault: Number(row.isDefault || 0) === 1,
+      }));
+      return res.json({ ok: true, branches: rows });
+    } catch (e) {
+      console.error("[public/branches]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.get("/api/provider/install-info", (req, res) => {
     try {
       const st = refreshActivationState();
       const installId = String(st.installId || getDbSetting("install.id") || "").trim();
       const expiresAt = Number(st.licenseExpiresAt || 0) || null;
       const daysRemaining = expiresAt ? Math.floor((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)) : null;
       const visibleCode = getVisibleBranchCode();
+      const branch = getRequestBranch(req);
       return res.json({
         ok: true,
         status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
         installId,
         branchCode: visibleCode,
-        branchName: visibleCode ? getBranchName() : "",
+        branchName: visibleCode ? getRequestBranchName(req) : "",
+        branchId: String(branch?.branchId || ""),
         activatedAt: st.activatedAt || null,
         activatedBy: st.activatedBy || null,
         activationLicenseId: st.activationLicenseId || null,
@@ -2185,6 +2678,7 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
           "ACTIVATE",
           now
         );
+        bootstrapDefaultOrganizationAndBranch(db);
       })();
 
       return res.json({
@@ -2280,15 +2774,16 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
     }
   });
 
-  app.get("/api/admin/business-date", requireAuth, (_, res) => {
+  app.get("/api/admin/business-date", requireAuth, (req, res) => {
     try {
       const cur = ensureBusinessDate(db);
-      const cfg = getBranchConfigSafe();
+      const branch = getRequestBranch(req);
       res.json({
         ok: true,
-        branchCode: getBranchCode(),
-        branchName: String(cfg.branchName || "").trim(),
-        timezone: String(cfg.timezone || "Asia/Manila"),
+        branchId: String(branch?.branchId || ""),
+        branchCode: getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
+        timezone: getRequestBranchTimezone(req),
         currentBusinessDate: cur,
         todayManila: getTodayManila(),
       });
@@ -2308,8 +2803,10 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 
       if (changed) {
         setState(db, "currentBusinessDate", today);
+        syncDefaultBranchBusinessDate(db, today);
         setState(db, "lastManualCloseDayAt", now);
       } else {
+        syncDefaultBranchBusinessDate(db, today);
         setState(db, "lastManualCloseDayAt", now);
       }
 
@@ -2357,10 +2854,10 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
     }
   });
 
-  app.get("/api/admin/branch", requireAuth, (_, res) => {
+  app.get("/api/admin/branch", requireAuth, (req, res) => {
     try {
-      const row = getBranchConfigSafe();
-      res.json({ ok: true, branch: row || null });
+      const branch = getRequestBranch(req);
+      res.json({ ok: true, branch: branch || null });
     } catch (e) {
       console.error("[admin/branch:get]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -2427,6 +2924,8 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
         }
 
       }
+
+      bootstrapDefaultOrganizationAndBranch(db);
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_BRANCH_UPDATE",
@@ -3295,6 +3794,11 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
         `INSERT INTO users(userId, fullName, pinHash, roleId, isActive, createdAt, updatedAt)
          VALUES(?,?,?,?,1,?,?)`
       ).run(userId, fullName, pinHash, roleId, now, now);
+      upsertUserBranchAccess(db, {
+        userId,
+        branchId: getOrBootstrapDefaultBranchId(db),
+        roleScope: roleId,
+      });
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_USER_CREATE",
@@ -3327,6 +3831,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       }
       if (roleId && ["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId)) {
         db.prepare(`UPDATE users SET roleId=?, updatedAt=? WHERE userId=?`).run(roleId, now, userId);
+        db.prepare(`UPDATE user_branch_access SET roleScope=? WHERE userId=?`).run(roleId, userId);
       }
       if (typeof isActive === "boolean" || isActive === 0 || isActive === 1) {
         db.prepare(`UPDATE users SET isActive=?, updatedAt=? WHERE userId=?`).run(isActive ? 1 : 0, now, userId);
@@ -3820,13 +4325,15 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   /* ---------- health ---------- */
 
-  app.get("/api/health", (_, res) => {
-    const bc = getBranchCode();
+  app.get("/api/health", (req, res) => {
+    const branch = getRequestBranch(req);
     const st = refreshActivationState();
     res.json({
       ok: true,
-      branchCode: bc,
-      branchName: getBranchName(),
+      branchId: String(branch?.branchId || ""),
+      branchCode: getRequestBranchCode(req),
+      branchName: getRequestBranchName(req),
+      timezone: getRequestBranchTimezone(req),
       port,
       activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
       activationEnforced: isActivationEnforced(),
@@ -3835,7 +4342,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     });
   });
 
-  app.get("/api/admin/ops/health", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.system_health"), (_req, res) => {
+  app.get("/api/admin/ops/health", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.system_health"), (req, res) => {
     try {
       const st = refreshActivationState();
       const dbPath = path.join(baseDir, "data", "qsys.db");
@@ -3843,10 +4350,12 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const supportDir = getSupportBundlesDir();
       const lastAudit = db.prepare(`SELECT action, createdAt FROM audit_logs ORDER BY createdAt DESC LIMIT 1`).get() || null;
       const lastRestore = getLastRestoreState();
+      const branch = getRequestBranch(req);
       return res.json({
         ok: true,
-        branchCode: getVisibleBranchCode(),
-        branchName: getBranchName(),
+        branchId: String(branch?.branchId || ""),
+        branchCode: getVisibleBranchCode() || getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
         activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
         licenseExpiresAt: Number(st.licenseExpiresAt || 0) || null,
         currentBusinessDate: ensureBusinessDate(db),
@@ -3976,6 +4485,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
           "Unassigned Branch",
           now
         );
+        bootstrapDefaultOrganizationAndBranch(db);
         db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
           "INSTALL_TRANSFER_RELEASED",
           JSON.stringify({
@@ -4468,7 +4978,7 @@ function announceDisplayTicket(row) {
 
 app.get("/api/staff/queue-tools", requireAuth, (req, res) => {
   try {
-    const branchCode = getBranchCode();
+    const branchCode = getRequestBranchCode(req);
     const businessDate = ensureBusinessDate(db);
     const groupCode = normalizeGroup(req.query.groupCode || "B");
     const features = getProvisionedFeatureMap([
@@ -4493,9 +5003,9 @@ app.get("/api/staff/queue-tools", requireAuth, (req, res) => {
 
   /* ---------- state snapshot (DISPLAY + STAFF) ---------- */
   // SECURITY ADDON: must be authenticated
-  app.get("/api/state", requireAuth, (_, res) => {
+app.get("/api/state", requireAuth, (req, res) => {
     const businessDate = ensureBusinessDate(db);
-    const bc = getBranchCode();
+    const bc = getRequestBranchCode(req);
 
     const rows = db
       .prepare(
@@ -4520,7 +5030,7 @@ app.get("/api/staff/queue-tools", requireAuth, (req, res) => {
       )
       .all(bc, businessDate);
 
-    res.json({ ok: true, branchCode: bc, branchName: getBranchName(), businessDate, rows });
+    res.json({ ok: true, branchCode: bc, branchName: getRequestBranchName(req), businessDate, rows });
   });
 
 
@@ -4532,7 +5042,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   res.set("Pragma", "no-cache");
 
   const businessDate = ensureBusinessDate(db);
-  const bc = getBranchCode();
+  const bc = getRequestBranchCode(req);
 
   const rowsRaw = db
     .prepare(
@@ -4585,16 +5095,16 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   // Version marker to confirm the running server code
   const version = "DISPLAY_STATE_PATCH_2026-01-24_DEV_A";
 
-  res.json({ ok: true, version, branchCode: bc, branchName: getBranchName(), businessDate, rows });
+  res.json({ ok: true, version, branchCode: bc, branchName: getRequestBranchName(req), businessDate, rows });
 });
 
 
 
   /* ---------- Admin: Today stats (all statuses) ---------- */
-  app.get("/api/admin/stats/today", requireAuth, (_, res) => {
+  app.get("/api/admin/stats/today", requireAuth, (req, res) => {
     try {
       const businessDate = ensureBusinessDate(db);
-      const payload = computeAdminTodayStats(db, getBranchCode(), businessDate);
+      const payload = computeAdminTodayStats(db, getRequestBranchCode(req), businessDate);
       res.json(payload);
     } catch (e) {
       console.error("[admin/stats/today]", e);
@@ -4603,9 +5113,9 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   });
 
   /* ---------- Admin: EMA(14) from daily_group_stats ---------- */
-  app.get("/api/admin/stats/ema14", requireAuth, (_, res) => {
+  app.get("/api/admin/stats/ema14", requireAuth, (req, res) => {
     try {
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const alpha = 2 / (14 + 1); // 2/15
       const groups = ["P", "A", "B", "C", "D"];
 
@@ -4827,7 +5337,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   // Raw ticket export with optional rolling-window filter (sinceMs/sinceHours).
   app.get("/api/admin/reports/tickets", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
     try {
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const from = String(req.query.from || "").trim();
       const to = String(req.query.to || "").trim();
       if (!from || !to) return res.status(400).json({ ok: false, error: "from/to required" });
@@ -4918,7 +5428,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
 
   app.get("/api/admin/reports/tickets.csv", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
     try {
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const from = String(req.query.from || "").trim();
       const to = String(req.query.to || "").trim();
       const scopeLabel = String(req.query.scopeLabel || "").trim();
@@ -5031,7 +5541,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   // Audit export includes actor columns and filters by actual audit timestamp.
   app.get("/api/admin/reports/audit_logs.csv", requirePerm("AUDIT_VIEW"), (req, res) => {
     try {
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const from = String(req.query.from || "").trim();
       const to = String(req.query.to || "").trim();
       const scopeLabel = String(req.query.scopeLabel || "").trim();
@@ -5089,7 +5599,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     requireProvisionedFeatureApi("reporting.audit_export"),
     (req, res) => {
       try {
-        const bc = getBranchCode();
+        const bc = getRequestBranchCode(req);
         const from = String(req.query.from || "").trim();
         const to = String(req.query.to || "").trim();
         const scopeLabel = String(req.query.scopeLabel || "").trim();
@@ -5098,7 +5608,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
 
         res.setHeader("Content-Type", "text/csv; charset=utf-8");
         res.setHeader("Content-Disposition", `attachment; filename="${reportFileName("audit_export", bc, from, to, { scopeLabel })}"`);
-        res.send(buildStructuredAuditExportCsvForRange(from, to, sinceMs));
+        res.send(buildStructuredAuditExportCsvForRange(from, to, sinceMs, bc));
       } catch (e) {
         console.error("[reports/audit_export]", e);
         res.status(500).send("Server error");
@@ -5109,7 +5619,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   // Daily rollup export from pre-aggregated stats table.
   app.get("/api/admin/reports/daily_summary", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
     try {
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const from = String(req.query.from || "").trim();
       const to = String(req.query.to || "").trim();
       if (!from || !to) return res.status(400).json({ ok: false, error: "from/to required" });
@@ -5146,7 +5656,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
 
   app.get("/api/admin/reports/daily_summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
     try {
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const from = String(req.query.from || "").trim();
       const to = String(req.query.to || "").trim();
       const scopeLabel = String(req.query.scopeLabel || "").trim();
@@ -5229,8 +5739,8 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   }
 
   // Computes A/B/C/D custom summary rows used by JSON preview and CSV export.
-  function buildCustomSummary(from, to, sinceMs){
-    const bc = getBranchCode();
+  function buildCustomSummary(from, to, sinceMs, branchCodeArg){
+    const bc = String(branchCodeArg || getBranchCode()).trim();
 
     // Some deployments store server-side `timestamp`, others only `createdAtLocal`.
     const hasTimestamp = tableHasColumn(db, "queue_items", "timestamp");
@@ -5325,7 +5835,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
       if (!from || !to) return res.status(400).json({ ok:false, error:"from/to required" });
 
       const sinceMs = parseSinceMs(req);
-      const result = buildCustomSummary(from, to, sinceMs);
+      const result = buildCustomSummary(from, to, sinceMs, getRequestBranchCode(req));
 
       res.json({ ok:true, ...result });
     } catch (e) {
@@ -5342,7 +5852,8 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
       if (!from || !to) return res.status(400).send("from/to required");
 
       const sinceMs = parseSinceMs(req);
-      const result = buildCustomSummary(from, to, sinceMs);
+      const bc = getRequestBranchCode(req);
+      const result = buildCustomSummary(from, to, sinceMs, bc);
 
       const header = [
         "GROUP CODE",
@@ -5371,7 +5882,6 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
         ].join(","));
       }
 
-      const bc = getBranchCode();
       const fn = reportFileName("custom_summary", bc, from, to, { scopeLabel });
 
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -5573,7 +6083,7 @@ function csvSafePaxBucket(bucket){
 // JSON summary endpoint used by on-screen reports preview.
 app.get("/api/admin/reports/summary", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
   try {
-    const bc = getBranchCode();
+    const bc = getRequestBranchCode(req);
     const from = String(req.query.from || "").trim();
     const to = String(req.query.to || "").trim();
     const waitRef = parseWaitRef(req.query.waitRef);
@@ -5589,7 +6099,7 @@ app.get("/api/admin/reports/summary", requirePerm("REPORT_EXPORT_CSV"), (req, re
 // CSV summary endpoint with sectioned layout for spreadsheet consumption.
 app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
   try {
-    const bc = getBranchCode();
+    const bc = getRequestBranchCode(req);
     const from = String(req.query.from || "").trim();
     const to = String(req.query.to || "").trim();
     const scopeLabel = String(req.query.scopeLabel || "").trim();
@@ -6082,8 +6592,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return parsed;
   }
 
-  function buildTicketsCsvForRange(from, to, sinceMs) {
-    const bc = getBranchCode();
+  function buildTicketsCsvForRange(from, to, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
     const hasTimestamp = tableHasColumn(db, "queue_items", "timestamp");
     const createdExpr = hasTimestamp ? "COALESCE(timestamp, createdAtLocal)" : "createdAtLocal";
     const sinceSql = sinceMs ? ` AND ${createdExpr} >= ?` : "";
@@ -6178,8 +6688,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return rowsToCsv(header, outRows);
   }
 
-  function buildDailySummaryCsvForRange(from, to, sinceMs) {
-    const bc = getBranchCode();
+  function buildDailySummaryCsvForRange(from, to, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
     const { effectiveFrom, rows } = getDailySummaryRowsWithFallback(bc, from, to, sinceMs);
     const emaFrom = addDaysYmd(effectiveFrom, -13);
     const emaHistory = getDailySummaryRowsWithFallback(bc, emaFrom, to, null).rows;
@@ -6218,8 +6728,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return rowsToCsv(header, outRows);
   }
 
-  function buildDailySummaryRowsForRange(from, to, sinceMs) {
-    const bc = getBranchCode();
+  function buildDailySummaryRowsForRange(from, to, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
     const { effectiveFrom, rows } = getDailySummaryRowsWithFallback(bc, from, to, sinceMs);
     const emaFrom = addDaysYmd(effectiveFrom, -13);
     const emaHistory = getDailySummaryRowsWithFallback(bc, emaFrom, to, null).rows;
@@ -6251,9 +6761,9 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       .replace(/'/g, "&#39;");
   }
 
-  function buildDailySummaryHtmlForRange(from, to, sinceMs) {
-    const bc = getBranchCode();
-    const rows = buildDailySummaryRowsForRange(from, to, sinceMs);
+  function buildDailySummaryHtmlForRange(from, to, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
+    const rows = buildDailySummaryRowsForRange(from, to, sinceMs, bc);
     const generatedAt = new Date().toLocaleString("en-PH", { timeZone: "Asia/Manila", hour12: true });
 
     const body = [];
@@ -6323,8 +6833,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 </html>`;
   }
 
-  function buildCustomSummaryCsvForRange(from, to, sinceMs) {
-    const result = buildCustomSummary(from, to, sinceMs);
+  function buildCustomSummaryCsvForRange(from, to, sinceMs, branchCodeArg) {
+    const result = buildCustomSummary(from, to, sinceMs, branchCodeArg);
     const header = [
       "GROUP CODE",
       "Total Reservations (all created tickets)",
@@ -6348,8 +6858,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return rowsToCsv(header, outRows);
   }
 
-  function buildReportSummaryCsvForRange(from, to, waitRef, sinceMs) {
-    const bc = getBranchCode();
+  function buildReportSummaryCsvForRange(from, to, waitRef, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
     const out = computeReportSummary(db, bc, from, to, waitRef, sinceMs);
     const rows = [];
     rows.push(["SECTION", "WAITLIST_COUNT", "", ""]);
@@ -6389,8 +6899,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     ).all(fromMs, toMs);
   }
 
-  function buildAuditLogsCsvForRange(from, to, sinceMs) {
-    const bc = getBranchCode();
+  function buildAuditLogsCsvForRange(from, to, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
     const rows = queryAuditRowsForRange(from, to, sinceMs);
     const header = ["schemaVersion", "branchCode", "createdAt", "action", "userId", "fullName", "roleId", "businessDate", "payloadJson"];
     const outRows = [];
@@ -6417,8 +6927,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return rowsToCsv(header, outRows);
   }
 
-  function buildStructuredAuditExportCsvForRange(from, to, sinceMs) {
-    const bc = getBranchCode();
+  function buildStructuredAuditExportCsvForRange(from, to, sinceMs, branchCodeArg) {
+    const bc = String(branchCodeArg || getBranchCode()).trim();
     const rows = queryAuditRowsForRange(from, to, sinceMs);
     const header = [
       "schemaVersion",
@@ -6460,8 +6970,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return rowsToCsv(header, outRows);
   }
 
-  function collectExportableReportFiles({ from, to, sinceMs = null, scopeLabel = "", waitRef = parseWaitRef("hours:2"), reportKeys = [], includeDailyHtml = false } = {}) {
-    const bc = getBranchCode();
+  function collectExportableReportFiles({ from, to, sinceMs = null, scopeLabel = "", waitRef = parseWaitRef("hours:2"), reportKeys = [], includeDailyHtml = false, branchCode = "" } = {}) {
+    const bc = String(branchCode || getBranchCode()).trim();
     const wanted = new Set((Array.isArray(reportKeys) ? reportKeys : []).map((v) => String(v || "").trim()).filter(Boolean));
     const include = (k) => wanted.size === 0 || wanted.has(k);
     const stamp = fileStampNow();
@@ -6471,7 +6981,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "tickets",
         name: reportFileName("tickets", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
         mimeType: "text/csv",
-        data: Buffer.from(buildTicketsCsvForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildTicketsCsvForRange(from, to, sinceMs, bc), "utf8"),
       });
     }
     if (include("daily_summary_csv")) {
@@ -6479,7 +6989,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "daily_summary_csv",
         name: reportFileName("daily_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
         mimeType: "text/csv",
-        data: Buffer.from(buildDailySummaryCsvForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildDailySummaryCsvForRange(from, to, sinceMs, bc), "utf8"),
       });
     }
     if (include("daily_summary_html") && includeDailyHtml) {
@@ -6487,7 +6997,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "daily_summary_html",
         name: reportFileName("daily_summary_formatted", bc, from, to, { scopeLabel, stamp, ext: "html" }),
         mimeType: "text/html",
-        data: Buffer.from(buildDailySummaryHtmlForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildDailySummaryHtmlForRange(from, to, sinceMs, bc), "utf8"),
       });
     }
     if (include("custom_summary")) {
@@ -6495,7 +7005,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "custom_summary",
         name: reportFileName("custom_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
         mimeType: "text/csv",
-        data: Buffer.from(buildCustomSummaryCsvForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildCustomSummaryCsvForRange(from, to, sinceMs, bc), "utf8"),
       });
     }
     if (include("summary")) {
@@ -6503,7 +7013,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "summary",
         name: reportFileName("report_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
         mimeType: "text/csv",
-        data: Buffer.from(buildReportSummaryCsvForRange(from, to, waitRef, sinceMs), "utf8"),
+        data: Buffer.from(buildReportSummaryCsvForRange(from, to, waitRef, sinceMs, bc), "utf8"),
       });
     }
     if (include("audit_logs")) {
@@ -6511,7 +7021,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "audit_logs",
         name: reportFileName("audit_logs", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
         mimeType: "text/csv",
-        data: Buffer.from(buildAuditLogsCsvForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildAuditLogsCsvForRange(from, to, sinceMs, bc), "utf8"),
       });
     }
     if (include("audit_export")) {
@@ -6519,18 +7029,19 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         key: "audit_export",
         name: reportFileName("audit_export", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
         mimeType: "text/csv",
-        data: Buffer.from(buildStructuredAuditExportCsvForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildStructuredAuditExportCsvForRange(from, to, sinceMs, bc), "utf8"),
       });
     }
     return files;
   }
 
-  function computeHistoricalInsights(days = 30) {
+  function computeHistoricalInsights(days = 30, branchCodeArg) {
+    const branchCode = String(branchCodeArg || getBranchCode()).trim();
     const safeDays = Math.max(7, Math.min(Number(days) || 30, 180));
     const to = ensureBusinessDate(db);
     const currentFrom = addDaysYmd(to, -(safeDays - 1));
     const compareFrom = addDaysYmd(to, -((safeDays * 2) - 1));
-    const rows = buildDailySummaryRowsForRange(compareFrom, to, null);
+    const rows = buildDailySummaryRowsForRange(compareFrom, to, null, branchCode);
     const perDay = new Map();
     const perGroup = new Map();
     for (const row of rows) {
@@ -6628,7 +7139,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     };
 
     return {
-      branchCode: getBranchCode(),
+      branchCode,
       from: currentFrom,
       to,
       days: safeDays,
@@ -6960,7 +7471,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
   app.get("/api/admin/reports/analytics", requirePerm("REPORT_EXPORT_CSV"), requireProvisionedFeatureApi("reporting.advanced_center", "reporting.historical_analytics", "reporting.branch_trends"), (req, res) => {
     try {
       const days = Number(req.query.days || 30) || 30;
-      const insights = computeHistoricalInsights(days);
+      const insights = computeHistoricalInsights(days, getRequestBranchCode(req));
       return res.json({ ok: true, insights });
     } catch (e) {
       console.error("[reports/analytics]", e);
@@ -7061,7 +7572,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         });
       }
 
-      const bc = getBranchCode();
+      const bc = getRequestBranchCode(req);
       const businessDate = ensureBusinessDate(db);
       const isYmd = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || "").trim());
       const bodyFrom = String(req.body?.from || "").trim();
@@ -7096,28 +7607,28 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         files.push({
           name: reportFileName("tickets", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
           mimeType: "text/csv",
-          data: Buffer.from(buildTicketsCsvForRange(from, to, sinceMs), "utf8"),
+        data: Buffer.from(buildTicketsCsvForRange(from, to, sinceMs, bc), "utf8"),
         });
       }
       if (include("daily_summary_csv")) {
         files.push({
           name: reportFileName("daily_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
           mimeType: "text/csv",
-          data: Buffer.from(buildDailySummaryCsvForRange(from, to, sinceMs), "utf8"),
+          data: Buffer.from(buildDailySummaryCsvForRange(from, to, sinceMs, bc), "utf8"),
         });
       }
       if (include("daily_summary_html")) {
         files.push({
           name: reportFileName("daily_summary_formatted", bc, from, to, { scopeLabel, stamp, ext: "html" }),
           mimeType: "text/html",
-          data: Buffer.from(buildDailySummaryHtmlForRange(from, to, sinceMs), "utf8"),
+          data: Buffer.from(buildDailySummaryHtmlForRange(from, to, sinceMs, bc), "utf8"),
         });
       }
       if (include("custom_summary")) {
         files.push({
           name: reportFileName("custom_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
           mimeType: "text/csv",
-          data: Buffer.from(buildCustomSummaryCsvForRange(from, to, sinceMs), "utf8"),
+          data: Buffer.from(buildCustomSummaryCsvForRange(from, to, sinceMs, bc), "utf8"),
         });
       }
       if (!files.length) {
@@ -7222,13 +7733,18 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       const name = String(req.body.name || "").trim();
       const pax = Number(req.body.pax || 1);
       const priorityType = normalizePriority(req.body.priorityType);
+      const requestedBranchCode = String(req.query.branchCode || "").trim().toUpperCase();
 
       if (!name) return res.status(400).json({ ok: false, error: "Name is required." });
       if (!Number.isFinite(pax) || pax < 1 || pax > 50)
         return res.status(400).json({ ok: false, error: "Pax must be 1–50." });
+      if (requestedBranchCode && !getBranchByCode(requestedBranchCode)) {
+        return res.status(404).json({ ok: false, error: "Branch not found." });
+      }
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = String(branch?.branchCode || getBranchCode()).trim();
       const groupCode = computeGroupCode({ priorityType, pax });
 
       const isPriority = priorityType !== "NONE";
@@ -7294,12 +7810,20 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       `
       ).run(
         "QUEUE_CREATE",
-        JSON.stringify({ id, groupCode, queueNum, name, pax, priorityType, businessDate }),
+        JSON.stringify({ id, branchId: branch?.branchId || null, branchCode: bc, groupCode, queueNum, name, pax, priorityType, businessDate }),
         Date.now()
       );
 
       emitChanged(app, db, "QUEUE_CREATE");
-      res.json({ ok: true, id, businessDate, groupCode, queueNum });
+      res.json({
+        ok: true,
+        id,
+        branchId: String(branch?.branchId || ""),
+        branchCode: bc,
+        businessDate,
+        groupCode,
+        queueNum,
+      });
     } catch (e) {
       console.error("[queue/create]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -7313,7 +7837,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       if (!groupCode) return res.status(400).json({ ok: false, error: "Invalid group." });
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
 
       const called = db
         .prepare(
@@ -7371,7 +7896,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       INSERT INTO audit_logs (action, payload, createdAt)
       VALUES (?, ?, ?)
     `
-      ).run("QUEUE_CLEAR_CALLED", JSON.stringify({ actor: actorFromReq(req), ...called, businessDate }), now);
+      ).run("QUEUE_CLEAR_CALLED", JSON.stringify({ actor: actorFromReq(req), branchId: branch?.branchId || null, branchCode: bc, ...called, businessDate }), now);
 
       emitChanged(app, db, "QUEUE_CLEAR_CALLED");
       res.json({ ok: true, cleared: called, undo: { available: true, action: "QUEUE_CLEAR_CALLED", expiresAt: undoExpiresAt } });
@@ -7400,7 +7925,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       const wantRegularOnly = pick === "REGULAR";
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
       const actor = actorFromReq(req);
 
       const tx = db.transaction(() => {
@@ -7501,7 +8027,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       `
         ).run(
           "QUEUE_CALL",
-          JSON.stringify({ actor, ...next, status: "CALLED", branchCode: bc, businessDate }),
+          JSON.stringify({ actor, branchId: branch?.branchId || null, ...next, status: "CALLED", branchCode: bc, businessDate }),
           now
         );
 
@@ -7533,7 +8059,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       if (!groupCode) return res.status(400).json({ ok: false, error: "Invalid group." });
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
       const actor = actorFromReq(req);
 
       const called = db
@@ -7570,6 +8097,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         "QUEUE_CALL_AGAIN",
         JSON.stringify({
           actor,
+          branchId: branch?.branchId || null,
           id: called.id,
           groupCode: called.groupCode,
           queueNum: called.queueNum,
@@ -7616,7 +8144,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       const note = noteRaw ? noteRaw.slice(0, 200) : null;
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
 
       const actor = actorFromReq(req);
       const user = getSessionUser(req);
@@ -7642,7 +8171,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
         if (!sup || !sup.isActive) return res.status(403).json({ ok: false, error: "Invalid supervisor" });
 
-        const okPin = bcrypt.compareSync(supPin, sup.pinHash);
+        const okPin = verifyPinAgainstStoredHash(supPin, sup.pinHash);
         if (!okPin) return res.status(403).json({ ok: false, error: "Invalid supervisor PIN" });
 
         if (!hasPerm({ roleId: sup.roleId }, "QUEUE_CALL_OVERRIDE")) {
@@ -7742,6 +8271,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
             actor,
             approvedBy,
             id,
+            branchId: branch?.branchId || null,
             branchCode: bc,
             groupCode,
             queueNum: target.queueNum,
@@ -7779,7 +8309,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       if (!groupCode) return res.status(400).json({ ok: false, error: "Invalid group." });
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
       const actor = actorFromReq(req);
 
       const tx = db.transaction(() => {
@@ -7836,7 +8367,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       `
         ).run(
           "QUEUE_SEAT",
-          JSON.stringify({ actor, ...called, status: "SEATED", branchCode: bc, businessDate }),
+          JSON.stringify({ actor, branchId: branch?.branchId || null, ...called, status: "SEATED", branchCode: bc, businessDate }),
           now
         );
 
@@ -7882,7 +8413,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       if (!groupCode) return res.status(400).json({ ok: false, error: "Invalid group." });
 
       const businessDate = ensureBusinessDate(db);
-      const bc = getBranchCode();
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
       const actor = actorFromReq(req);
 
       const tx = db.transaction(() => {
@@ -7953,7 +8485,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       `
         ).run(
           "QUEUE_SKIP",
-          JSON.stringify({ actor, ...target, status: "SKIPPED", branchCode: bc, businessDate }),
+          JSON.stringify({ actor, branchId: branch?.branchId || null, ...target, status: "SKIPPED", branchCode: bc, businessDate }),
           now
         );
 
@@ -8122,7 +8654,8 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       const ticketId = String(req.body?.id || "").trim();
       if (!ticketId) return res.status(400).json({ ok: false, error: "Ticket id is required." });
 
-      const branchCode = getBranchCode();
+      const branch = getRequestBranch(req);
+      const branchCode = getRequestBranchCode(req);
       const businessDate = ensureBusinessDate(db);
       const actor = actorFromReq(req);
       const now = Date.now();
@@ -8179,6 +8712,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
           "QUEUE_REOPEN_COMPLETED",
           JSON.stringify({
             actor,
+            branchId: branch?.branchId || null,
             branchCode,
             businessDate,
             ticketId: row.id,
@@ -8353,7 +8887,11 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
   app.set("io", io);
 
   io.on("connection", (socket) => {
-    socket.emit("hello", { ok: true, branchCode: getBranchCode(), branchName: getBranchName() });
+    socket.emit("hello", {
+      ok: true,
+      branchCode: getRequestBranchCode(socket.request),
+      branchName: getRequestBranchName(socket.request),
+    });
     socket.emit("heartbeat", { ts: Date.now() });
 
     socket.on("ping", () => socket.emit("pong", { ts: Date.now() }));

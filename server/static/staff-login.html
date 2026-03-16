@@ -180,10 +180,28 @@
     const $p = document.getElementById("pin");
     const $e = document.getElementById("err");
     const $dot = document.querySelector(".dot");
+    function getPathBranchCode() {
+      try {
+        const parts = String(window.location.pathname || "").split("/").filter(Boolean);
+        const idx = parts.findIndex((part) => String(part).toLowerCase() === "b");
+        if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim().toUpperCase();
+      } catch {}
+      return "";
+    }
+    function currentBranchCode() {
+      const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
+      return byQuery || getPathBranchCode() || "";
+    }
+    function buildStaffEntryUrl() {
+      const code = currentBranchCode();
+      return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
+    }
 
     async function refreshHealth() {
       try {
-        const r = await fetch("/api/health", { cache: "no-store" });
+        const code = currentBranchCode();
+        const target = code ? window.appUrl(`/api/health?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/health");
+        const r = await fetch(target, { cache: "no-store" });
         const ok = r.ok;
         $dot.classList.remove("ok", "bad");
         $dot.classList.add(ok ? "ok" : "bad");
@@ -207,15 +225,17 @@
     document.getElementById("btn").addEventListener("click", async () => {
       $e.textContent = "";
       try {
-        const r = await fetch("/api/staff/auth/login", {
+        const code = currentBranchCode();
+        const target = code ? window.appUrl(`/api/staff/auth/login?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/staff/auth/login");
+        const r = await fetch(target, {
 
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ fullName: $n.value, pin: $p.value })
+          body: JSON.stringify({ fullName: $n.value, pin: $p.value, ...(code ? { branchCode: code } : {}) })
         });
         const j = await r.json();
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
-        location.href = window.appUrl("/staff");
+        location.href = buildStaffEntryUrl();
       } catch {
         $e.textContent = "Server error";
       }

@@ -194,6 +194,15 @@ margin:0;
     font-size: 12px;
     font-weight: 900;
   }
+  .topSelect{
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.04);
+    color: var(--text);
+    font-weight: 800;
+    min-width: 220px;
+  }
 
   /* Grid + cards */
   .grid{
@@ -667,6 +676,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
             <div class="meta" id="topMeta">-</div>
           </div>
           <div class="actions">
+            <select id="adminBranchSwitch" class="topSelect" style="display:none;" title="Switch branch"></select>
             <button class="btn" id="btnRefresh">Refresh</button>
           </div>
         </div>
@@ -1750,7 +1760,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
       function handleAuthRedirect(res) {
   if (res.status === 401) {
     // session missing/expired => go login
-    window.location.href = window.appUrl("/admin-login");
+    window.location.href = adminLoginUrl();
     return true;
   }
   return false;
@@ -1847,10 +1857,37 @@ async function jpost(url, body) {
       let META_BUSINESS_DATE_LABEL = "";
       let SYS_INFO_CACHE = null;
       let CURRENT_USER = null;
+      let ALLOWED_BRANCHES = [];
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
       const QS = new URLSearchParams(window.location.search);
       const INTERNAL_MODE = QS.get("internal") || "";
+
+      function getPathBranchCode() {
+        try {
+          const parts = String(window.location.pathname || "").split("/").filter(Boolean);
+          const idx = parts.findIndex((part) => String(part).toLowerCase() === "b");
+          if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim().toUpperCase();
+        } catch {}
+        return "";
+      }
+
+      function currentAdminBranchCode() {
+        const byPath = getPathBranchCode();
+        if (byPath) return byPath;
+        const selected = (ALLOWED_BRANCHES || []).find((row) => String(row.branchId || "").trim() === String(CURRENT_USER?.selectedBranchId || "").trim());
+        return String(selected?.branchCode || "").trim().toUpperCase();
+      }
+
+      function adminLoginUrl() {
+        const code = currentAdminBranchCode();
+        return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin-login`) : window.appUrl("/admin-login");
+      }
+
+      function adminEntryUrl(branchCode) {
+        const code = String(branchCode || currentAdminBranchCode() || "").trim().toUpperCase();
+        return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin`) : window.appUrl("/admin");
+      }
 
       const PAGE_PERMS = {
         dashboard: null,
@@ -1937,15 +1974,36 @@ async function jpost(url, body) {
       async function loadAccessContext() {
         const me = await jget("/api/admin/auth/me");
         if (!me?.ok) {
-          window.location.href = window.appUrl("/admin-login");
+          window.location.href = adminLoginUrl();
           throw new Error(me?.error || "Not authenticated");
         }
         CURRENT_USER = me.user || null;
+        ALLOWED_BRANCHES = Array.isArray(me.allowedBranches) ? me.allowedBranches : [];
         USER_PERMS = new Set(Array.isArray(me.permissions) ? me.permissions.map((p) => String(p)) : []);
         const features = await jget("/api/admin/feature-flags");
         FEATURE_FLAGS = features?.ok && features.features ? features.features : {};
+        renderAdminBranchSwitcher();
         applyNavPermissions();
         applyInternalAdminVisibility();
+      }
+
+      function renderAdminBranchSwitcher() {
+        const sel = $("adminBranchSwitch");
+        if (!sel) return;
+        if (!Array.isArray(ALLOWED_BRANCHES) || ALLOWED_BRANCHES.length <= 1) {
+          sel.style.display = "none";
+          sel.innerHTML = "";
+          return;
+        }
+        sel.style.display = "";
+        sel.innerHTML = ALLOWED_BRANCHES.map((row) => {
+          const id = String(row.branchId || "");
+          const code = String(row.branchCode || "");
+          const name = String(row.branchName || code || "Branch");
+          return `<option value="${id.replace(/"/g, "&quot;")}">${name} • ${code}</option>`;
+        }).join("");
+        const selected = String(CURRENT_USER?.selectedBranchId || "").trim();
+        if (selected) sel.value = selected;
       }
 
       function nowTimeText() {
@@ -1998,7 +2056,7 @@ async function jpost(url, body) {
         try {
           await jpost("/api/admin/auth/logout", {});
         } catch {}
-        window.location.href = window.appUrl("/admin-login");
+        window.location.href = adminLoginUrl();
       }
 
       function setActiveSetupPane(pane) {
@@ -2219,8 +2277,9 @@ async function jpost(url, body) {
       // ---------- Setup page ----------
       
       function getQrPngUrl(branchCode) {
-  // Uses your server-side QR generator endpoint
-  return window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`);
+  const code = String(branchCode || "").trim().toUpperCase();
+  if (!code) return "";
+  return window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`);
 }
 
 function refreshQrPreview() {
@@ -2240,7 +2299,7 @@ function refreshQrPreview() {
 
   const url = getQrPngUrl(code);
   img.src = url;
-  txt.value = url;
+  txt.value = window.appAbsoluteUrl(`/b/${encodeURIComponent(code)}/guest`);
 
   hint.textContent = "Tip: If on-screen scan fails, use Print QR for a larger code.";
 }
@@ -2333,10 +2392,18 @@ function refreshQueueQrPreview2() {
   const txt = $("queueQrUrlText");
   if (!img || !hint || !txt) return;
 
-  const url = window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`);
-  img.src = url;
-  txt.value = url;
-  hint.textContent = "Scan to open the Guest queueing page.";
+  const code = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
+  if (!code) {
+    img.removeAttribute("src");
+    txt.value = "";
+    hint.textContent = "Branch Code not loaded yet.";
+    return;
+  }
+  const guestUrl = window.appAbsoluteUrl(`/b/${encodeURIComponent(code)}/guest`);
+  const qrUrl = window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`);
+  img.src = qrUrl;
+  txt.value = guestUrl;
+  hint.textContent = `Scan to open the ${code} guest queue page.`;
 }
 
 async function loadQrSetup() {
@@ -4731,6 +4798,26 @@ function printSummary(){
         btn.addEventListener("click", () => setActive(btn.dataset.page));
       });
       $("btnLogout")?.addEventListener("click", logoutAdmin);
+      $("adminBranchSwitch")?.addEventListener("change", async (ev) => {
+        const branchId = String(ev.target?.value || "").trim();
+        const prev = String(CURRENT_USER?.selectedBranchId || "").trim();
+        if (!branchId || branchId === prev) return;
+        try {
+          const j = await jpost("/api/admin/select-branch", { branchId });
+          if (!j?.ok) {
+            if ($("adminBranchSwitch")) $("adminBranchSwitch").value = prev;
+            toast("Branch", j?.error || "Failed to switch branch.", "err");
+            return;
+          }
+          CURRENT_USER = j.user || CURRENT_USER;
+          renderAdminBranchSwitcher();
+          toast("Branch", `Switched to ${j.branch?.branchName || j.branch?.branchCode || "branch"}.`, "ok");
+          window.location.href = adminEntryUrl(j.branch?.branchCode);
+        } catch {
+          if ($("adminBranchSwitch")) $("adminBranchSwitch").value = prev;
+          toast("Branch", "Failed to switch branch.", "err");
+        }
+      });
 
       $("btnRefresh").addEventListener("click", refreshCurrentPage);
       $("btnCloseDay")?.addEventListener("click", closeDay);
@@ -4842,11 +4929,17 @@ $("btnUploadNow").addEventListener("click", uploadNow);
       // QR Setup
       $("btnSaveWifi")?.addEventListener("click", saveWifiSettings);
       $("btnDownloadWifiQr")?.addEventListener("click", () => downloadImage(getWifiQrPngUrl(), "wifi-qr.png"));
-      $("btnDownloadQueueQr")?.addEventListener("click", () => downloadImage(window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`), "queue-qr.png"));
+      $("btnDownloadQueueQr")?.addEventListener("click", () => {
+        const code = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
+        if (!code) return toast("QR", "Branch Code not loaded.", "warn");
+        downloadImage(window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`), `${code.toLowerCase()}-guest-qr.png`);
+      });
       $("btnPrintQrPair")?.addEventListener("click", () => {
         const ssid = String($("wifiSsid")?.value || "").trim();
         const wifiUrl = getWifiQrPngUrl();
-        const queueUrl = window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`);
+        const code = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
+        if (!code) return toast("QR", "Branch Code not loaded.", "warn");
+        const queueUrl = window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`);
         openPrintWindowForQrPair(wifiUrl, queueUrl, ssid);
       });
 

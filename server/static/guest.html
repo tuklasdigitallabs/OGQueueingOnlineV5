@@ -231,11 +231,11 @@
         <div class="topbar">
           <div class="brandWrap">
             <h1>Get a Queue Number</h1>
-            <p class="sub">Offline mode (local store Wi-Fi)</p>
+            <p class="sub" id="guestSub">Register for the selected branch.</p>
           </div>
-          <div class="badge" title="Connected to local store network">
+          <div class="badge" id="guestBranchBadge" title="Current branch">
             <span class="dot"></span>
-            Local
+            <span id="guestBranchBadgeText">Branch</span>
           </div>
         </div>
 
@@ -248,6 +248,12 @@
           </div>
 
           <form id="f" autocomplete="on">
+            <div class="field" id="branchField" style="display:none;">
+              <label for="branchCode">Branch</label>
+              <select id="branchCode"></select>
+              <div class="help">Choose the branch you are registering with.</div>
+            </div>
+
             <div class="field">
               <label for="name">Name</label>
               <input id="name" required placeholder="Your name" inputmode="text" />
@@ -292,11 +298,17 @@
       const nameEl = document.getElementById("name");
       const paxEl = document.getElementById("pax");
       const prioEl = document.getElementById("priorityType");
+      const branchFieldEl = document.getElementById("branchField");
+      const branchCodeEl = document.getElementById("branchCode");
+      const guestSubEl = document.getElementById("guestSub");
+      const guestBranchBadgeTextEl = document.getElementById("guestBranchBadgeText");
       const result = document.getElementById("result");
       const code = document.getElementById("code");
       const meta = document.getElementById("meta");
       const err = document.getElementById("err");
       const btnSubmit = document.getElementById("btnSubmit");
+      let availableBranches = [];
+      let selectedBranchCode = "";
 
       function showErr(msg) {
         err.style.display = "block";
@@ -332,6 +344,64 @@
         return `${g}-${qn}`;
       }
 
+      function getPathBranchCode() {
+        try {
+          const parts = String(window.location.pathname || "").split("/").filter(Boolean);
+          const idx = parts.findIndex((part) => String(part).toLowerCase() === "b");
+          if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim().toUpperCase();
+        } catch {}
+        return "";
+      }
+
+      function currentBranchCode() {
+        const bySelect = String(branchCodeEl?.value || "").trim().toUpperCase();
+        const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
+        return bySelect || byQuery || getPathBranchCode() || selectedBranchCode || "";
+      }
+
+      function renderBranchMeta() {
+        const selected = availableBranches.find((row) => String(row.branchCode || "").trim().toUpperCase() === currentBranchCode())
+          || availableBranches.find((row) => row.isDefault)
+          || availableBranches[0]
+          || null;
+        const name = String(selected?.branchName || selected?.branchCode || "Branch");
+        const code = String(selected?.branchCode || "").trim().toUpperCase();
+        selectedBranchCode = code;
+        if (guestSubEl) guestSubEl.textContent = `Register for ${name}${code ? ` (${code})` : ""}.`;
+        if (guestBranchBadgeTextEl) guestBranchBadgeTextEl.textContent = code || name || "Branch";
+      }
+
+      async function loadBranches() {
+        try {
+          const r = await fetch(window.appUrl("/api/public/branches"));
+          const j = await r.json();
+          if (!r.ok || !j?.ok) return;
+          availableBranches = Array.isArray(j.branches) ? j.branches : [];
+          if (branchFieldEl && branchCodeEl) {
+            if (availableBranches.length > 1) {
+              branchFieldEl.style.display = "flex";
+              branchCodeEl.innerHTML = availableBranches.map((row) => {
+                const code = String(row.branchCode || "").trim().toUpperCase();
+                const name = String(row.branchName || code || "Branch");
+                return `<option value="${code.replace(/"/g, "&quot;")}">${name} • ${code}</option>`;
+              }).join("");
+              const preferred = currentBranchCode();
+              if (preferred && availableBranches.some((row) => String(row.branchCode || "").trim().toUpperCase() === preferred)) {
+                branchCodeEl.value = preferred;
+              } else {
+                const fallback = availableBranches.find((row) => row.isDefault) || availableBranches[0];
+                branchCodeEl.value = String(fallback?.branchCode || "").trim().toUpperCase();
+              }
+            } else {
+              branchFieldEl.style.display = "none";
+              const only = availableBranches[0];
+              if (only) branchCodeEl.value = String(only.branchCode || "").trim().toUpperCase();
+            }
+          }
+          renderBranchMeta();
+        } catch {}
+      }
+
       async function submitGuestRegistration(e) {
         if (e && typeof e.preventDefault === "function") e.preventDefault();
         clearErr();
@@ -349,7 +419,11 @@
         btnSubmit.textContent = "Submitting…";
 
         try {
-          const r = await fetch("/api/queue/create", {
+          const branchCode = currentBranchCode();
+          const targetUrl = branchCode
+            ? window.appUrl("/api/queue/create?branchCode=" + encodeURIComponent(branchCode))
+            : window.appUrl("/api/queue/create");
+          const r = await fetch(targetUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -371,6 +445,8 @@
         }
       }
 
+      branchCodeEl?.addEventListener("change", renderBranchMeta);
+      loadBranches();
       f.addEventListener("submit", submitGuestRegistration);
       btnSubmit.addEventListener("click", submitGuestRegistration);
     </script>

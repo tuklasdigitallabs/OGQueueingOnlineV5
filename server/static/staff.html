@@ -669,6 +669,11 @@
           <span class="roleTag" id="meRole">—</span>
         </div>
 
+        <div class="pill" id="branchSwitchWrap" style="display:none;">
+          <label for="branchSwitch" style="font-weight:800; color:var(--muted);">Branch</label>
+          <select id="branchSwitch" class="miniSelect" title="Switch branch"></select>
+        </div>
+
         <div class="statusPill" id="serverStatusPill" title="Local server connection status">
           <span class="statusDot" id="serverStatusDot"></span>
           <span id="serverStatusText">Server: …</span>
@@ -964,6 +969,8 @@ function waitingMins(r){
 
     const state = {
       me: null,
+      allowedBranches: [],
+      selectedBranchId: "",
       permissions: {},
       features: {},
       snapshot: null,
@@ -979,6 +986,52 @@ function waitingMins(r){
       undoExpiresAt: 0,
       undoTimer: null
     };
+
+    function getPathBranchCode(){
+      try{
+        const parts = String(window.location.pathname || "").split("/").filter(Boolean);
+        const idx = parts.findIndex((part) => String(part).toLowerCase() === "b");
+        if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim().toUpperCase();
+      }catch{}
+      return "";
+    }
+
+    function currentBranchCodeForNav(){
+      const byPath = getPathBranchCode();
+      if (byPath) return byPath;
+      const selected = (state.allowedBranches || []).find((row) => String(row.branchId || "").trim() === String(state.selectedBranchId || "").trim());
+      return String(selected?.branchCode || "").trim().toUpperCase();
+    }
+
+    function staffLoginUrl(){
+      const code = currentBranchCodeForNav();
+      return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff-login`) : window.appUrl("/staff-login");
+    }
+
+    function staffEntryUrl(branchCode){
+      const code = String(branchCode || currentBranchCodeForNav() || "").trim().toUpperCase();
+      return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
+    }
+
+    function renderBranchSwitcher(){
+      const wrap = $("branchSwitchWrap");
+      const sel = $("branchSwitch");
+      const rows = Array.isArray(state.allowedBranches) ? state.allowedBranches : [];
+      if (!wrap || !sel) return;
+      if (rows.length <= 1){
+        wrap.style.display = "none";
+        sel.innerHTML = "";
+        return;
+      }
+      wrap.style.display = "flex";
+      sel.innerHTML = rows.map((row) => {
+        const id = String(row.branchId || "");
+        const code = String(row.branchCode || "");
+        const name = String(row.branchName || code || "Branch");
+        return `<option value="${id.replace(/"/g, "&quot;")}">${name} • ${code}</option>`;
+      }).join("");
+      if (state.selectedBranchId) sel.value = state.selectedBranchId;
+    }
 
     function hasPerm(key){
       const perms = state.permissions;
@@ -1109,13 +1162,16 @@ function getQueuedMs(item) {
     async function loadMe(){
       const { res, data } = await api("/api/staff/auth/me", "GET");
       if (!res.ok || !data || !data.ok){
-        window.location.href = window.appUrl("/staff-login");
+        window.location.href = staffLoginUrl();
         return false;
       }
       state.me = data.user || null;
+      state.allowedBranches = Array.isArray(data.allowedBranches) ? data.allowedBranches : [];
+      state.selectedBranchId = String(state.me?.selectedBranchId || data.branch?.branchId || "").trim();
       state.permissions = data.permissions || {};
       $("meName").textContent = state.me?.fullName || state.me?.username || "—";
       $("meRole").textContent = String(state.me?.roleId || state.me?.role || "—").toUpperCase();
+      renderBranchSwitcher();
 
       const lines = [];
       if (hasPerm("QUEUE_CALL_NEXT")) lines.push("✅ Call Again");
@@ -1383,7 +1439,7 @@ function getQueuedMs(item) {
       const { res, data } = await api("/api/state", "GET");
       if (!res.ok || !data || !data.ok){
         toast("Not authenticated", "bad", "Please login again.");
-        window.location.href = window.appUrl("/staff-login");
+        window.location.href = staffLoginUrl();
         return;
       }
 
@@ -1682,7 +1738,30 @@ function getQueuedMs(item) {
 
     $("logoutBtn").addEventListener("click", async () => {
       try{ await fetch("/api/staff/auth/logout", { method:"POST" }); }catch{}
-      window.location.href = window.appUrl("/staff-login");
+      window.location.href = staffLoginUrl();
+    });
+    $("branchSwitch")?.addEventListener("change", async (ev) => {
+      const branchId = String(ev.target.value || "").trim();
+      if (!branchId || branchId === state.selectedBranchId) return;
+      const prev = state.selectedBranchId;
+      state.selectedBranchId = branchId;
+      try{
+        const { res, data } = await api("/api/staff/select-branch", "POST", { branchId });
+        if (!res.ok || !data || !data.ok) {
+          state.selectedBranchId = prev;
+          renderBranchSwitcher();
+          toast(data?.error || "Failed to switch branch", "bad", "Branch");
+          return;
+        }
+        state.me = data.user || state.me;
+        const nextCode = String(data.branch?.branchCode || "").trim().toUpperCase();
+        toast("Branch switched", "ok", (data.branch?.branchName || data.branch?.branchCode || "Branch"));
+        window.location.href = staffEntryUrl(nextCode);
+      }catch{
+        state.selectedBranchId = prev;
+        renderBranchSwitcher();
+        toast("Failed to switch branch", "bad", "Branch");
+      }
     });
 
     $("openDisplayBtn")?.addEventListener("click", async () => {
