@@ -125,7 +125,7 @@
       </div>
     </div>
 
-    <script src="/app-boot.js"></script>
+    <script src="./app-boot.js"></script>
     <script>
       const fullName = document.getElementById("fullName");
       const pin = document.getElementById("pin");
@@ -155,8 +155,8 @@
             return;
           }
           window.location.assign(window.appUrl("/super-admin"));
-        } catch {
-          statusEl.textContent = "Server error";
+        } catch (err) {
+          statusEl.textContent = err && err.message ? `Server error: ${err.message}` : "Server error";
         }
       });
     </script>

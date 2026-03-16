@@ -14,17 +14,29 @@
 <body>
   <div class="wrap">
     <h1>Super Admin Recovery</h1>
-    <p>This endpoint is intended for loopback-only recovery. Use it only when locked out of administrative access.</p>
+    <p>This endpoint is intended for loopback-only recovery. Use it only from the server itself when locked out of administrative access.</p>
+    <p id="hint" style="color:#fca5a5;"></p>
     <button id="recoverBtn" type="button">Reset Super Admin</button>
     <pre id="status"></pre>
   </div>
-  <script src="/app-boot.js"></script>
+  <script src="./app-boot.js"></script>
   <script>
     const statusEl = document.getElementById("status");
+    const hintEl = document.getElementById("hint");
+    const isLoopbackHost = ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+    if (!isLoopbackHost) {
+      hintEl.textContent = "This page is being opened through the public site. Recovery will only work from the VPS/localhost because the reset endpoint is loopback-only.";
+    }
     document.getElementById("recoverBtn").addEventListener("click", async () => {
       statusEl.textContent = "Running recovery...";
-      const res = await fetch("/api/internal/super-admin/recover", { method: "POST", headers: { "Content-Type": "application/json" } });
-      const data = await res.json();
+      const res = await fetch(window.appUrl("/api/internal/super-admin/recover"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const ct = String(res.headers.get("content-type") || "").toLowerCase();
+      const data = ct.includes("application/json")
+        ? await res.json().catch(() => ({ ok: false, error: "Invalid JSON response" }))
+        : { ok: false, error: await res.text().catch(() => `HTTP ${res.status}`) };
       statusEl.textContent = JSON.stringify(data, null, 2);
     });
   </script>
