@@ -662,12 +662,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   app.set("trust proxy", true);
   app.use(helmet({
     hsts: false,
-    contentSecurityPolicy: {
-      useDefaults: true,
-      directives: {
-        upgradeInsecureRequests: null,
-      },
-    },
+    contentSecurityPolicy: false,
   }));
 
   // Persistent SQLite session store (avoids default MemoryStore limitations).
