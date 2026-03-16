@@ -271,7 +271,7 @@
               </div>
             </div>
 
-            <button id="btnSubmit" class="btn" type="submit">Get Number</button>
+            <button id="btnSubmit" class="btn" type="button">Get Number</button>
           </form>
         </div>
 
@@ -332,8 +332,8 @@
         return `${g}-${qn}`;
       }
 
-      f.addEventListener("submit", async (e) => {
-        e.preventDefault();
+      async function submitGuestRegistration(e) {
+        if (e && typeof e.preventDefault === "function") e.preventDefault();
         clearErr();
 
         const payload = {
@@ -369,7 +369,10 @@
           btnSubmit.disabled = false;
           btnSubmit.textContent = "Get Number";
         }
-      });
+      }
+
+      f.addEventListener("submit", submitGuestRegistration);
+      btnSubmit.addEventListener("click", submitGuestRegistration);
     </script>
   </body>
 </html>
