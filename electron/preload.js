@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld("qsys", {
   openGuest: () => ipcRenderer.send("launcher-open", "guest"),
   openDisplay: () => ipcRenderer.send("launcher-open", "display"),
   shutdownApp: () => ipcRenderer.send("launcher-open", "shutdown"),
+  getLauncherConfig: () => ipcRenderer.invoke("launcher-config:get"),
+  saveLauncherConfig: (cfg) => ipcRenderer.invoke("launcher-config:save", cfg),
+  getDisplayTargets: () => ipcRenderer.invoke("launcher-display-targets"),
+  getLauncherStatus: () => ipcRenderer.invoke("launcher-status:get"),
 });

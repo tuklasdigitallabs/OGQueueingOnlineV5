@@ -395,7 +395,7 @@
             </div>
 
             <div class="note">
-              Staff/Admin/Guest opens in your default browser. Display opens in kiosk window. Shutdown closes the local QSys app.
+              Staff/Admin/Guest opens in your default browser using the configured online branch URLs. Display opens in kiosk window on the selected screen. Shutdown closes the local QSys app.
             </div>
           </div>
         </section>
@@ -430,6 +430,50 @@
 
             <div class="note">
               Status updates automatically while this launcher is open.
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="agentConfigHeading">
+          <div class="cardHeader">
+            <h2 id="agentConfigHeading">Display Agent Setup</h2>
+          </div>
+          <div class="cardBody">
+            <div class="kv">
+              <div class="kvRow">
+                <div class="k">Server URL</div>
+                <input class="v mono" id="serverUrlInput" type="text" placeholder="https://onegourmetph.com/qsys" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;" />
+              </div>
+              <div class="kvRow">
+                <div class="k">Branch Code</div>
+                <input class="v mono" id="branchCodeInput" type="text" placeholder="YL-MOA" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;" />
+              </div>
+              <div class="kvRow">
+                <div class="k">Display Mode</div>
+                <select class="v" id="displayModeInput" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;">
+                  <option value="landscape">Landscape</option>
+                  <option value="portrait">Portrait</option>
+                </select>
+              </div>
+              <div class="kvRow">
+                <div class="k">Target Screen</div>
+                <select class="v" id="displayTargetInput" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;">
+                  <option value="">Primary / Auto</option>
+                </select>
+              </div>
+              <div class="kvRow">
+                <div class="k">Resolved Display URL</div>
+                <div class="v mono" id="resolvedDisplayUrl">-</div>
+              </div>
+            </div>
+
+            <div class="btnRow">
+              <button type="button" class="btn btnGhost" id="btnSaveAgentConfig">Save Display Setup</button>
+              <button type="button" class="btn btnNeutral" id="btnRefreshAgentConfig">Reload Display Setup</button>
+            </div>
+
+            <div class="note" id="agentConfigStatus">
+              Configure the online branch display URL and the monitor to use on this PC.
             </div>
           </div>
         </section>

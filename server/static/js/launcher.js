@@ -10,6 +10,14 @@
     branchCode: $("branchCode"),
     businessDate: $("businessDate"),
     localTime: $("localTime"),
+    serverUrlInput: $("serverUrlInput"),
+    branchCodeInput: $("branchCodeInput"),
+    displayModeInput: $("displayModeInput"),
+    displayTargetInput: $("displayTargetInput"),
+    resolvedDisplayUrl: $("resolvedDisplayUrl"),
+    agentConfigStatus: $("agentConfigStatus"),
+    btnSaveAgentConfig: $("btnSaveAgentConfig"),
+    btnRefreshAgentConfig: $("btnRefreshAgentConfig"),
 
     btnStaff: $("btnStaff"),
     btnAdmin: $("btnAdmin"),
@@ -24,6 +32,100 @@
     bootList: $("bootList"),
     bootSummary: $("bootSummary"),
   };
+
+  const state = {
+    launcherConfig: null,
+    displayTargets: [],
+  };
+
+  function normalizeServerUrl(serverUrl) {
+    return String(serverUrl || "").trim().replace(/\/+$/, "");
+  }
+
+  function normalizeBranchCode(branchCode) {
+    return String(branchCode || "").trim().toUpperCase();
+  }
+
+  function normalizeDisplayMode(mode) {
+    return String(mode || "").toLowerCase() === "portrait" ? "portrait" : "landscape";
+  }
+
+  function buildResolvedDisplayUrl(config) {
+    const branchCode = normalizeBranchCode(config?.branchCode);
+    const serverUrl = normalizeServerUrl(config?.serverUrl);
+    const mode = normalizeDisplayMode(config?.displayMode);
+    if (!branchCode) return "-";
+    const suffix = mode === "portrait" ? "display-portrait.html" : "display-landscape.html";
+    if (!serverUrl) return `/b/${encodeURIComponent(branchCode)}/${suffix}`;
+    return `${serverUrl}/b/${encodeURIComponent(branchCode)}/${suffix}`;
+  }
+
+  function setAgentStatus(text, isError) {
+    if (!el.agentConfigStatus) return;
+    el.agentConfigStatus.textContent = text;
+    el.agentConfigStatus.style.color = isError ? "#fca5a5" : "";
+  }
+
+  function getSelectedDisplayTargetId() {
+    const raw = String(el.displayTargetInput?.value || "").trim();
+    if (!raw) return null;
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  function currentConfigFromForm() {
+    return {
+      serverUrl: normalizeServerUrl(el.serverUrlInput?.value),
+      branchCode: normalizeBranchCode(el.branchCodeInput?.value),
+      displayMode: normalizeDisplayMode(el.displayModeInput?.value),
+      targetDisplayId: getSelectedDisplayTargetId(),
+    };
+  }
+
+  function renderDisplayTargets(selectedId) {
+    if (!el.displayTargetInput) return;
+    const current = selectedId;
+    el.displayTargetInput.innerHTML = "";
+
+    const autoOption = document.createElement("option");
+    autoOption.value = "";
+    autoOption.textContent = "Primary / Auto";
+    el.displayTargetInput.appendChild(autoOption);
+
+    for (const item of state.displayTargets) {
+      const option = document.createElement("option");
+      option.value = String(item.id);
+      option.textContent = `${item.label}${item.primary ? " (Primary)" : ""}`;
+      el.displayTargetInput.appendChild(option);
+    }
+
+    if (current !== null && current !== undefined && current !== "") {
+      el.displayTargetInput.value = String(current);
+    } else {
+      el.displayTargetInput.value = "";
+    }
+  }
+
+  function renderResolvedDisplayUrl() {
+    if (!el.resolvedDisplayUrl) return;
+    const config = currentConfigFromForm();
+    el.resolvedDisplayUrl.textContent = buildResolvedDisplayUrl(config);
+  }
+
+  function renderLauncherConfig(config) {
+    state.launcherConfig = config || null;
+    if (el.serverUrlInput) el.serverUrlInput.value = String(config?.serverUrl || "");
+    if (el.branchCodeInput) el.branchCodeInput.value = normalizeBranchCode(config?.branchCode);
+    if (el.displayModeInput) el.displayModeInput.value = normalizeDisplayMode(config?.displayMode);
+    renderDisplayTargets(config?.targetDisplayId ?? null);
+    renderResolvedDisplayUrl();
+    if (el.baseUrl) {
+      el.baseUrl.textContent = normalizeServerUrl(config?.serverUrl) || String(config?.localLauncherUrl || window.appAbsoluteUrl("/"));
+    }
+    if (el.branchCode) {
+      el.branchCode.textContent = normalizeBranchCode(config?.branchCode) || "-";
+    }
+  }
 
   function setHealth(ok, text) {
     el.healthDot.classList.remove("ok", "bad");
@@ -67,11 +169,37 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function getHealthUrl() {
+    const config = state.launcherConfig || currentConfigFromForm();
+    const serverUrl = normalizeServerUrl(config.serverUrl);
+    if (serverUrl) return `${serverUrl}/api/health`;
+    return "/api/health";
+  }
+
+  async function getLauncherStatus() {
+    if (window.qsys?.getLauncherStatus) {
+      return window.qsys.getLauncherStatus();
+    }
+    const res = await fetch(getHealthUrl(), { cache: "no-store" });
+    const j = await safeJson(res);
+    return {
+      ok: !!res.ok,
+      healthOk: !!res.ok,
+      branchCode: String(j.branchCode || ""),
+      businessDate: String(j.currentBusinessDate || ""),
+      branchName: "",
+      baseUrl: getHealthUrl().replace(/\/api\/health$/, ""),
+    };
+  }
+
   async function pingHealth() {
     try {
-      const res = await fetch("/api/health", { cache: "no-store" });
-      if (!res.ok) throw new Error("health not ok");
+      const status = await getLauncherStatus();
+      if (!status?.healthOk) throw new Error("health not ok");
       setHealth(true, "Server online");
+      if (status.baseUrl && el.baseUrl) el.baseUrl.textContent = String(status.baseUrl);
+      if (status.businessDate) el.businessDate.textContent = String(status.businessDate);
+      if (status.branchCode && el.branchCode) el.branchCode.textContent = String(status.branchCode);
       return true;
     } catch (e) {
       setHealth(false, "Server offline");
@@ -80,17 +208,24 @@
   }
 
   async function fetchBranchInfoBestEffort() {
+    const config = state.launcherConfig || currentConfigFromForm();
+    const serverUrl = normalizeServerUrl(config.serverUrl);
+    const branchCode = normalizeBranchCode(config.branchCode);
+    const prefix = serverUrl || "";
     const candidates = [
-      "/api/public/business-date",
-      "/api/public/branch",
-      "/api/branch",
-      "/api/admin/branch-config",
+      branchCode ? `${prefix}/api/public/business-date?branchCode=${encodeURIComponent(branchCode)}` : null,
+      `${prefix}/api/public/business-date`,
+      `${prefix}/api/public/branch`,
+      `${prefix}/api/branch`,
+      `${prefix}/api/admin/branch-config`,
+      branchCode ? `${prefix}/api/public/branches` : null,
     ];
 
     let gotBranchCode = false;
     let gotBusinessDate = false;
 
     for (const url of candidates) {
+      if (!url) continue;
       try {
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) continue;
@@ -129,6 +264,40 @@
     el.localTime.textContent = d.toLocaleString();
   }
 
+  async function loadDisplayTargets() {
+    if (!window.qsys?.getDisplayTargets) return;
+    const res = await window.qsys.getDisplayTargets();
+    if (!res?.ok) throw new Error(res?.error || "Unable to load display targets");
+    state.displayTargets = Array.isArray(res.displays) ? res.displays : [];
+    renderDisplayTargets(state.launcherConfig?.targetDisplayId ?? res.displayId ?? null);
+  }
+
+  async function loadLauncherConfig() {
+    if (!window.qsys?.getLauncherConfig) return;
+    const res = await window.qsys.getLauncherConfig();
+    if (!res?.ok) throw new Error(res?.error || "Unable to load launcher config");
+    renderLauncherConfig(res.config || {});
+  }
+
+  async function saveLauncherConfig() {
+    if (!window.qsys?.saveLauncherConfig) return;
+    const payload = currentConfigFromForm();
+    if (!payload.branchCode) {
+      setAgentStatus("Branch code is required before saving display setup.", true);
+      return;
+    }
+    setAgentStatus("Saving display setup...", false);
+    const res = await window.qsys.saveLauncherConfig(payload);
+    if (!res?.ok) {
+      setAgentStatus(res?.error || "Failed to save display setup.", true);
+      return;
+    }
+    renderLauncherConfig(res.config || payload);
+    setAgentStatus("Display setup saved for this PC.", false);
+    const ok = await pingHealth();
+    if (ok) await fetchBranchInfoBestEffort();
+  }
+
   function bindActions() {
     const qsys = window.qsys;
 
@@ -148,6 +317,30 @@
       const ok = await pingHealth();
       if (ok) await fetchBranchInfoBestEffort();
     });
+
+    el.btnSaveAgentConfig?.addEventListener("click", async () => {
+      try {
+        await saveLauncherConfig();
+      } catch (err) {
+        setAgentStatus(err?.message || "Failed to save display setup.", true);
+      }
+    });
+
+    el.btnRefreshAgentConfig?.addEventListener("click", async () => {
+      try {
+        setAgentStatus("Reloading display setup...", false);
+        await loadLauncherConfig();
+        await loadDisplayTargets();
+        setAgentStatus("Display setup reloaded.", false);
+      } catch (err) {
+        setAgentStatus(err?.message || "Failed to reload display setup.", true);
+      }
+    });
+
+    el.serverUrlInput?.addEventListener("input", renderResolvedDisplayUrl);
+    el.branchCodeInput?.addEventListener("input", renderResolvedDisplayUrl);
+    el.displayModeInput?.addEventListener("change", renderResolvedDisplayUrl);
+    el.displayTargetInput?.addEventListener("change", renderResolvedDisplayUrl);
     return true;
   }
 
@@ -213,6 +406,14 @@
     if (!actionsBound) {
       if (el.bootNow) el.bootNow.textContent = "Bridge unavailable. Launcher controls are disabled.";
       return;
+    }
+
+    try {
+      await loadLauncherConfig();
+      await loadDisplayTargets();
+      setAgentStatus("Configure the online branch display URL and the monitor to use on this PC.", false);
+    } catch (err) {
+      setAgentStatus(err?.message || "Failed to load display setup.", true);
     }
 
     updateClock();

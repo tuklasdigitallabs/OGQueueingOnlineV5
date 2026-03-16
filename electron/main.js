@@ -111,7 +111,9 @@ function loadConfig(baseDir) {
   if (!fs.existsSync(cfgPath)) {
     const defaultCfg = {
       port: 3000,
+      serverUrl: "",
       branchCode: "DEV",
+      targetDisplayId: null,
       displayMode: "landscape",
       kioskUrlLandscape: "/display-landscape.html",
       kioskUrlPortrait: "/display-portrait.html",
@@ -127,7 +129,9 @@ function loadConfig(baseDir) {
   } catch (e) {
     const fallback = {
       port: 3000,
+      serverUrl: "",
       branchCode: "DEV",
+      targetDisplayId: null,
       displayMode: "landscape",
       kioskUrlLandscape: "/display-landscape.html",
       kioskUrlPortrait: "/display-portrait.html",
@@ -154,10 +158,34 @@ function normalizeDisplayMode(mode) {
   return m === "portrait" ? "portrait" : "landscape";
 }
 
+function normalizeServerUrl(serverUrl, port) {
+  const raw = String(serverUrl || "").trim();
+  if (!raw) return `http://127.0.0.1:${port}`;
+  return raw.replace(/\/+$/, "");
+}
+
+function normalizeBranchCode(branchCode) {
+  return String(branchCode || "").trim().toUpperCase() || "DEV";
+}
+
+async function fetchJsonMaybe(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  const text = await res.text();
+  let json = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {}
+  return { ok: res.ok, status: res.status, json };
+}
+
 function resolveKioskUrl(cfg) {
   const forced = String(cfg?.kioskUrlForce || "").trim();
   if (forced) return forced;
-  return "/display";
+  const mode = normalizeDisplayMode(cfg?.displayMode);
+  const branchCode = normalizeBranchCode(cfg?.branchCode);
+  const base = normalizeServerUrl(cfg?.serverUrl, cfg?.port);
+  const suffix = mode === "portrait" ? "display-portrait.html" : "display-landscape.html";
+  return `${base}/b/${encodeURIComponent(branchCode)}/${suffix}`;
 }
 
 let win = null; // kiosk display window
@@ -357,11 +385,12 @@ ipcMain.on("kiosk-lock-screen2", () => {
 // ✅ NEW: Launcher actions (buttons call these)
 ipcMain.on("launcher-open", (_evt, target) => {
   if (!cfgGlobal) return;
-  const base = `http://127.0.0.1:${cfgGlobal.port}`;
+  const base = normalizeServerUrl(cfgGlobal.serverUrl, cfgGlobal.port);
+  const branchCode = normalizeBranchCode(cfgGlobal.branchCode);
 
-  if (target === "staff") return shell.openExternal(`${base}/staff`);
-  if (target === "admin") return shell.openExternal(`${base}/admin`);
-  if (target === "guest") return shell.openExternal(`${base}/guest`);
+  if (target === "staff") return shell.openExternal(`${base}/b/${encodeURIComponent(branchCode)}/staff-login`);
+  if (target === "admin") return shell.openExternal(`${base}/b/${encodeURIComponent(branchCode)}/admin-login`);
+  if (target === "guest") return shell.openExternal(`${base}/b/${encodeURIComponent(branchCode)}/guest`);
   if (target === "display") return showKioskWindow();
   if (target === "shutdown") {
     isQuitting = true;
@@ -392,8 +421,7 @@ function createKioskWindow(port, kioskUrl) {
 
   win.webContents.setAudioMuted(false);
 
-  const url = `http://127.0.0.1:${port}${kioskUrl}`;
-  win.loadURL(url);
+  win.loadURL(kioskUrl);
 
   win.on("close", (e) => {
     if (!isQuitting) {
@@ -444,8 +472,7 @@ function reloadDisplayWindow() {
   if (!win || win.isDestroyed()) return false;
   if (!cfgGlobal) return false;
   const kioskUrl = resolveKioskUrl(cfgGlobal);
-  const url = `http://127.0.0.1:${cfgGlobal.port}${kioskUrl}`;
-  win.loadURL(url);
+  win.loadURL(kioskUrl);
   return true;
 }
 
@@ -462,6 +489,90 @@ function setDisplayMode(mode) {
   const reloaded = reloadDisplayWindow();
   return { ok: true, mode: newMode, reloaded };
 }
+
+ipcMain.handle("launcher-config:get", async () => {
+  if (!cfgGlobal) return { ok: false, error: "Config not initialized" };
+  return {
+    ok: true,
+    config: {
+      serverUrl: String(cfgGlobal.serverUrl || ""),
+      branchCode: normalizeBranchCode(cfgGlobal.branchCode),
+      displayMode: normalizeDisplayMode(cfgGlobal.displayMode),
+      targetDisplayId: Number.isFinite(Number(cfgGlobal.targetDisplayId)) ? Number(cfgGlobal.targetDisplayId) : null,
+      resolvedDisplayUrl: resolveKioskUrl(cfgGlobal),
+      localLauncherUrl: `http://127.0.0.1:${cfgGlobal.port}/static/launcher.html`,
+    },
+  };
+});
+
+ipcMain.handle("launcher-display-targets", async () => {
+  return {
+    ok: true,
+    displays: getDisplayTargetList(),
+    displayId: Number.isFinite(Number(currentDisplayId)) ? Number(currentDisplayId) : null,
+  };
+});
+
+ipcMain.handle("launcher-config:save", async (_evt, payload) => {
+  if (!cfgGlobal || !baseDirGlobal) return { ok: false, error: "Config not initialized" };
+  const next = {
+    ...cfgGlobal,
+    serverUrl: String(payload?.serverUrl || "").trim(),
+    branchCode: normalizeBranchCode(payload?.branchCode),
+    displayMode: normalizeDisplayMode(payload?.displayMode),
+    targetDisplayId: Number.isFinite(Number(payload?.targetDisplayId)) ? Number(payload.targetDisplayId) : null,
+  };
+  next.kioskUrl = resolveKioskUrl(next);
+  const saved = saveConfig(baseDirGlobal, next);
+  if (!saved) return { ok: false, error: "Failed to save launcher config" };
+  cfgGlobal = next;
+  currentDisplayId = next.targetDisplayId;
+  return {
+    ok: true,
+    config: {
+      serverUrl: String(cfgGlobal.serverUrl || ""),
+      branchCode: normalizeBranchCode(cfgGlobal.branchCode),
+      displayMode: normalizeDisplayMode(cfgGlobal.displayMode),
+      targetDisplayId: Number.isFinite(Number(cfgGlobal.targetDisplayId)) ? Number(cfgGlobal.targetDisplayId) : null,
+      resolvedDisplayUrl: resolveKioskUrl(cfgGlobal),
+      localLauncherUrl: `http://127.0.0.1:${cfgGlobal.port}/static/launcher.html`,
+    },
+  };
+});
+
+ipcMain.handle("launcher-status:get", async () => {
+  if (!cfgGlobal) return { ok: false, error: "Config not initialized" };
+  const base = normalizeServerUrl(cfgGlobal.serverUrl, cfgGlobal.port);
+  const branchCode = normalizeBranchCode(cfgGlobal.branchCode);
+  const out = {
+    ok: false,
+    healthOk: false,
+    branchCode,
+    businessDate: "",
+    branchName: "",
+    baseUrl: base,
+  };
+  try {
+    const health = await fetchJsonMaybe(`${base}/api/health`);
+    out.healthOk = !!health.ok;
+    out.ok = !!health.ok;
+    if (health.json?.branchCode) out.branchCode = String(health.json.branchCode);
+    if (health.json?.currentBusinessDate) out.businessDate = String(health.json.currentBusinessDate);
+  } catch {}
+
+  try {
+    const info = await fetchJsonMaybe(`${base}/api/public/business-date?branchCode=${encodeURIComponent(branchCode)}`);
+    if (info.json?.branchName) out.branchName = String(info.json.branchName);
+    if (!out.businessDate && info.json?.currentBusinessDate) {
+      out.businessDate = String(info.json.currentBusinessDate);
+    }
+    if (!out.branchCode && info.json?.branchCode) {
+      out.branchCode = String(info.json.branchCode);
+    }
+  } catch {}
+
+  return out;
+});
 
 function createTray() {
   if (tray) return;
@@ -483,14 +594,18 @@ function createTray() {
       label: "Open Staff Login (Browser)",
       click: () => {
         if (!cfgGlobal) return;
-        shell.openExternal(`http://127.0.0.1:${cfgGlobal.port}/staff`);
+        const base = normalizeServerUrl(cfgGlobal.serverUrl, cfgGlobal.port);
+        const branchCode = normalizeBranchCode(cfgGlobal.branchCode);
+        shell.openExternal(`${base}/b/${encodeURIComponent(branchCode)}/staff-login`);
       },
     },
     {
       label: "Open Admin Login (Browser)",
       click: () => {
         if (!cfgGlobal) return;
-        shell.openExternal(`http://127.0.0.1:${cfgGlobal.port}/admin`);
+        const base = normalizeServerUrl(cfgGlobal.serverUrl, cfgGlobal.port);
+        const branchCode = normalizeBranchCode(cfgGlobal.branchCode);
+        shell.openExternal(`${base}/b/${encodeURIComponent(branchCode)}/admin-login`);
       },
     },
     { type: "separator" },
@@ -687,9 +802,13 @@ app.whenReady().then(async () => {
   migrateDevDataIfNeeded(baseDir);
 
   const cfg = loadConfig(baseDir);
+  cfg.serverUrl = String(cfg.serverUrl || "").trim();
+  cfg.branchCode = normalizeBranchCode(cfg.branchCode);
+  cfg.targetDisplayId = Number.isFinite(Number(cfg.targetDisplayId)) ? Number(cfg.targetDisplayId) : null;
   cfg.displayMode = normalizeDisplayMode(cfg.displayMode);
   cfg.kioskUrl = resolveKioskUrl(cfg);
   cfgGlobal = cfg;
+  currentDisplayId = cfg.targetDisplayId;
 
   const existingQSys = await probeExistingQSys(cfg.port);
   if (existingQSys) {
@@ -747,7 +866,11 @@ app.whenReady().then(async () => {
   // Allow server.js endpoints (staff app) to open/close display window
   global.QSYS_DISPLAY = {
     open: ({ displayId } = {}) => {
-      currentDisplayId = Number.isFinite(Number(displayId)) ? Number(displayId) : null;
+      currentDisplayId = Number.isFinite(Number(displayId)) ? Number(displayId) : cfgGlobal?.targetDisplayId ?? null;
+      if (cfgGlobal && baseDirGlobal) {
+        cfgGlobal.targetDisplayId = currentDisplayId;
+        saveConfig(baseDirGlobal, cfgGlobal);
+      }
       const w = ensureKioskWindow();
       if (w && !w.isDestroyed()) {
         forceWindowToDisplay(w, currentDisplayId);

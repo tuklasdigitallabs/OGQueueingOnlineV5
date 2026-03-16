@@ -176,7 +176,7 @@ function dbgDisp(...args){
         return;
       }
       msg.textContent = "Pairing...";
-      fetch("/api/display/pair/complete", {
+      fetch(withDisplayBranch("/api/display/pair/complete"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: v }),
@@ -216,6 +216,34 @@ function dbgDisp(...args){
     } catch {}
   }
 
+  function getDisplayBranchCode() {
+    try {
+      const qs = new URLSearchParams(window.location.search || "");
+      const qCode = String(qs.get("branchCode") || "").trim().toUpperCase();
+      if (qCode) return qCode;
+    } catch {}
+    try {
+      const parts = String(window.location.pathname || "").split("/").filter(Boolean);
+      const idx = parts.findIndex((part) => String(part || "").toLowerCase() === "b");
+      if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1] || "").trim().toUpperCase();
+    } catch {}
+    return "";
+  }
+
+  function withDisplayBranch(url) {
+    const raw = String(url || "");
+    const branchCode = getDisplayBranchCode();
+    if (!branchCode || !raw.startsWith("/api/")) return raw;
+    try {
+      const u = new URL(raw, window.location.origin);
+      if (!u.searchParams.get("branchCode")) u.searchParams.set("branchCode", branchCode);
+      return u.pathname + u.search;
+    } catch {
+      const sep = raw.includes("?") ? "&" : "?";
+      return `${raw}${sep}branchCode=${encodeURIComponent(branchCode)}`;
+    }
+  }
+
   // Exposed for onclick="toggleSettings()"
   window.toggleSettings = function toggleSettings() {
     const p = document.getElementById("settingsPanel");
@@ -227,8 +255,8 @@ function dbgDisp(...args){
     try {
       const token = getDisplayToken();
       const url = token
-        ? "/api/display/settings?token=" + encodeURIComponent(token)
-        : "/api/display/settings";
+        ? withDisplayBranch("/api/display/settings?token=" + encodeURIComponent(token))
+        : withDisplayBranch("/api/display/settings");
       const r = await fetch(url, {
         cache: "no-store",
         headers: token ? { "x-display-token": token } : {},
@@ -747,8 +775,8 @@ function dbgDisp(...args){
       const token = ensureDisplayTokenUI();
 
       const url = token
-        ? "/api/display/state?token=" + encodeURIComponent(token)
-        : "/api/display/state";
+        ? withDisplayBranch("/api/display/state?token=" + encodeURIComponent(token))
+        : withDisplayBranch("/api/display/state");
       dbg("loadState() fetch", {
         url,
         hasToken: !!token,
@@ -1102,7 +1130,7 @@ function dbgDisp(...args){
     if (el) el.textContent = "Now Serving";
 
     try {
-      const r1 = await fetch("/api/public/business-date", { cache: "no-store" });
+      const r1 = await fetch(withDisplayBranch("/api/public/business-date"), { cache: "no-store" });
       const j1 = await r1.json();
       const name1 = String(j1.branchName || "").trim();
       if (name1) {
@@ -1113,7 +1141,7 @@ function dbgDisp(...args){
     } catch {}
 
     try {
-      const r2 = await fetch("/api/public/branch", { cache: "no-store" });
+      const r2 = await fetch(withDisplayBranch("/api/public/branch"), { cache: "no-store" });
       const j2 = await r2.json();
       const name2 = String(j2.branch?.branchName || "").trim();
       if (name2) el.textContent = `${name2}`;
@@ -1265,8 +1293,10 @@ function dbgDisp(...args){
     });
 
     // Socket
+    const branchCode = getDisplayBranchCode();
     const socket = io({
       path: window.appUrl("/socket.io"),
+      query: branchCode ? { branchCode } : undefined,
       transports: ["websocket", "polling"],
     });
 

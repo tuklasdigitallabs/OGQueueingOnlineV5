@@ -2276,6 +2276,19 @@ function buildAdminEntryPath(branchCodeInput = "") {
   return pathWithBase(`/b/${encodeURIComponent(code)}/admin`);
 }
 
+function buildDisplayEntryPath(branchCodeInput = "", mode = "") {
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  const m = String(mode || "").trim().toLowerCase();
+  const page =
+    m === "portrait"
+      ? "display-portrait.html"
+      : m === "landscape"
+        ? "display-landscape.html"
+        : "display";
+  if (!code) return pathWithBase(`/${page}`);
+  return pathWithBase(`/b/${encodeURIComponent(code)}/${page}`);
+}
+
 function buildGuestEntryUrl(req, branchCodeInput = "") {
   const proto =
     (req.headers["x-forwarded-proto"] || req.protocol || "http")
@@ -2446,6 +2459,27 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   app.get("/display-portrait.html", (_req, res) =>
     (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "display-portrait.html")))
   );
+  app.get("/b/:branchCode/display", (req, res) => {
+    setPrivateSurfaceNoIndex(res);
+    const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
+    if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+    try {
+      const orientation = String(getAppSetting("display.orientation") || "landscape");
+      return res.redirect(302, buildDisplayEntryPath(branchCode, orientation));
+    } catch {
+      return res.redirect(302, buildDisplayEntryPath(branchCode, "landscape"));
+    }
+  });
+  app.get("/b/:branchCode/display-landscape.html", (req, res) => {
+    const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
+    if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+    return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "display-landscape.html")));
+  });
+  app.get("/b/:branchCode/display-portrait.html", (req, res) => {
+    const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
+    if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+    return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "display-portrait.html")));
+  });
 app.get("/staff", requireStaffPage, (_, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")))
 );
