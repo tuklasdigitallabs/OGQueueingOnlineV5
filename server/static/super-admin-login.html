@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Super Admin Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root{
+        --bg:#f3eadc;
+        --panel:#faf6ee;
+        --line:rgba(0,0,0,.08);
+        --text:#1f2933;
+        --muted:rgba(31,41,51,.62);
+        --accent:#e10600;
+        --accent-2:#b91c1c;
+        --good:#16a34a;
+        --bad:#dc2626;
+        --shadow:0 10px 26px rgba(0,0,0,.10);
+        --radius:18px;
+      }
+      *{ box-sizing:border-box; }
+      body{
+        margin:0;
+        min-height:100vh;
+        display:grid;
+        place-items:center;
+        padding:24px;
+        color:var(--text);
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+        background: var(--bg);
+        background-image: radial-gradient(900px 600px at 18% 12%, rgba(225,6,0,.05), transparent 55%);
+        background-attachment: fixed;
+      }
+      .card{
+        width:min(460px, 100%);
+        padding:28px;
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        background:rgba(255,255,255,.88);
+        box-shadow:var(--shadow);
+      }
+      .eyebrow{
+        margin:0 0 8px;
+        letter-spacing:.18em;
+        text-transform:uppercase;
+        font-size:11px;
+        color:var(--accent);
+      }
+      h1{
+        margin:0 0 8px;
+        font-size:30px;
+        line-height:1.05;
+      }
+      .sub{
+        margin:0 0 20px;
+        color:var(--muted);
+        font-size:14px;
+      }
+      label{
+        display:block;
+        margin:14px 0 6px;
+        font-size:13px;
+        font-weight:700;
+      }
+      input{
+        width:100%;
+        padding:14px 15px;
+        border:1px solid var(--line);
+        border-radius:14px;
+        font:inherit;
+        background:#fff;
+        color:var(--text);
+      }
+      button{
+        width:100%;
+        margin-top:20px;
+        border:1px solid rgba(225,6,0,.55);
+        border-radius:14px;
+        padding:14px 16px;
+        font:inherit;
+        font-weight:900;
+        color:var(--text);
+        background:rgba(225,6,0,.10);
+        cursor:pointer;
+        transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      }
+      button:hover{
+        background:rgba(225,6,0,.14);
+        transform:translateY(-1px);
+      }
+      .status{
+        min-height:20px;
+        margin-top:14px;
+        font-size:13px;
+        color:var(--bad);
+      }
+      .hint{
+        margin-top:14px;
+        padding:12px 14px;
+        border-radius:14px;
+        border:1px dashed var(--line);
+        color:var(--muted);
+        font-size:12px;
+        background:rgba(255,255,255,.78);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p class="eyebrow">Restricted Surface</p>
+      <h1>Super Admin</h1>
+      <p class="sub">Hidden provisioning access for feature enablement and internal rollout control.</p>
+
+      <label for="fullName">Username</label>
+      <input id="fullName" autocomplete="username" />
+
+      <label for="pin">PIN</label>
+      <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" />
+
+      <button id="btn" type="button">Enter</button>
+      <div id="status" class="status"></div>
+
+      <div class="hint">
+        Access is available only to users with role <code>SUPER_ADMIN</code>.
+      </div>
+    </div>
+
+    <script src="/app-boot.js"></script>
+    <script>
+      const fullName = document.getElementById("fullName");
+      const pin = document.getElementById("pin");
+      const statusEl = document.getElementById("status");
+      const btn = document.getElementById("btn");
+
+      pin.addEventListener("input", () => {
+        const cleaned = String(pin.value || "").replace(/\D+/g, "");
+        if (cleaned !== pin.value) pin.value = cleaned;
+      });
+
+      [fullName, pin].forEach((el) => el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") btn.click();
+      }));
+
+      btn.addEventListener("click", async () => {
+        statusEl.textContent = "";
+        try {
+          const r = await fetch(window.appUrl("/api/super-admin/auth/login"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fullName: fullName.value, pin: pin.value }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.ok) {
+            statusEl.textContent = j.error || "Login failed";
+            return;
+          }
+          window.location.assign(window.appUrl("/super-admin"));
+        } catch {
+          statusEl.textContent = "Server error";
+        }
+      });
+    </script>
+  </body>
+</html>

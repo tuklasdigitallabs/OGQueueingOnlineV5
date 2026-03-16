@@ -23,6 +23,15 @@ function monthStartYmd(ymd) {
   return `${m[1]}-${m[2]}-01`;
 }
 
+function monthStartMonthsBack(ymd, monthsBack) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!m) return monthStartYmd(ymd);
+  const totalMonths = (Number(m[1]) * 12 + (Number(m[2]) - 1)) - Math.max(0, Number(monthsBack || 0));
+  const year = Math.floor(totalMonths / 12);
+  const monthIndex = ((totalMonths % 12) + 12) % 12;
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+}
+
 function ymdToUtcDate(ymd) {
   const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
@@ -126,6 +135,7 @@ function fmtManilaHms(ms) {
 
 function main() {
   const baseDir = process.argv[2] || process.cwd();
+  const requestedMonths = Math.max(1, Math.min(3, Number.parseInt(process.argv[3] || "1", 10) || 1));
   const db = openDb(baseDir);
 
   let bc = "DEV";
@@ -135,7 +145,7 @@ function main() {
   } catch {}
 
   const today = getTodayManila();
-  const fromYmd = monthStartYmd(today);
+  const fromYmd = monthStartMonthsBack(today, requestedMonths - 1);
   const days = ymdRangeInclusive(fromYmd, today);
   const now = Date.now();
 
@@ -345,6 +355,7 @@ function main() {
   }
 
   console.log(`[Seed] Done for ${fromYmd}..${today} branch=${bc}`);
+  console.log(`[Seed] Requested span: ${requestedMonths} month(s).`);
   console.log(`[Seed] Inserted total: ${grandInserted} ticket rows across ${days.length} day(s).`);
   for (const line of perDayOut.slice(-10)) console.log(`[Seed] ${line}`);
   console.log(`[Seed] Daily rollups refreshed in daily_group_stats for seeded dates.`);

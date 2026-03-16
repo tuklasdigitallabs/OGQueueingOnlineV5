@@ -11,7 +11,7 @@ const { execFile } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const { Server } = require("socket.io");
-const { randomUUID, createSign, randomBytes, createHash } = require("crypto");
+const { randomUUID, createSign, createVerify, randomBytes, createHash } = require("crypto");
 const bcrypt = require("bcryptjs");
 const { openDb } = require("./db");
 const session = require("express-session");
@@ -50,6 +50,64 @@ function stripBasePathFromUrl(url) {
     return stripped.startsWith("/") ? stripped : `/${stripped}`;
   }
   return raw || "/";
+}
+
+const ACTIVATION_STATUS_UNACTIVATED = "UNACTIVATED";
+const ACTIVATION_STATUS_ACTIVATED = "ACTIVATED";
+const ACTIVATION_STATUS_EXPIRED = "EXPIRED";
+const BRANCH_CODE_PLACEHOLDER = "UNASSIGNED";
+const DEFAULT_SUPER_ADMIN_USER = "rbz1988";
+const DEFAULT_SUPER_ADMIN_PIN = "053787";
+const SUPER_ADMIN_FEATURE_CATALOG = [
+  { key: "operations.system_health", name: "System Health Dashboard", group: "Operations", description: "Shows branch status, activation state, database health, backup count, and key runtime information." },
+  { key: "operations.support_bundle", name: "Support Bundle Export", group: "Operations", description: "Generates a local diagnostic bundle with system metadata, recent audit activity, and support details." },
+  { key: "operations.auto_backup", name: "Automatic Local Backups", group: "Operations", description: "Creates scheduled database backups automatically in local storage without manual action." },
+  { key: "operations.backup_restore", name: "Backup Restore Tool", group: "Operations", description: "Lets authorized users create manual backups, export them, open the backup folder, and restore the latest valid backup." },
+  { key: "operations.integrity_check", name: "Database Integrity Check", group: "Operations", description: "Runs validation checks against the local database to detect corruption or structural issues." },
+  { key: "operations.startup_self_test", name: "Startup Self-Test", group: "Operations", description: "Runs system checks during app startup to verify core dependencies before normal use." },
+  { key: "licensing.advanced_dashboard", name: "Advanced License Dashboard", group: "Licensing", description: "Provides a deeper view of activation state, expiry, renewal timing, and license history." },
+  { key: "licensing.renewal_reminders", name: "Renewal Reminder Workflow", group: "Licensing", description: "Surfaces structured renewal reminders as expiry approaches." },
+  { key: "licensing.audit_history", name: "License Audit History", group: "Licensing", description: "Tracks license issuance, renewal, and related audit events over time." },
+  { key: "licensing.branch_transfer", name: "Branch Transfer Tool", group: "Licensing", description: "Supports controlled license transfer or machine replacement workflows." },
+  { key: "licensing.token_revocation", name: "Token Revocation Support", group: "Licensing", description: "Adds the ability to invalidate previously issued activation or renewal tokens." },
+  { key: "licensing.one_time_tokens", name: "One-Time-Use Tokens", group: "Licensing", description: "Prevents reuse of activation or renewal tokens after successful application." },
+  { key: "reporting.advanced_center", name: "Advanced Reports Center", group: "Reporting", description: "Adds a richer report workspace with expanded filters, summaries, and export options." },
+  { key: "reporting.scheduled_csv", name: "Scheduled CSV Export", group: "Reporting", description: "Exports report data to CSV automatically on a scheduled basis." },
+  { key: "reporting.pdf_daily_summary", name: "PDF Daily Summary Export", group: "Reporting", description: "Generates printable PDF daily summaries for branch operations and review." },
+  { key: "reporting.audit_export", name: "Audit Trail Export", group: "Reporting", description: "Exports audit logs in a more structured support or compliance format." },
+  { key: "reporting.historical_analytics", name: "Historical Analytics", group: "Reporting", description: "Provides longer-range trend analysis across stored queue history." },
+  { key: "reporting.branch_trends", name: "Branch Performance Trends", group: "Reporting", description: "Highlights branch-level performance trends such as wait time and throughput changes." },
+  { key: "queue.recovery_tools", name: "Queue Recovery Tools", group: "Queue Management", description: "Adds operational tools for recovering from accidental queue mistakes or interruptions." },
+  { key: "queue.reopen_completed", name: "Reopen Completed Tickets", group: "Queue Management", description: "Allows previously completed tickets to be returned to an active workflow state." },
+  { key: "queue.wait_forecast", name: "Wait-Time Forecasting", group: "Queue Management", description: "Estimates expected wait time based on recent queue activity and patterns." },
+];
+
+function activationError(message, http = 400) {
+  const e = new Error(String(message || "Activation error"));
+  e.http = Number(http) || 400;
+  return e;
+}
+
+function base64UrlDecodeToBuffer(input) {
+  const s = String(input || "").trim();
+  if (!s) return Buffer.alloc(0);
+  const normalized = s.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
+  return Buffer.from(padded, "base64");
+}
+
+function parseEpochLike(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  const s = String(value || "").trim();
+  if (!s) return NaN;
+  if (/^\d+$/.test(s)) return Number(s);
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : NaN;
+}
+
+function isReservedBranchCode(value) {
+  const code = String(value || "").trim().toUpperCase();
+  return code === "DEV" || code === BRANCH_CODE_PLACEHOLDER;
 }
 
 
@@ -141,6 +199,85 @@ function ensureColumn(db, tableName, colName, colDefSql) {
       e.message || e
     );
   }
+}
+
+function getActivationVerifier(baseDir) {
+  const candidates = [
+    String(process.env.QSYS_ACTIVATION_PUBLIC_KEY_PEM || "").trim(),
+    path.join(baseDir || process.cwd(), "activation", "public_key.pem"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return fs.readFileSync(candidate, "utf8");
+      }
+    } catch {}
+  }
+  return "";
+}
+
+function verifyActivationToken(token, { baseDir, expectedInstallId } = {}) {
+  const raw = String(token || "").trim();
+  if (!raw) throw activationError("Activation token is required.");
+
+  const dot = raw.lastIndexOf(".");
+  if (dot <= 0) throw activationError("Activation token format is invalid.");
+  const body = raw.slice(0, dot);
+  const signaturePart = raw.slice(dot + 1);
+  const payloadJson = base64UrlDecodeToBuffer(body).toString("utf8");
+
+  let payload;
+  try {
+    payload = JSON.parse(payloadJson);
+  } catch {
+    throw activationError("Activation token payload is invalid.");
+  }
+
+  const verifierPem = getActivationVerifier(baseDir);
+  if (!verifierPem) throw activationError("Activation public key is not configured.", 500);
+
+  const verify = createVerify("RSA-SHA256");
+  verify.update(body);
+  verify.end();
+  const sig = base64UrlDecodeToBuffer(signaturePart);
+  if (!verify.verify(verifierPem, sig)) {
+    throw activationError("Activation token signature is invalid.");
+  }
+
+  const installId = String(payload.installId || "").trim();
+  if (!installId) throw activationError("Activation token is missing installId.");
+  if (expectedInstallId && installId !== String(expectedInstallId).trim()) {
+    throw activationError("Activation token installId does not match this installation.");
+  }
+
+  const branchCode = String(payload.branchCode || "").trim().toUpperCase();
+  if (!branchCode || isReservedBranchCode(branchCode)) {
+    throw activationError("Activation token branchCode is invalid.");
+  }
+
+  const issuedAt = parseEpochLike(payload.issuedAt);
+  const expiresAt = parseEpochLike(payload.expiresAt);
+  if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt) {
+    throw activationError("Activation token timing fields are invalid.");
+  }
+  if (Date.now() > expiresAt) {
+    throw activationError("Activation token is already expired.", 409);
+  }
+
+  return {
+    tokenHash: createHash("sha256").update(raw).digest("hex"),
+    payload: {
+      ...payload,
+      branchCode,
+      issuedAt,
+      expiresAt,
+      installId,
+      issuer: String(payload.issuer || "provider").trim() || "provider",
+      licenseId: String(payload.licenseId || "").trim(),
+      branchName: String(payload.branchName || "").trim(),
+    },
+  };
 }
 
 // Manila "today" (YYYY-MM-DD) based on actual wall-clock time
@@ -529,21 +666,95 @@ function ensureAdminSchema(db) {
   }
 }
 
+function ensureActivationState(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS installation_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      status TEXT NOT NULL,
+      installId TEXT NOT NULL,
+      activatedAt INTEGER,
+      activatedBy TEXT,
+      activationLicenseId TEXT,
+      licenseIssuedAt INTEGER,
+      licenseExpiresAt INTEGER,
+      lastRenewedAt INTEGER,
+      activationBranchCode TEXT,
+      activationTokenHash TEXT,
+      activationPayload TEXT,
+      updatedAt INTEGER NOT NULL
+    );
+  `);
+
+  const now = Date.now();
+  let installId = "";
+  try {
+    const row = db.prepare(`SELECT value FROM app_settings WHERE key='install.id' LIMIT 1`).get();
+    installId = String(row?.value || "").trim();
+  } catch {}
+  if (!installId) {
+    installId = randomUUID();
+    db.prepare(
+      `INSERT INTO app_settings(key, value, updatedAt)
+       VALUES('install.id', ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updatedAt=excluded.updatedAt`,
+    ).run(installId, now);
+  }
+
+  const row = db.prepare(`SELECT id FROM installation_state WHERE id=1`).get();
+  if (!row) {
+    db.prepare(
+      `INSERT INTO installation_state(
+        id, status, installId, activatedAt, activatedBy, activationLicenseId,
+        licenseIssuedAt, licenseExpiresAt, lastRenewedAt, activationBranchCode,
+        activationTokenHash, activationPayload, updatedAt
+      ) VALUES(1, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?)`,
+    ).run(ACTIVATION_STATUS_UNACTIVATED, installId, now);
+  } else {
+    db.prepare(`UPDATE installation_state SET installId=?, updatedAt=? WHERE id=1`).run(installId, now);
+  }
+}
+
+function ensureActivationTokenTables(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS activation_token_usage (
+      tokenHash TEXT PRIMARY KEY,
+      installId TEXT,
+      branchCode TEXT,
+      licenseId TEXT,
+      issuer TEXT,
+      action TEXT NOT NULL,
+      consumedAt INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS activation_token_revocations (
+      tokenHash TEXT PRIMARY KEY,
+      installId TEXT,
+      branchCode TEXT,
+      licenseId TEXT,
+      reason TEXT,
+      revokedBy TEXT,
+      revokedAt INTEGER NOT NULL
+    );
+  `);
+}
+
 /* -------------------- Admin seeds -------------------- */
 function ensureAdminSeeds(db, opts = {}) {
   const now = Date.now();
   const disableDefaultAdminSeed = !!opts.disableDefaultAdminSeed;
 
-  // roles (must exist BEFORE users because schema.sql enforces FK)
-  const roleCount = db.prepare(`SELECT COUNT(*) AS n FROM roles`).get()?.n || 0;
-  if (roleCount === 0) {
-    const insRole = db.prepare(
-      `INSERT INTO roles(roleId, roleName, isSystem, createdAt, updatedAt) VALUES(?,?,?,?,?)`
-    );
-    insRole.run("STAFF", "Staff", 1, now, now);
-    insRole.run("SUPERVISOR", "Supervisor", 1, now, now);
-    insRole.run("ADMIN", "Admin", 1, now, now);
-  }
+  // roles must be individually upserted so older DBs also gain SUPER_ADMIN.
+  const upsertRole = db.prepare(
+    `INSERT INTO roles(roleId, roleName, isSystem, createdAt, updatedAt)
+     VALUES(?,?,?,?,?)
+     ON CONFLICT(roleId) DO UPDATE SET
+       roleName=excluded.roleName,
+       isSystem=excluded.isSystem,
+       updatedAt=excluded.updatedAt`
+  );
+  upsertRole.run("STAFF", "Staff", 1, now, now);
+  upsertRole.run("SUPERVISOR", "Supervisor", 1, now, now);
+  upsertRole.run("ADMIN", "Admin", 1, now, now);
+  upsertRole.run("SUPER_ADMIN", "Super Admin", 1, now, now);
 
   // permissions catalog
   const permCount = db.prepare(`SELECT COUNT(*) AS n FROM permissions`).get()?.n || 0;
@@ -616,13 +827,34 @@ function ensureAdminSeeds(db, opts = {}) {
     console.warn("[QSysLocal] Default ADMIN seed is disabled in production. Create an admin user explicitly.");
   }
 
+  const requestedFullName = String(process.env.QSYS_SUPER_ADMIN_USER || "").trim() || DEFAULT_SUPER_ADMIN_USER;
+  const requestedPin = String(process.env.QSYS_SUPER_ADMIN_PIN || "").trim() || DEFAULT_SUPER_ADMIN_PIN;
+  if (requestedFullName && /^\d{6}$/.test(requestedPin)) {
+    const existing = db.prepare(
+      `SELECT userId FROM users WHERE upper(roleId)='SUPER_ADMIN' ORDER BY createdAt ASC LIMIT 1`
+    ).get();
+    const pinHash = bcrypt.hashSync(requestedPin, 10);
+    if (existing?.userId) {
+      db.prepare(
+        `UPDATE users
+         SET fullName=?, pinHash=?, roleId='SUPER_ADMIN', isActive=1, updatedAt=?
+         WHERE userId=?`
+      ).run(requestedFullName, pinHash, now, existing.userId);
+    } else {
+      db.prepare(
+        `INSERT INTO users(userId, fullName, pinHash, roleId, isActive, createdAt, updatedAt)
+         VALUES(?,?,?,?,1,?,?)`
+      ).run(randomUUID(), requestedFullName, pinHash, "SUPER_ADMIN", now, now);
+    }
+  }
+
   // Ensure branch_config row exists (id=1), safe defaults
   const bc = db.prepare(`SELECT id FROM branch_config WHERE id=1`).get();
   if (!bc) {
     db.prepare(
       `INSERT INTO branch_config(id, branchCode, branchName, timezone, createdAt, updatedAt)
        VALUES(1, ?, ?, 'Asia/Manila', ?, ?)`
-    ).run("DEV", "DEV Branch", now, now);
+    ).run(BRANCH_CODE_PLACEHOLDER, "Unassigned Branch", now, now);
   }
 }
 
@@ -636,11 +868,16 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
 
   // Ensure required tables exist even if schema.sql is older
   ensureAdminSchema(db);
+  ensureActivationState(db);
+  ensureActivationTokenTables(db);
 
   // ✅ Ensure optional note column exists for override calls
   ensureColumn(db, "queue_items", "calledNote", "TEXT");
   // ✅ Track re-calls after the initial call
   ensureColumn(db, "queue_items", "next_calls", "TEXT");
+  ensureColumn(db, "installation_state", "licenseIssuedAt", "INTEGER");
+  ensureColumn(db, "installation_state", "licenseExpiresAt", "INTEGER");
+  ensureColumn(db, "installation_state", "lastRenewedAt", "INTEGER");
 
   // Priority numbering is handled via queueNum with independent counters per bucket
   // for Regular vs Priority (Priority = priorityType != 'NONE').
@@ -799,6 +1036,30 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   app.use(express.json({ limit: "256kb" }));
   app.use(express.urlencoded({ extended: true, limit: "256kb" }));
 
+  app.use((req, res, next) => {
+    if (!isActivationEnforced()) return next();
+    try {
+      const st = refreshActivationState();
+      const status = String(st.status || "").toUpperCase();
+      if (status === ACTIVATION_STATUS_ACTIVATED) return next();
+      if (isActivationBypassRequest(req)) return next();
+      if (String(req.path || "").startsWith("/api/")) {
+        const expired = status === ACTIVATION_STATUS_EXPIRED;
+        return res.status(423).json({
+          ok: false,
+          error: expired
+            ? "Installation license has expired. Provider renewal is required."
+            : "Installation is not activated. Provider activation is required.",
+          code: expired ? "INSTALLATION_LICENSE_EXPIRED" : "INSTALLATION_NOT_ACTIVATED",
+        });
+      }
+      return res.redirect(302, pathWithBase("/provider-setup"));
+    } catch (e) {
+      console.error("[activation/middleware]", e);
+      return res.status(500).json({ ok: false, error: "Activation state error." });
+    }
+  });
+
   // ✅ Prevent direct static access entirely (SECURITY ADDON)
   // Allow ONLY:
   // - /static/media/*  (display videos)
@@ -824,11 +1085,14 @@ app.use("/static", (req, res, next) => {
   // ✅ Allow ALL JS under /static/js/*
   if (p.startsWith("/js/")) return next();
 
-  // ✅ Allow guest ticket page (if used)
+// ✅ Allow guest ticket page (if used)
 if (p === "/ticket.html") return next();
 
 // ✅ Allow Electron launcher page
 if (p === "/launcher.html") return next();
+if (p === "/provider-setup.html") return next();
+if (p === "/super-admin-login.html") return next();
+if (p === "/super-admin-recover.html") return next();
 
 return res.status(404).send("Not found");
 
@@ -865,12 +1129,98 @@ app.get("/static/js/:file", (req, res) => {
   function getBranchName() {
     return String(getBranchConfigSafe().branchName || "").trim();
   }
+  function getDbSetting(key) {
+    try {
+      const row = db.prepare(`SELECT value FROM app_settings WHERE key=? LIMIT 1`).get(String(key || ""));
+      return row ? String(row.value || "") : "";
+    } catch {
+      return "";
+    }
+  }
+  function setDbSetting(key, value) {
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO app_settings(key, value, updatedAt)
+       VALUES(?,?,?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updatedAt=excluded.updatedAt`
+    ).run(String(key || ""), String(value || ""), now);
+  }
+  function isFeatureProvisioned(featureKey) {
+    return getDbSetting(`feature.${String(featureKey || "").trim()}`) === "1";
+  }
+  function setFeatureProvisioned(featureKey, enabled) {
+    setDbSetting(`feature.${String(featureKey || "").trim()}`, enabled ? "1" : "0");
+  }
+  function getProvisionedFeatureMap(keys) {
+    const map = {};
+    for (const key of keys || []) map[String(key)] = isFeatureProvisioned(key);
+    return map;
+  }
+  function getActivationState() {
+    ensureActivationState(db);
+    const row = db.prepare(
+      `SELECT status, installId, activatedAt, activatedBy, activationLicenseId, licenseIssuedAt, licenseExpiresAt,
+              lastRenewedAt, activationBranchCode, activationTokenHash, activationPayload, updatedAt
+       FROM installation_state WHERE id=1`
+    ).get();
+    return row || {
+      status: ACTIVATION_STATUS_UNACTIVATED,
+      installId: "",
+      activatedAt: null,
+      activatedBy: null,
+      activationLicenseId: null,
+      licenseIssuedAt: null,
+      licenseExpiresAt: null,
+      lastRenewedAt: null,
+      activationBranchCode: null,
+      activationTokenHash: null,
+      activationPayload: null,
+      updatedAt: Date.now(),
+    };
+  }
+  function refreshActivationState() {
+    const st = getActivationState();
+    const status = String(st.status || "").toUpperCase();
+    if (status !== ACTIVATION_STATUS_ACTIVATED) return st;
+    const exp = Number(st.licenseExpiresAt || 0);
+    if (!Number.isFinite(exp) || exp <= 0 || Date.now() <= exp) return st;
+    const now = Date.now();
+    db.prepare(`UPDATE installation_state SET status=?, updatedAt=? WHERE id=1`).run(ACTIVATION_STATUS_EXPIRED, now);
+    return { ...st, status: ACTIVATION_STATUS_EXPIRED, updatedAt: now };
+  }
+  function isActivationEnforced() {
+    return String(process.env.QSYS_REQUIRE_ACTIVATION || "").trim() === "1";
+  }
+  function getVisibleBranchCode() {
+    const code = String(getBranchCode() || "").trim().toUpperCase();
+    const status = String(refreshActivationState()?.status || "").toUpperCase();
+    if (![ACTIVATION_STATUS_ACTIVATED, ACTIVATION_STATUS_EXPIRED].includes(status)) return "";
+    if (isReservedBranchCode(code)) return "";
+    return code;
+  }
+  function isActivationBypassRequest(req) {
+    const p = stripBasePathFromUrl(String(req.path || req.originalUrl || ""));
+    if (p === "/provider-setup") return true;
+    if (p === "/app-boot.js") return true;
+    if (p === "/api/provider/install-info") return true;
+    if (p === "/api/provider/activate") return true;
+    if (p === "/api/provider/renew") return true;
+    if (p === "/api/health") return true;
+    if (p === "/api/public/business-date") return true;
+    if (p === "/favicon.ico") return true;
+    if (p === "/static/provider-setup.html") return true;
+    if (p === "/static/js/provider-setup.js") return true;
+    return false;
+  }
 
   /* ===================== SECURITY ADDON: auth + perms ===================== */
 
   function getSessionUser(req) {
     const url = stripBasePathFromUrl(String(req.path || req.originalUrl || ""));
     // Session separation: Admin and Staff must never overwrite each other
+    if (url.startsWith("/api/super-admin/") || url.startsWith("/super-admin")) {
+      return (req.session && req.session.adminUser) ? req.session.adminUser : null;
+    }
     if (url.startsWith("/api/admin/") || url.startsWith("/admin")) {
       return (req.session && req.session.adminUser) ? req.session.adminUser : null;
     }
@@ -964,6 +1314,7 @@ app.get("/static/js/:file", (req, res) => {
   function hasPerm(u, permKey) {
     if (!u) return false;
     const roleId = getRoleId(u);
+    if (roleId === "SUPER_ADMIN") return true;
     const row = db
       .prepare(
         `
@@ -998,6 +1349,25 @@ function requireStaffApi(req, res, next) {
     };
   }
 
+  function isSuperAdmin(user) {
+    return String(user?.roleId || "").toUpperCase() === "SUPER_ADMIN";
+  }
+
+  function requireSuperAdminApi(req, res, next) {
+    const u = getSessionUser(req);
+    if (!u) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    if (!isSuperAdmin(u)) return res.status(403).json({ ok: false, error: "Super admin only" });
+    next();
+  }
+
+  function requireProvisionedFeatureApi(...featureKeys) {
+    const keys = (featureKeys || []).map((k) => String(k || "").trim()).filter(Boolean);
+    return (_req, res, next) => {
+      if (keys.some((key) => isFeatureProvisioned(key))) return next();
+      return res.status(404).json({ ok: false, error: "Not found" });
+    };
+  }
+
   // For PAGE routes (redirect instead of JSON)
 function requirePermPage(permKey) {
   return (req, res, next) => {
@@ -1019,7 +1389,14 @@ function requireAdminPage(req, res, next) {
   if (!u) return res.redirect(pathWithBase("/admin-login"));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (roleId !== "ADMIN") return res.redirect(pathWithBase("/staff")); // or res.status(403).send("Forbidden");
+  if (!["ADMIN", "SUPER_ADMIN"].includes(roleId)) return res.redirect(pathWithBase("/staff")); // or res.status(403).send("Forbidden");
+  next();
+}
+
+function requireSuperAdminPage(req, res, next) {
+  const u = getSessionUser(req);
+  if (!u) return res.redirect(pathWithBase("/super-admin-login"));
+  if (!isSuperAdmin(u)) return res.status(403).send("Forbidden");
   next();
 }
 
@@ -1052,6 +1429,20 @@ function requireAdminPage(req, res, next) {
     const u = getSessionUser(req);
     if (!u) return null;
     return { userId: u.userId, fullName: u.fullName, roleId: getRoleId(u) };
+  }
+
+  function setStaffUndo(req, payload) {
+    if (!req || !req.session) return;
+    req.session.staffUndo = payload || null;
+  }
+
+  function getStaffUndo(req) {
+    return req?.session?.staffUndo || null;
+  }
+
+  function clearStaffUndo(req) {
+    if (!req || !req.session) return;
+    delete req.session.staffUndo;
   }
 
   /* ---------- AUTH: login/me/logout (SESSION SEPARATED: staff vs admin) ---------- */
@@ -1131,6 +1522,38 @@ function requireAdminPage(req, res, next) {
     }
   });
 
+  app.post("/api/super-admin/auth/login", rateLimitAuthLogin, express.json(), async (req, res) => {
+    try {
+      const fullName = String(req.body.fullName || "").trim();
+      const pin = String(req.body.pin || "").trim();
+      if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
+
+      const u = db.prepare(`
+        SELECT userId, fullName, pinHash, roleId, isActive
+        FROM users
+        WHERE lower(fullName) = lower(?)
+        LIMIT 1
+      `).get(fullName);
+
+      if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
+      const role = String(u.roleId || "").toUpperCase();
+      if (role !== "SUPER_ADMIN") return res.status(403).json({ ok: false, error: "Super admin only" });
+
+      const ok = bcrypt.compareSync(pin, u.pinHash);
+      if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
+
+      const now = Date.now();
+      db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
+
+      const sessUser = { userId: u.userId, fullName: u.fullName, roleId: role };
+      await finalizeLoginSession(req, "admin", sessUser);
+      return res.json({ ok: true, scope: "super-admin", user: sessUser });
+    } catch (e) {
+      console.error("[super-admin/auth/login]", e);
+      return res.status(500).json({ ok: false, error: "Server error" });
+    }
+  });
+
   // Legacy login (kept for backward compatibility)
   // - ADMIN -> admin session
   // - STAFF/SUPERVISOR -> staff session
@@ -1181,6 +1604,21 @@ function requireAdminPage(req, res, next) {
     res.json({ ok: true, user: u, permissions: perms });
   });
 
+  app.get("/api/admin/feature-flags", requireAuth, (_req, res) => {
+    const keys = SUPER_ADMIN_FEATURE_CATALOG.map((item) => item.key);
+    return res.json({ ok: true, features: getProvisionedFeatureMap(keys) });
+  });
+
+  app.get("/api/staff/feature-flags", requireAuth, (_req, res) => {
+    const keys = ["queue.recovery_tools", "queue.reopen_completed", "queue.wait_forecast"];
+    return res.json({ ok: true, features: getProvisionedFeatureMap(keys) });
+  });
+
+  app.get("/api/super-admin/auth/me", requireSuperAdminApi, (req, res) => {
+    const u = getSessionUser(req);
+    res.json({ ok: true, user: u });
+  });
+
   // Legacy /api/auth/me kept (uses getSessionUser routing by URL)
   app.get("/api/auth/me", requireAuth, (req, res) => {
     const u = getSessionUser(req);
@@ -1196,6 +1634,12 @@ function requireAdminPage(req, res, next) {
 
   app.post("/api/admin/auth/logout", (req, res) => {
     try { clearSessionUser(req, "admin"); } catch {}
+    res.json({ ok: true });
+  });
+
+  app.post("/api/super-admin/auth/logout", (req, res) => {
+    try { clearSessionUser(req, "admin"); } catch {}
+    try { clearSessionUser(req, "staff"); } catch {}
     res.json({ ok: true });
   });
 
@@ -1225,6 +1669,53 @@ function requireAdminPage(req, res, next) {
     } catch (e) {
       console.error("[auth/supervisors]", e);
       res.status(500).json({ ok: false, error: "Server error" });
+    }
+  });
+
+  app.post("/api/internal/super-admin/recover", express.json(), (req, res) => {
+    try {
+      const remote = String(req.ip || req.socket?.remoteAddress || "");
+      if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(remote)) {
+        return res.status(403).json({ ok: false, error: "Loopback only" });
+      }
+      const fullName = String(process.env.QSYS_SUPER_ADMIN_USER || "").trim() || DEFAULT_SUPER_ADMIN_USER;
+      const pin = String(process.env.QSYS_SUPER_ADMIN_PIN || "").trim() || DEFAULT_SUPER_ADMIN_PIN;
+      if (!fullName || !/^\d{6}$/.test(pin)) {
+        return res.status(500).json({ ok: false, error: "Recovery credentials are not configured." });
+      }
+
+      const now = Date.now();
+      const pinHash = bcrypt.hashSync(pin, 10);
+      const existing = db.prepare(
+        `SELECT userId FROM users WHERE upper(roleId)='SUPER_ADMIN' ORDER BY createdAt ASC LIMIT 1`
+      ).get();
+
+      let userId = "";
+      if (existing?.userId) {
+        userId = String(existing.userId || "");
+        db.prepare(
+          `UPDATE users
+           SET fullName=?, pinHash=?, roleId='SUPER_ADMIN', isActive=1, updatedAt=?
+           WHERE userId=?`
+        ).run(fullName, pinHash, now, userId);
+      } else {
+        userId = randomUUID();
+        db.prepare(
+          `INSERT INTO users(userId, fullName, pinHash, roleId, isActive, createdAt, updatedAt)
+           VALUES(?,?,?,?,1,?,?)`
+        ).run(userId, fullName, pinHash, "SUPER_ADMIN", now, now);
+      }
+
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "SUPER_ADMIN_RECOVERY_RESET",
+        JSON.stringify({ actor: "LOCAL_RECOVERY", userId, fullName, roleId: "SUPER_ADMIN" }),
+        now
+      );
+
+      return res.json({ ok: true, user: { userId, fullName, roleId: "SUPER_ADMIN" } });
+    } catch (e) {
+      console.error("[internal/super-admin/recover]", e);
+      return res.status(500).json({ ok: false, error: "Recovery reset failed." });
     }
   });
 
@@ -1467,6 +1958,26 @@ app.get("/admin-login", (_, res) =>
   res.sendFile(path.join(__dirname, "static", "admin-login.html"))
 );
 
+app.get("/super-admin-login", (_req, res) =>
+  res.sendFile(path.join(__dirname, "static", "super-admin-login.html"))
+);
+
+app.get("/super-admin-recover", (_req, res) =>
+  res.sendFile(path.join(__dirname, "static", "super-admin-recover.html"))
+);
+
+app.get("/provider-setup", (_req, res) =>
+  res.sendFile(path.join(__dirname, "static", "provider-setup.html"))
+);
+
+app.get("/super-admin", requireSuperAdminPage, (_req, res) =>
+  res.sendFile(path.join(__dirname, "static", "super-admin.html"))
+);
+
+app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
+  res.sendFile(path.join(__dirname, "static", "internal-tools.html"))
+);
+
 
   app.get("/staff-login", (_, res) =>
   res.sendFile(path.join(__dirname, "static", "staff-login.html"))
@@ -1529,10 +2040,13 @@ app.get("/admin-login", (_, res) =>
     try {
       const cur = ensureBusinessDate(db);
       const cfg = getBranchConfigSafe();
+      const st = refreshActivationState();
+      const visibleCode = getVisibleBranchCode();
       res.json({
         ok: true,
-        branchCode: getBranchCode(),
-        branchName: String(cfg.branchName || "").trim(),
+        activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+        branchCode: visibleCode || getBranchCode(),
+        branchName: visibleCode ? String(cfg.branchName || "").trim() : String(cfg.branchName || "").trim(),
         timezone: String(cfg.timezone || "Asia/Manila"),
         currentBusinessDate: cur,
         todayManila: getTodayManila(),
@@ -1540,6 +2054,186 @@ app.get("/admin-login", (_, res) =>
     } catch (e) {
       console.error("[public/business-date]", e);
       res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.get("/api/provider/install-info", (_req, res) => {
+    try {
+      const st = refreshActivationState();
+      const installId = String(st.installId || getDbSetting("install.id") || "").trim();
+      const expiresAt = Number(st.licenseExpiresAt || 0) || null;
+      const daysRemaining = expiresAt ? Math.floor((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)) : null;
+      const visibleCode = getVisibleBranchCode();
+      return res.json({
+        ok: true,
+        status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+        installId,
+        branchCode: visibleCode,
+        branchName: visibleCode ? getBranchName() : "",
+        activatedAt: st.activatedAt || null,
+        activatedBy: st.activatedBy || null,
+        activationLicenseId: st.activationLicenseId || null,
+        licenseIssuedAt: Number(st.licenseIssuedAt || 0) || null,
+        licenseExpiresAt: expiresAt,
+        daysRemaining,
+        activationPublicKeyLoaded: !!getActivationVerifier(baseDir),
+        activationEnforced: isActivationEnforced(),
+      });
+    } catch (e) {
+      console.error("[provider/install-info]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/provider/activate", rateLimitAuthLogin, express.json(), (req, res) => {
+    try {
+      const st = refreshActivationState();
+      const currentStatus = String(st.status || "").toUpperCase();
+      if (currentStatus === ACTIVATION_STATUS_ACTIVATED) {
+        return res.status(409).json({ ok: false, error: "Installation is already activated. Use renewal instead." });
+      }
+      if (currentStatus === ACTIVATION_STATUS_EXPIRED) {
+        return res.status(409).json({ ok: false, error: "Installation is expired. Use renewal instead." });
+      }
+
+      const token = String(req.body?.token || "").trim();
+      if (!token) return res.status(400).json({ ok: false, error: "token is required." });
+
+      const installId = String(st.installId || getDbSetting("install.id") || "").trim();
+      const verified = verifyActivationToken(token, { baseDir, expectedInstallId: installId });
+      const payload = verified.payload;
+      const now = Date.now();
+      const nextBranchCode = String(payload.branchCode || "").trim().toUpperCase();
+      const nextBranchName = String(payload.branchName || "").trim() || `${nextBranchCode} Branch`;
+
+      db.transaction(() => {
+        db.prepare(
+          `UPDATE branch_config SET branchCode=?, branchName=?, updatedAt=? WHERE id=1`
+        ).run(nextBranchCode, nextBranchName, now);
+
+        db.prepare(
+          `UPDATE installation_state
+           SET status=?, installId=?, activatedAt=?, activatedBy=?, activationLicenseId=?, licenseIssuedAt=?,
+               licenseExpiresAt=?, lastRenewedAt=?, activationBranchCode=?, activationTokenHash=?, activationPayload=?, updatedAt=?
+           WHERE id=1`
+        ).run(
+          ACTIVATION_STATUS_ACTIVATED,
+          installId,
+          now,
+          String(payload.issuer || "provider").trim() || "provider",
+          String(payload.licenseId || "").trim(),
+          Number(payload.issuedAt || 0),
+          Number(payload.expiresAt || 0),
+          now,
+          nextBranchCode,
+          verified.tokenHash,
+          JSON.stringify(payload),
+          now
+        );
+        db.prepare(
+          `INSERT INTO activation_token_usage(tokenHash, installId, branchCode, licenseId, issuer, action, consumedAt)
+           VALUES(?,?,?,?,?,?,?)`
+        ).run(
+          verified.tokenHash,
+          installId,
+          nextBranchCode,
+          String(payload.licenseId || "").trim(),
+          String(payload.issuer || "provider").trim() || "provider",
+          "ACTIVATE",
+          now
+        );
+      })();
+
+      return res.json({
+        ok: true,
+        status: ACTIVATION_STATUS_ACTIVATED,
+        installId,
+        branchCode: nextBranchCode,
+        branchName: nextBranchName,
+        activatedAt: now,
+        licenseIssuedAt: Number(payload.issuedAt || 0),
+        licenseExpiresAt: Number(payload.expiresAt || 0),
+      });
+    } catch (e) {
+      if (e && typeof e.http === "number") {
+        return res.status(e.http).json({ ok: false, error: e.message || "Activation failed." });
+      }
+      console.error("[provider/activate]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/provider/renew", rateLimitAuthLogin, express.json(), (req, res) => {
+    try {
+      const st = refreshActivationState();
+      const currentStatus = String(st.status || "").toUpperCase();
+      if (![ACTIVATION_STATUS_ACTIVATED, ACTIVATION_STATUS_EXPIRED].includes(currentStatus)) {
+        return res.status(409).json({ ok: false, error: "Installation is not yet activated. Use initial activation first." });
+      }
+
+      const token = String(req.body?.token || "").trim();
+      if (!token) return res.status(400).json({ ok: false, error: "token is required." });
+
+      const installId = String(st.installId || getDbSetting("install.id") || "").trim();
+      const verified = verifyActivationToken(token, { baseDir, expectedInstallId: installId });
+      const payload = verified.payload;
+      const renewalCode = String(payload.branchCode || "").trim().toUpperCase();
+      const currentCode = String(getBranchCode() || "").trim().toUpperCase();
+      if (!currentCode || isReservedBranchCode(currentCode)) {
+        return res.status(409).json({ ok: false, error: "Current branch is not valid for renewal. Use initial activation." });
+      }
+      if (renewalCode !== currentCode) {
+        return res.status(400).json({ ok: false, error: `Renewal token branchCode mismatch. Expected '${currentCode}', got '${renewalCode}'.` });
+      }
+
+      const now = Date.now();
+      db.prepare(
+        `UPDATE installation_state
+         SET status=?, installId=?, activatedBy=?, activationLicenseId=?, licenseIssuedAt=?, licenseExpiresAt=?,
+             lastRenewedAt=?, activationBranchCode=?, activationTokenHash=?, activationPayload=?, updatedAt=?
+         WHERE id=1`
+      ).run(
+        ACTIVATION_STATUS_ACTIVATED,
+        installId,
+        String(payload.issuer || "provider").trim() || "provider",
+        String(payload.licenseId || "").trim(),
+        Number(payload.issuedAt || 0),
+        Number(payload.expiresAt || 0),
+        now,
+        currentCode,
+        verified.tokenHash,
+        JSON.stringify(payload),
+        now
+      );
+      db.prepare(
+        `INSERT INTO activation_token_usage(tokenHash, installId, branchCode, licenseId, issuer, action, consumedAt)
+         VALUES(?,?,?,?,?,?,?)`
+      ).run(
+        verified.tokenHash,
+        installId,
+        currentCode,
+        String(payload.licenseId || "").trim(),
+        String(payload.issuer || "provider").trim() || "provider",
+        "RENEW",
+        now
+      );
+
+      return res.json({
+        ok: true,
+        status: ACTIVATION_STATUS_ACTIVATED,
+        installId,
+        branchCode: currentCode,
+        branchName: getBranchName(),
+        renewedAt: now,
+        licenseIssuedAt: Number(payload.issuedAt || 0),
+        licenseExpiresAt: Number(payload.expiresAt || 0),
+      });
+    } catch (e) {
+      if (e && typeof e.http === "number") {
+        return res.status(e.http).json({ ok: false, error: e.message || "Renewal failed." });
+      }
+      console.error("[provider/renew]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
     }
   });
 
@@ -2036,6 +2730,52 @@ app.post("/api/admin/display/devices/revoke-all", requirePerm("SETTINGS_MANAGE")
   } catch (e) {
     console.error("[admin/display/devices/revoke-all]", e);
     return res.status(500).json({ ok: false, error: "Failed to revoke display devices" });
+  }
+});
+
+app.get("/api/super-admin/features", requireSuperAdminApi, (_req, res) => {
+  try {
+    const features = SUPER_ADMIN_FEATURE_CATALOG.map((item) => ({
+      ...item,
+      enabled: isFeatureProvisioned(item.key),
+    }));
+    res.json({ ok: true, features });
+  } catch (e) {
+    console.error("[super-admin/features:get]", e);
+    res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/super-admin/features", requireSuperAdminApi, express.json(), (req, res) => {
+  try {
+    const featureMap = req.body?.features;
+    if (!featureMap || typeof featureMap !== "object") {
+      return res.status(400).json({ ok: false, error: "features object is required." });
+    }
+
+    const allowed = new Set(SUPER_ADMIN_FEATURE_CATALOG.map((item) => item.key));
+    const now = Date.now();
+    const changes = [];
+    for (const [key, raw] of Object.entries(featureMap)) {
+      if (!allowed.has(key)) continue;
+      const enabled = !!raw;
+      setFeatureProvisioned(key, enabled);
+      changes.push({ key, enabled });
+    }
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "SUPER_ADMIN_FEATURES_UPDATE",
+      JSON.stringify({ actor: actorFromReq(req), changes }),
+      now
+    );
+
+    const features = SUPER_ADMIN_FEATURE_CATALOG.map((item) => ({
+      ...item,
+      enabled: isFeatureProvisioned(item.key),
+    }));
+    res.json({ ok: true, features });
+  } catch (e) {
+    console.error("[super-admin/features:post]", e);
+    res.status(500).json({ ok: false, error: "Server error." });
   }
 });
 
@@ -2687,18 +3427,638 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
+  function hashLicenseToken(token) {
+    return createHash("sha256").update(String(token || "").trim()).digest("hex");
+  }
+
+  function decodeActivationPayloadUnsafe(token) {
+    try {
+      const raw = String(token || "").trim();
+      const parts = raw.split(".");
+      if (parts.length < 2) return {};
+      return JSON.parse(base64UrlDecodeToBuffer(parts[1]).toString("utf8"));
+    } catch {
+      return {};
+    }
+  }
+
+  function findActivationTokenRevocation(tokenHash) {
+    try {
+      return db.prepare(`SELECT * FROM activation_token_revocations WHERE tokenHash=? LIMIT 1`).get(String(tokenHash || ""));
+    } catch {
+      return null;
+    }
+  }
+
+  function revokeActivationTokenHash({ tokenHash, installId, branchCode, licenseId, reason, revokedBy, revokedAt }) {
+    db.prepare(
+      `INSERT INTO activation_token_revocations(tokenHash, installId, branchCode, licenseId, reason, revokedBy, revokedAt)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(tokenHash) DO UPDATE SET
+         installId=excluded.installId,
+         branchCode=excluded.branchCode,
+         licenseId=excluded.licenseId,
+         reason=excluded.reason,
+         revokedBy=excluded.revokedBy,
+         revokedAt=excluded.revokedAt`
+    ).run(
+      String(tokenHash || "").trim(),
+      String(installId || "").trim(),
+      String(branchCode || "").trim().toUpperCase(),
+      String(licenseId || "").trim(),
+      String(reason || "").trim(),
+      String(revokedBy || "").trim(),
+      Number(revokedAt || Date.now()) || Date.now()
+    );
+  }
+
+  function listActivationTokenEvents(limit = 12) {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 12));
+    const usageRows = db.prepare(
+      `SELECT 'usage' AS eventType, tokenHash, installId, branchCode, licenseId, issuer, action, consumedAt AS eventAt
+       FROM activation_token_usage
+       ORDER BY consumedAt DESC
+       LIMIT ?`
+    ).all(safeLimit);
+    const revokedRows = db.prepare(
+      `SELECT 'revocation' AS eventType, tokenHash, installId, branchCode, licenseId, revokedBy AS issuer, reason AS action, revokedAt AS eventAt
+       FROM activation_token_revocations
+       ORDER BY revokedAt DESC
+       LIMIT ?`
+    ).all(safeLimit);
+    return [...usageRows, ...revokedRows]
+      .sort((a, b) => Number(b.eventAt || 0) - Number(a.eventAt || 0))
+      .slice(0, safeLimit);
+  }
+
+  function getLicenseAuditHistory(limit = 20) {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+    const actions = [
+      "INSTALL_ACTIVATED",
+      "INSTALL_RENEWED",
+      "INSTALL_TRANSFER_RELEASED",
+      "INSTALL_TOKEN_REVOKED",
+      "SUPER_ADMIN_RECOVERY_RESET",
+    ];
+    const placeholders = actions.map(() => "?").join(",");
+    return db.prepare(
+      `SELECT id, action, payload, createdAt
+       FROM audit_logs
+       WHERE action IN (${placeholders})
+       ORDER BY createdAt DESC
+       LIMIT ?`
+    ).all(...actions, safeLimit);
+  }
+
+  function buildLicenseReminder(st) {
+    const expiresAt = Number(st?.licenseExpiresAt || 0) || 0;
+    if (!expiresAt) return { level: "unknown", daysRemaining: null, message: "No license expiration is recorded." };
+    const msRemaining = expiresAt - Date.now();
+    const daysRemaining = Math.floor(msRemaining / (24 * 60 * 60 * 1000));
+    if (msRemaining < 0) {
+      return { level: "expired", daysRemaining, message: `License expired ${Math.abs(daysRemaining)} day(s) ago.` };
+    }
+    if (daysRemaining <= 7) {
+      return { level: "urgent", daysRemaining, message: `License expires in ${daysRemaining} day(s). Renewal is recommended now.` };
+    }
+    if (daysRemaining <= 30) {
+      return { level: "warning", daysRemaining, message: `License expires in ${daysRemaining} day(s).` };
+    }
+    return { level: "ok", daysRemaining, message: `License valid for ${daysRemaining} more day(s).` };
+  }
+
+  function getBackupsDir() {
+    return path.join(baseDir, "backups");
+  }
+
+  function listBackupFiles() {
+    const backupsDir = getBackupsDir();
+    if (!fs.existsSync(backupsDir)) return [];
+    return fs
+      .readdirSync(backupsDir)
+      .filter((f) => /^qsys-backup-.*\.db$/i.test(f))
+      .map((f) => {
+        const full = path.join(backupsDir, f);
+        const stat = fs.statSync(full);
+        return { name: f, full, mtime: Number(stat.mtimeMs || 0), sizeBytes: Number(stat.size || 0) };
+      })
+      .sort((a, b) => Number(b.mtime || 0) - Number(a.mtime || 0));
+  }
+
+  function getSupportBundlesDir() {
+    return path.join(baseDir, "support-bundles");
+  }
+
+  function getAutoBackupConfig() {
+    return {
+      enabled: getAppSetting("ops.autoBackup.enabled") === "1",
+      intervalHours: Math.max(1, Math.min(24 * 30, Number(getAppSetting("ops.autoBackup.intervalHours") || 24) || 24)),
+      retentionCount: Math.max(1, Math.min(100, Number(getAppSetting("ops.autoBackup.retentionCount") || 10) || 10)),
+    };
+  }
+
+  function getAutoBackupState() {
+    return safeParseJson(getAppSetting("ops.autoBackup.lastResult"), null);
+  }
+
+  function saveAutoBackupState(payload) {
+    setAppSetting("ops.autoBackup.lastResult", JSON.stringify(payload || {}));
+  }
+
+  function getLastRestoreState() {
+    return safeParseJson(getAppSetting("ops.lastRestore"), null);
+  }
+
+  function saveLastRestoreState(payload) {
+    setAppSetting("ops.lastRestore", JSON.stringify(payload || {}));
+  }
+
+  function getIntegrityCheckState() {
+    return safeParseJson(getAppSetting("ops.integrityCheck.lastResult"), null);
+  }
+
+  function saveIntegrityCheckState(payload) {
+    setAppSetting("ops.integrityCheck.lastResult", JSON.stringify(payload || {}));
+  }
+
+  function getSelfTestState() {
+    return safeParseJson(getAppSetting("ops.selfTest.lastResult"), null);
+  }
+
+  function saveSelfTestState(payload) {
+    setAppSetting("ops.selfTest.lastResult", JSON.stringify(payload || {}));
+  }
+
+  function pruneBackupFiles({ keepCount, actor = "SYSTEM", trigger = "system" } = {}) {
+    const files = listBackupFiles();
+    const retentionCount = Math.max(1, Math.min(100, Number(keepCount) || 10));
+    const stale = files.slice(retentionCount);
+    for (const file of stale) {
+      try { fs.unlinkSync(file.full); } catch {}
+    }
+    if (stale.length) {
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "OPS_AUTO_BACKUP_PRUNE",
+        JSON.stringify({ actor, trigger, retentionCount, deleted: stale.map((f) => ({ name: f.name, mtime: f.mtime })) }),
+        Date.now()
+      );
+    }
+    return { retentionCount, deletedCount: stale.length };
+  }
+
+  let autoBackupInProgress = false;
+  function maybeRunAutoBackup(trigger = "timer") {
+    if (autoBackupInProgress) return { ok: false, skipped: true, reason: "in_progress" };
+    if (!isFeatureProvisioned("operations.auto_backup")) return { ok: false, skipped: true, reason: "feature_disabled" };
+    const cfg = getAutoBackupConfig();
+    if (!cfg.enabled && trigger !== "manual") return { ok: false, skipped: true, reason: "config_disabled" };
+
+    const last = getAutoBackupState();
+    const now = Date.now();
+    if (
+      trigger !== "manual" &&
+      last?.lastRunAt &&
+      Number(last.lastRunAt) + cfg.intervalHours * 60 * 60 * 1000 > now
+    ) {
+      return { ok: false, skipped: true, reason: "not_due", nextDueAt: Number(last.lastRunAt) + cfg.intervalHours * 60 * 60 * 1000 };
+    }
+
+    autoBackupInProgress = true;
+    try {
+      const snap = createInternalDbBackup();
+      const cleanup = pruneBackupFiles({ keepCount: cfg.retentionCount, actor: "SYSTEM", trigger });
+      const payload = {
+        ok: true,
+        trigger,
+        lastRunAt: now,
+        fileName: snap.fileName,
+        filePath: snap.filePath,
+        sizeBytes: snap.sizeBytes,
+        retentionCount: cleanup.retentionCount,
+        prunedCount: cleanup.deletedCount,
+      };
+      saveAutoBackupState(payload);
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "OPS_AUTO_BACKUP_RUN",
+        JSON.stringify({ actor: "SYSTEM", ...payload }),
+        now
+      );
+      return payload;
+    } catch (e) {
+      const payload = { ok: false, trigger, lastRunAt: now, error: String(e?.message || e || "Auto backup failed") };
+      saveAutoBackupState(payload);
+      throw e;
+    } finally {
+      autoBackupInProgress = false;
+    }
+  }
+
+  function runIntegrityCheck(trigger = "manual", actor = "SYSTEM") {
+    const checkedAt = Date.now();
+    const details = db.prepare("PRAGMA quick_check").all().map((row) => String(row.quick_check || row.integrity_check || Object.values(row || {})[0] || ""));
+    const payload = {
+      ok: details.length ? details.every((v) => String(v).toLowerCase() === "ok") : true,
+      trigger,
+      actor,
+      checkedAt,
+      details,
+    };
+    saveIntegrityCheckState(payload);
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "OPS_INTEGRITY_CHECK_RUN",
+      JSON.stringify(payload),
+      checkedAt
+    );
+    return payload;
+  }
+
+  function runStartupSelfTest(trigger = "startup", actor = "SYSTEM") {
+    const checkedAt = Date.now();
+    const checks = [];
+    const addCheck = (key, fn) => {
+      try {
+        checks.push({ key, status: "PASS", message: String(fn() || "") });
+      } catch (e) {
+        checks.push({ key, status: "FAIL", message: String(e?.message || e || "Check failed") });
+      }
+    };
+    addCheck("database_access", () => {
+      db.prepare("SELECT 1 AS ok").get();
+      return "SQLite connection is available.";
+    });
+    addCheck("business_date", () => `Business date is ${ensureBusinessDate(db)}.`);
+    addCheck("activation_verifier", () => getActivationVerifier(baseDir) ? "Activation public key is available." : "Activation public key is not configured.");
+    addCheck("backup_dir", () => {
+      const dir = getBackupsDir();
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      return `Backup directory ready at ${dir}.`;
+    });
+    const payload = {
+      ok: checks.every((check) => check.status === "PASS"),
+      trigger,
+      actor,
+      checkedAt,
+      checks,
+    };
+    saveSelfTestState(payload);
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "OPS_SELF_TEST_RUN",
+      JSON.stringify(payload),
+      checkedAt
+    );
+    return payload;
+  }
+
+  function getQueueRecoveryRows({ branchCode, businessDate, groupCode, limit = 10 }) {
+    const params = [branchCode, businessDate];
+    let sql = `
+      SELECT id, groupCode, queueNum, name, pax, status, priorityType,
+             createdAtLocal, calledAt, next_calls, calledNote, seatedAt, skippedAt
+      FROM queue_items
+      WHERE branchCode = ?
+        AND businessDate = ?
+        AND status IN ('SEATED', 'SKIPPED')
+    `;
+    if (groupCode) {
+      sql += ` AND groupCode = ?`;
+      params.push(groupCode);
+    }
+    sql += `
+      ORDER BY COALESCE(seatedAt, skippedAt, calledAt, createdAtLocal) DESC, queueNum DESC
+      LIMIT ?
+    `;
+    params.push(Math.max(1, Math.min(25, Number(limit) || 10)));
+    return db.prepare(sql).all(...params);
+  }
+
+  function getQueueWaitForecast({ branchCode, businessDate, groupCode }) {
+    const avgCalledRow = db.prepare(
+      `SELECT AVG(calledAt - createdAtLocal) AS avgMs, COUNT(*) AS sampleCount
+       FROM queue_items
+       WHERE branchCode = ?
+         AND businessDate = ?
+         AND groupCode = ?
+         AND calledAt IS NOT NULL
+         AND createdAtLocal IS NOT NULL
+         AND calledAt >= createdAtLocal`
+    ).get(branchCode, businessDate, groupCode) || {};
+    const avgSeatedRow = db.prepare(
+      `SELECT AVG(seatedAt - createdAtLocal) AS avgMs, COUNT(*) AS sampleCount
+       FROM queue_items
+       WHERE branchCode = ?
+         AND businessDate = ?
+         AND groupCode = ?
+         AND seatedAt IS NOT NULL
+         AND createdAtLocal IS NOT NULL
+         AND seatedAt >= createdAtLocal`
+    ).get(branchCode, businessDate, groupCode) || {};
+    const counts = db.prepare(
+      `SELECT
+         SUM(CASE WHEN status='WAITING' THEN 1 ELSE 0 END) AS waitingCount,
+         SUM(CASE WHEN status='CALLED' THEN 1 ELSE 0 END) AS calledCount
+       FROM queue_items
+       WHERE branchCode = ?
+         AND businessDate = ?
+         AND groupCode = ?`
+    ).get(branchCode, businessDate, groupCode) || {};
+    const avgWaitToCalledMinutes = Math.round((Number(avgCalledRow.avgMs || 0) / 60000) || 0);
+    const waitingCount = Number(counts.waitingCount || 0);
+    return {
+      groupCode,
+      waitingCount,
+      calledCount: Number(counts.calledCount || 0),
+      avgWaitToCalledMinutes: avgWaitToCalledMinutes || null,
+      avgWaitToSeatedMinutes: Math.round((Number(avgSeatedRow.avgMs || 0) / 60000) || 0) || null,
+      calledSampleCount: Number(avgCalledRow.sampleCount || 0),
+      seatedSampleCount: Number(avgSeatedRow.sampleCount || 0),
+      projectedMinutesForBacklog: avgWaitToCalledMinutes > 0 ? avgWaitToCalledMinutes * waitingCount : null,
+    };
+  }
+
   /* ---------- health ---------- */
 
   app.get("/api/health", (_, res) => {
     const bc = getBranchCode();
+    const st = refreshActivationState();
     res.json({
       ok: true,
       branchCode: bc,
       branchName: getBranchName(),
       port,
+      activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+      activationEnforced: isActivationEnforced(),
       currentBusinessDate: ensureBusinessDate(db),
       todayManila: getTodayManila(),
     });
+  });
+
+  app.get("/api/admin/ops/health", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.system_health"), (_req, res) => {
+    try {
+      const st = refreshActivationState();
+      const dbPath = path.join(baseDir, "data", "qsys.db");
+      const backups = listBackupFiles();
+      const supportDir = getSupportBundlesDir();
+      const lastAudit = db.prepare(`SELECT action, createdAt FROM audit_logs ORDER BY createdAt DESC LIMIT 1`).get() || null;
+      const lastRestore = getLastRestoreState();
+      return res.json({
+        ok: true,
+        branchCode: getVisibleBranchCode(),
+        branchName: getBranchName(),
+        activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+        licenseExpiresAt: Number(st.licenseExpiresAt || 0) || null,
+        currentBusinessDate: ensureBusinessDate(db),
+        port,
+        dbPath,
+        dbSizeBytes: fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0,
+        backupCount: backups.length,
+        lastBackupAt: backups[0] ? Number(backups[0].mtime || 0) : 0,
+        lastRestoreAt: Number(lastRestore?.restoredAt || 0) || 0,
+        supportBundleCount: fs.existsSync(supportDir)
+          ? fs.readdirSync(supportDir).filter((f) => /^qsys-support-bundle-.*\.json$/i.test(f)).length
+          : 0,
+        lastAuditAction: lastAudit ? String(lastAudit.action || "") : "",
+        lastAuditAt: lastAudit ? Number(lastAudit.createdAt || 0) : 0,
+      });
+    } catch (e) {
+      console.error("[admin/ops/health]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load operations health." });
+    }
+  });
+
+  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.renewal_reminders", "licensing.audit_history", "licensing.branch_transfer", "licensing.token_revocation", "licensing.one_time_tokens"), (_req, res) => {
+    try {
+      const st = refreshActivationState();
+      const reminder = buildLicenseReminder(st);
+      const features = getProvisionedFeatureMap([
+        "licensing.advanced_dashboard",
+        "licensing.renewal_reminders",
+        "licensing.audit_history",
+        "licensing.branch_transfer",
+        "licensing.token_revocation",
+        "licensing.one_time_tokens",
+      ]);
+      const currentTokenHash = String(st.activationTokenHash || "").trim();
+      return res.json({
+        ok: true,
+        features,
+        status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+        installId: String(st.installId || getDbSetting("install.id") || "").trim(),
+        branchCode: getVisibleBranchCode(),
+        branchName: getBranchName(),
+        activatedAt: Number(st.activatedAt || 0) || null,
+        activatedBy: String(st.activatedBy || ""),
+        activationLicenseId: String(st.activationLicenseId || ""),
+        licenseIssuedAt: Number(st.licenseIssuedAt || 0) || null,
+        licenseExpiresAt: Number(st.licenseExpiresAt || 0) || null,
+        lastRenewedAt: Number(st.lastRenewedAt || 0) || null,
+        updatedAt: Number(st.updatedAt || 0) || null,
+        daysRemaining: reminder.daysRemaining,
+        reminder,
+        history: getLicenseAuditHistory(20),
+        tokenEvents: listActivationTokenEvents(12),
+        currentTokenRevoked: currentTokenHash ? !!findActivationTokenRevocation(currentTokenHash) : false,
+      });
+    } catch (e) {
+      console.error("[admin/licensing/status]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load licensing status." });
+    }
+  });
+
+  app.post("/api/admin/licensing/revoke-token", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.token_revocation"), express.json(), (req, res) => {
+    try {
+      const token = String(req.body?.token || "").trim();
+      const reason = String(req.body?.reason || "").trim();
+      if (!token) return res.status(400).json({ ok: false, error: "token is required." });
+      const actor = String(getSessionUser(req)?.fullName || "admin").trim() || "admin";
+      const payload = decodeActivationPayloadUnsafe(token);
+      const tokenHash = hashLicenseToken(token);
+      const now = Date.now();
+      revokeActivationTokenHash({
+        tokenHash,
+        installId: String(payload.installId || getDbSetting("install.id") || "").trim(),
+        branchCode: String(payload.branchCode || getVisibleBranchCode() || "").trim().toUpperCase(),
+        licenseId: String(payload.licenseId || "").trim(),
+        reason,
+        revokedBy: actor,
+        revokedAt: now,
+      });
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "INSTALL_TOKEN_REVOKED",
+        JSON.stringify({
+          tokenHash,
+          installId: String(payload.installId || getDbSetting("install.id") || "").trim(),
+          branchCode: String(payload.branchCode || getVisibleBranchCode() || "").trim().toUpperCase(),
+          licenseId: String(payload.licenseId || "").trim(),
+          reason,
+          revokedBy: actor,
+        }),
+        now
+      );
+      return res.json({ ok: true, tokenHash, revokedAt: now });
+    } catch (e) {
+      console.error("[admin/licensing/revoke-token]", e);
+      return res.status(500).json({ ok: false, error: "Failed to revoke licensing token." });
+    }
+  });
+
+  app.post("/api/admin/licensing/transfer-release", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.branch_transfer"), express.json(), (req, res) => {
+    try {
+      const confirmText = String(req.body?.confirmText || "").trim().toUpperCase();
+      if (confirmText !== "TRANSFER") return res.status(400).json({ ok: false, error: "Type TRANSFER to confirm release." });
+
+      const st = getActivationState();
+      const currentStatus = String(st.status || "").toUpperCase();
+      if (![ACTIVATION_STATUS_ACTIVATED, ACTIVATION_STATUS_EXPIRED].includes(currentStatus)) {
+        return res.status(409).json({ ok: false, error: "Only activated or expired installations can be released." });
+      }
+
+      const previousInstallId = String(st.installId || getDbSetting("install.id") || "").trim();
+      const previousBranchCode = String(getVisibleBranchCode() || st.activationBranchCode || "").trim().toUpperCase();
+      const previousLicenseId = String(st.activationLicenseId || "").trim();
+      const nextInstallId = randomUUID();
+      const now = Date.now();
+      const actor = String(getSessionUser(req)?.fullName || "admin").trim() || "admin";
+
+      db.transaction(() => {
+        setDbSetting("install.id", nextInstallId);
+        db.prepare(
+          `UPDATE installation_state
+           SET status=?, installId=?, activatedAt=NULL, activatedBy=NULL, activationLicenseId=NULL,
+               licenseIssuedAt=NULL, licenseExpiresAt=NULL, lastRenewedAt=NULL, activationBranchCode=NULL,
+               activationTokenHash=NULL, activationPayload=NULL, updatedAt=?
+           WHERE id=1`
+        ).run(ACTIVATION_STATUS_UNACTIVATED, nextInstallId, now);
+        db.prepare(`UPDATE branch_config SET branchCode=?, branchName=?, updatedAt=? WHERE id=1`).run(
+          BRANCH_CODE_PLACEHOLDER,
+          "Unassigned Branch",
+          now
+        );
+        db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+          "INSTALL_TRANSFER_RELEASED",
+          JSON.stringify({
+            previousInstallId,
+            nextInstallId,
+            branchCode: previousBranchCode,
+            licenseId: previousLicenseId,
+            releasedBy: actor,
+            previousStatus: currentStatus,
+          }),
+          now
+        );
+      })();
+
+      return res.json({ ok: true, previousInstallId, nextInstallId, branchCode: previousBranchCode, releasedAt: now });
+    } catch (e) {
+      console.error("[admin/licensing/transfer-release]", e);
+      return res.status(500).json({ ok: false, error: "Failed to release installation for transfer." });
+    }
+  });
+
+  app.get("/api/admin/ops/automation/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.auto_backup", "operations.integrity_check", "operations.startup_self_test"), (_req, res) => {
+    try {
+      res.json({
+        ok: true,
+        features: getProvisionedFeatureMap(["operations.auto_backup", "operations.integrity_check", "operations.startup_self_test"]),
+        autoBackup: { ...getAutoBackupConfig(), lastResult: getAutoBackupState() },
+        integrityCheck: getIntegrityCheckState(),
+        selfTest: getSelfTestState(),
+      });
+    } catch (e) {
+      console.error("[admin/ops/automation/status]", e);
+      res.status(500).json({ ok: false, error: "Failed to load automation status." });
+    }
+  });
+
+  app.post("/api/admin/ops/auto-backup/config", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.auto_backup"), express.json(), (req, res) => {
+    try {
+      const enabled = !!req.body?.enabled;
+      const intervalHours = Math.max(1, Math.min(24 * 30, Number(req.body?.intervalHours) || 24));
+      const retentionCount = Math.max(1, Math.min(100, Number(req.body?.retentionCount) || 10));
+      setAppSetting("ops.autoBackup.enabled", enabled ? "1" : "0");
+      setAppSetting("ops.autoBackup.intervalHours", String(intervalHours));
+      setAppSetting("ops.autoBackup.retentionCount", String(retentionCount));
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "OPS_AUTO_BACKUP_CONFIG",
+        JSON.stringify({ actor: actorFromReq(req), enabled, intervalHours, retentionCount }),
+        Date.now()
+      );
+      res.json({ ok: true, config: getAutoBackupConfig() });
+    } catch (e) {
+      console.error("[admin/ops/auto-backup/config]", e);
+      res.status(500).json({ ok: false, error: "Failed to save auto-backup config." });
+    }
+  });
+
+  app.post("/api/admin/ops/auto-backup/run", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.auto_backup"), (_req, res) => {
+    try {
+      return res.json({ ok: true, result: maybeRunAutoBackup("manual") });
+    } catch (e) {
+      console.error("[admin/ops/auto-backup/run]", e);
+      return res.status(500).json({ ok: false, error: String(e?.message || e || "Auto backup failed.") });
+    }
+  });
+
+  app.post("/api/admin/ops/integrity-check/run", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.integrity_check"), (req, res) => {
+    try {
+      return res.json({ ok: true, result: runIntegrityCheck("manual", actorFromReq(req)?.fullName || "SYSTEM") });
+    } catch (e) {
+      console.error("[admin/ops/integrity-check/run]", e);
+      return res.status(500).json({ ok: false, error: String(e?.message || e || "Integrity check failed.") });
+    }
+  });
+
+  app.post("/api/admin/ops/startup-self-test/run", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.startup_self_test"), (req, res) => {
+    try {
+      return res.json({ ok: true, result: runStartupSelfTest("manual", actorFromReq(req)?.fullName || "SYSTEM") });
+    } catch (e) {
+      console.error("[admin/ops/startup-self-test/run]", e);
+      return res.status(500).json({ ok: false, error: String(e?.message || e || "Self-test failed.") });
+    }
+  });
+
+  app.get("/api/admin/ops/support-bundle", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.support_bundle"), (req, res) => {
+    try {
+      const now = Date.now();
+      const supportDir = getSupportBundlesDir();
+      if (!fs.existsSync(supportDir)) fs.mkdirSync(supportDir, { recursive: true });
+      const stamp = new Date(now).toISOString().replace(/[:.]/g, "-");
+      const fileName = `qsys-support-bundle-${stamp}.json`;
+      const filePath = path.join(supportDir, fileName);
+      const st = refreshActivationState();
+      const payload = {
+        generatedAt: now,
+        branchCode: getVisibleBranchCode(),
+        branchName: getBranchName(),
+        currentBusinessDate: ensureBusinessDate(db),
+        activation: {
+          status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+          installId: String(st.installId || ""),
+          activationLicenseId: String(st.activationLicenseId || ""),
+          licenseIssuedAt: Number(st.licenseIssuedAt || 0) || null,
+          licenseExpiresAt: Number(st.licenseExpiresAt || 0) || null,
+          lastRenewedAt: Number(st.lastRenewedAt || 0) || null,
+        },
+        operations: {
+          autoBackup: { ...getAutoBackupConfig(), lastResult: getAutoBackupState() },
+          integrityCheck: getIntegrityCheckState(),
+          selfTest: getSelfTestState(),
+          lastRestore: getLastRestoreState(),
+        },
+        recentAudit: db.prepare(`SELECT id, action, payload, createdAt FROM audit_logs ORDER BY createdAt DESC LIMIT 100`).all(),
+      };
+      fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf8");
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "OPS_SUPPORT_BUNDLE_EXPORT",
+        JSON.stringify({ actor: actorFromReq(req), fileName, filePath }),
+        now
+      );
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename=\"${fileName}\"`);
+      return res.sendFile(filePath);
+    } catch (e) {
+      console.error("[admin/ops/support-bundle]", e);
+      return res.status(500).json({ ok: false, error: "Failed to build support bundle." });
+    }
   });
 
   /* ---------- admin/system backup + restore ---------- */
@@ -2710,8 +4070,14 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     const backupsDir = path.join(baseDir, "backups");
     if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
 
-    const fileName = `qsys-backup-${ts}.db`;
-    const outPath = path.join(backupsDir, fileName);
+    let fileName = `qsys-backup-${ts}.db`;
+    let outPath = path.join(backupsDir, fileName);
+    let suffix = 1;
+    while (fs.existsSync(outPath)) {
+      fileName = `qsys-backup-${ts}-${suffix}.db`;
+      outPath = path.join(backupsDir, fileName);
+      suffix += 1;
+    }
     const escapedOutPath = outPath.replace(/'/g, "''");
 
     // Flush WAL pages before creating a compact snapshot.
@@ -2723,7 +4089,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   let seedTodayInProgress = false;
 
-  // Seed realistic test queue data for today's business date.
+  // Seed realistic test queue data across a selectable month span.
   app.post("/api/admin/system/seed-today", requirePerm("SETTINGS_MANAGE"), (req, res) => {
     if (seedTodayInProgress) {
       return res.status(409).json({ ok: false, error: "Seed job is already running." });
@@ -2731,7 +4097,8 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     seedTodayInProgress = true;
 
     const seedScript = path.join(__dirname, "seed-demo-today.js");
-    const args = [seedScript, baseDir];
+    const requestedMonths = Math.max(1, Math.min(3, Number.parseInt(req.body?.months || "1", 10) || 1));
+    const args = [seedScript, baseDir, String(requestedMonths)];
     const startedAt = Date.now();
 
     execFile(
@@ -2752,6 +4119,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
               JSON.stringify({
                 actor: actorFromReq(req),
                 ok: false,
+                months: requestedMonths,
                 durationMs,
                 error: msg,
                 stderr: errOut,
@@ -2772,6 +4140,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
             JSON.stringify({
               actor: actorFromReq(req),
               ok: true,
+              months: requestedMonths,
               durationMs,
               output: out,
             }),
@@ -2781,7 +4150,8 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
         return res.json({
           ok: true,
-          message: "Seed completed.",
+          months: requestedMonths,
+          message: `Seed completed for ${requestedMonths} month(s).`,
           durationMs,
           output: out,
         });
@@ -2961,6 +4331,12 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
         }),
         now
       );
+      saveLastRestoreState({
+        restoredAt: now,
+        sourceFile: latest.name,
+        sourcePath: latest.full,
+        actor: actorFromReq(req),
+      });
 
       db.close();
       fs.copyFileSync(latest.full, dbPath);
@@ -3007,7 +4383,7 @@ app.post("/api/system/display/open", requireStaffApi, (req, res) => {
   try {
     const ctrl = global.QSYS_DISPLAY;
     if (!ctrl) return res.status(400).json({ ok: false, error: "Display controller not available" });
-    return res.json(ctrl.open());
+    return res.json(ctrl.open({ displayId: req.body?.displayId }));
   } catch (e) {
     console.error("[display/open]", e);
     res.status(500).json({ ok: false, error: "Server error" });
@@ -3022,6 +4398,53 @@ app.post("/api/system/display/close", requireStaffApi, (req, res) => {
   } catch (e) {
     console.error("[display/close]", e);
     res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+function formatDisplayTicketCode(row) {
+  if (!row) return "";
+  const groupCode = String(row.groupCode || "").trim().toUpperCase();
+  if (!groupCode) return "";
+  const queueNum = String(Number(row.queueNum || 0)).padStart(2, "0");
+  const isPriority = String(row.priorityType || "NONE").trim().toUpperCase() !== "NONE";
+  return `${isPriority ? "P" : ""}${groupCode}-${queueNum}`;
+}
+
+function announceDisplayTicket(row) {
+  try {
+    const ctrl = global.QSYS_DISPLAY;
+    if (!ctrl || typeof ctrl.announce !== "function") return;
+    const code = formatDisplayTicketCode(row);
+    if (!code) return;
+    if (typeof ctrl.attention === "function") {
+      try { ctrl.attention(); } catch {}
+    }
+    try { ctrl.announce({ code }); } catch {}
+  } catch {}
+}
+
+app.get("/api/staff/queue-tools", requireAuth, (req, res) => {
+  try {
+    const branchCode = getBranchCode();
+    const businessDate = ensureBusinessDate(db);
+    const groupCode = normalizeGroup(req.query.groupCode || "B");
+    const features = getProvisionedFeatureMap([
+      "queue.recovery_tools",
+      "queue.reopen_completed",
+      "queue.wait_forecast",
+    ]);
+
+    const payload = { ok: true, groupCode, businessDate, features };
+    if (features["queue.recovery_tools"] || features["queue.reopen_completed"]) {
+      payload.recentRecoverable = getQueueRecoveryRows({ branchCode, businessDate, groupCode, limit: 12 });
+    }
+    if (features["queue.wait_forecast"]) {
+      payload.waitForecast = getQueueWaitForecast({ branchCode, businessDate, groupCode });
+    }
+    return res.json(payload);
+  } catch (e) {
+    console.error("[staff/queue-tools]", e);
+    return res.status(500).json({ ok: false, error: "Failed to load queue tools." });
   }
 });
 
@@ -3616,6 +5039,29 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
       res.status(500).send("Server error");
     }
   });
+
+  app.get(
+    "/api/admin/reports/audit_export.csv",
+    requirePerm("AUDIT_VIEW"),
+    requireProvisionedFeatureApi("reporting.audit_export"),
+    (req, res) => {
+      try {
+        const bc = getBranchCode();
+        const from = String(req.query.from || "").trim();
+        const to = String(req.query.to || "").trim();
+        const scopeLabel = String(req.query.scopeLabel || "").trim();
+        if (!from || !to) return res.status(400).send("from/to required");
+        const sinceMs = parseSinceMs(req);
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${reportFileName("audit_export", bc, from, to, { scopeLabel })}"`);
+        res.send(buildStructuredAuditExportCsvForRange(from, to, sinceMs));
+      } catch (e) {
+        console.error("[reports/audit_export]", e);
+        res.status(500).send("Server error");
+      }
+    }
+  );
 
   // Daily rollup export from pre-aggregated stats table.
   app.get("/api/admin/reports/daily_summary", requirePerm("REPORT_EXPORT_CSV"), (req, res) => {
@@ -4884,11 +6330,471 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     return rowsToCsv([], rows);
   }
 
+  const REPORT_SCHEDULE_CONFIG_KEY = "reports.schedule.configJson";
+  const REPORT_SCHEDULE_LAST_RESULT_KEY = "reports.schedule.lastResultJson";
+
+  function queryAuditRowsForRange(from, to, sinceMs) {
+    let fromMs = manilaDayStartMs(from);
+    const toMs = manilaDayEndMs(to);
+    if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) throw new Error("invalid from/to");
+    if (sinceMs) fromMs = Math.max(fromMs, sinceMs);
+    return db.prepare(
+      `SELECT action, payload, createdAt
+       FROM audit_logs
+       WHERE createdAt BETWEEN ? AND ?
+       ORDER BY createdAt ASC`
+    ).all(fromMs, toMs);
+  }
+
+  function buildAuditLogsCsvForRange(from, to, sinceMs) {
+    const bc = getBranchCode();
+    const rows = queryAuditRowsForRange(from, to, sinceMs);
+    const header = ["schemaVersion", "branchCode", "createdAt", "action", "userId", "fullName", "roleId", "businessDate", "payloadJson"];
+    const outRows = [];
+    for (const r of rows) {
+      let actor = null;
+      let biz = "";
+      try {
+        const p = JSON.parse(r.payload || "{}");
+        actor = p && p.actor ? p.actor : null;
+        if (p.businessDate) biz = String(p.businessDate);
+      } catch {}
+      outRows.push([
+        1,
+        bc,
+        r.createdAt,
+        r.action,
+        actor?.userId || "",
+        actor?.fullName || "",
+        actor?.roleId || "",
+        biz,
+        r.payload,
+      ]);
+    }
+    return rowsToCsv(header, outRows);
+  }
+
+  function buildStructuredAuditExportCsvForRange(from, to, sinceMs) {
+    const bc = getBranchCode();
+    const rows = queryAuditRowsForRange(from, to, sinceMs);
+    const header = [
+      "schemaVersion",
+      "branchCode",
+      "createdAt",
+      "action",
+      "actorName",
+      "actorRole",
+      "businessDate",
+      "installId",
+      "licenseId",
+      "reportKey",
+      "targetFile",
+      "error",
+      "reason",
+      "payloadJson",
+    ];
+    const outRows = rows.map((r) => {
+      let payload = {};
+      try { payload = JSON.parse(r.payload || "{}"); } catch {}
+      const actor = payload && payload.actor ? payload.actor : null;
+      return [
+        1,
+        bc,
+        r.createdAt,
+        r.action,
+        actor?.fullName || actor?.userId || "",
+        actor?.roleId || "",
+        String(payload.businessDate || ""),
+        String(payload.installId || payload.previousInstallId || ""),
+        String(payload.licenseId || ""),
+        String(payload.reportKey || ""),
+        String(payload.fileName || payload.filePath || payload.exportPath || ""),
+        String(payload.error || ""),
+        String(payload.reason || payload.previousStatus || ""),
+        r.payload,
+      ];
+    });
+    return rowsToCsv(header, outRows);
+  }
+
+  function collectExportableReportFiles({ from, to, sinceMs = null, scopeLabel = "", waitRef = parseWaitRef("hours:2"), reportKeys = [], includeDailyHtml = false } = {}) {
+    const bc = getBranchCode();
+    const wanted = new Set((Array.isArray(reportKeys) ? reportKeys : []).map((v) => String(v || "").trim()).filter(Boolean));
+    const include = (k) => wanted.size === 0 || wanted.has(k);
+    const stamp = fileStampNow();
+    const files = [];
+    if (include("tickets")) {
+      files.push({
+        key: "tickets",
+        name: reportFileName("tickets", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
+        mimeType: "text/csv",
+        data: Buffer.from(buildTicketsCsvForRange(from, to, sinceMs), "utf8"),
+      });
+    }
+    if (include("daily_summary_csv")) {
+      files.push({
+        key: "daily_summary_csv",
+        name: reportFileName("daily_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
+        mimeType: "text/csv",
+        data: Buffer.from(buildDailySummaryCsvForRange(from, to, sinceMs), "utf8"),
+      });
+    }
+    if (include("daily_summary_html") && includeDailyHtml) {
+      files.push({
+        key: "daily_summary_html",
+        name: reportFileName("daily_summary_formatted", bc, from, to, { scopeLabel, stamp, ext: "html" }),
+        mimeType: "text/html",
+        data: Buffer.from(buildDailySummaryHtmlForRange(from, to, sinceMs), "utf8"),
+      });
+    }
+    if (include("custom_summary")) {
+      files.push({
+        key: "custom_summary",
+        name: reportFileName("custom_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
+        mimeType: "text/csv",
+        data: Buffer.from(buildCustomSummaryCsvForRange(from, to, sinceMs), "utf8"),
+      });
+    }
+    if (include("summary")) {
+      files.push({
+        key: "summary",
+        name: reportFileName("report_summary", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
+        mimeType: "text/csv",
+        data: Buffer.from(buildReportSummaryCsvForRange(from, to, waitRef, sinceMs), "utf8"),
+      });
+    }
+    if (include("audit_logs")) {
+      files.push({
+        key: "audit_logs",
+        name: reportFileName("audit_logs", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
+        mimeType: "text/csv",
+        data: Buffer.from(buildAuditLogsCsvForRange(from, to, sinceMs), "utf8"),
+      });
+    }
+    if (include("audit_export")) {
+      files.push({
+        key: "audit_export",
+        name: reportFileName("audit_export", bc, from, to, { scopeLabel, stamp, ext: "csv" }),
+        mimeType: "text/csv",
+        data: Buffer.from(buildStructuredAuditExportCsvForRange(from, to, sinceMs), "utf8"),
+      });
+    }
+    return files;
+  }
+
+  function computeHistoricalInsights(days = 30) {
+    const safeDays = Math.max(7, Math.min(Number(days) || 30, 180));
+    const to = ensureBusinessDate(db);
+    const currentFrom = addDaysYmd(to, -(safeDays - 1));
+    const compareFrom = addDaysYmd(to, -((safeDays * 2) - 1));
+    const rows = buildDailySummaryRowsForRange(compareFrom, to, null);
+    const perDay = new Map();
+    const perGroup = new Map();
+    for (const row of rows) {
+      const dateKey = String(row.businessDate || "");
+      const groupKey = String(row.groupCode || "");
+      if (!perDay.has(dateKey)) {
+        perDay.set(dateKey, {
+          businessDate: dateKey,
+          registeredCount: 0,
+          calledCount: 0,
+          seatedCount: 0,
+          skippedCount: 0,
+          overrideCalledCount: 0,
+          waitWeightedSum: 0,
+          waitWeight: 0,
+        });
+      }
+      const daily = perDay.get(dateKey);
+      daily.registeredCount += Number(row.registeredCount || 0);
+      daily.calledCount += Number(row.calledCount || 0);
+      daily.seatedCount += Number(row.seatedCount || 0);
+      daily.skippedCount += Number(row.skippedCount || 0);
+      daily.overrideCalledCount += Number(row.overrideCalledCount || 0);
+      const avgWait = Number(row.avgWaitMinutes);
+      const weight = Number(row.seatedCount || 0);
+      if (Number.isFinite(avgWait) && weight > 0) {
+        daily.waitWeightedSum += avgWait * weight;
+        daily.waitWeight += weight;
+      }
+
+      if (!perGroup.has(groupKey)) {
+        perGroup.set(groupKey, {
+          groupCode: groupKey,
+          registeredCount: 0,
+          seatedCount: 0,
+          skippedCount: 0,
+        });
+      }
+      const grp = perGroup.get(groupKey);
+      grp.registeredCount += Number(row.registeredCount || 0);
+      grp.seatedCount += Number(row.seatedCount || 0);
+      grp.skippedCount += Number(row.skippedCount || 0);
+    }
+
+    const dailyRows = Array.from(perDay.values())
+      .sort((a, b) => String(a.businessDate).localeCompare(String(b.businessDate)))
+      .map((row) => ({
+        businessDate: row.businessDate,
+        registeredCount: row.registeredCount,
+        calledCount: row.calledCount,
+        seatedCount: row.seatedCount,
+        skippedCount: row.skippedCount,
+        overrideCalledCount: row.overrideCalledCount,
+        avgWaitMinutes: row.waitWeight > 0 ? Math.round((row.waitWeightedSum / row.waitWeight) * 10) / 10 : null,
+      }));
+
+    const currentWindow = dailyRows.slice(-safeDays);
+    const previousWindow = dailyRows.slice(-(safeDays * 2), -safeDays);
+    const hasFullComparisonWindow = previousWindow.length >= safeDays;
+
+    const totalRegistered = currentWindow.reduce((sum, row) => sum + Number(row.registeredCount || 0), 0);
+    const totalSeated = currentWindow.reduce((sum, row) => sum + Number(row.seatedCount || 0), 0);
+    const totalSkipped = currentWindow.reduce((sum, row) => sum + Number(row.skippedCount || 0), 0);
+    const totalCalled = currentWindow.reduce((sum, row) => sum + Number(row.calledCount || 0), 0);
+    const weightedWait = currentWindow.reduce((sum, row) => {
+      const avg = Number(row.avgWaitMinutes);
+      const weight = Number(row.seatedCount || 0);
+      return sum + (Number.isFinite(avg) && weight > 0 ? avg * weight : 0);
+    }, 0);
+    const waitWeight = currentWindow.reduce((sum, row) => sum + Number(row.seatedCount || 0), 0);
+    const overallAvgWait = waitWeight > 0 ? Math.round((weightedWait / waitWeight) * 10) / 10 : null;
+    const sumWindow = (rowsForWindow) => ({
+      registeredCount: rowsForWindow.reduce((sum, row) => sum + Number(row.registeredCount || 0), 0),
+      calledCount: rowsForWindow.reduce((sum, row) => sum + Number(row.calledCount || 0), 0),
+      seatedCount: rowsForWindow.reduce((sum, row) => sum + Number(row.seatedCount || 0), 0),
+      skippedCount: rowsForWindow.reduce((sum, row) => sum + Number(row.skippedCount || 0), 0),
+      avgWaitMinutes: (() => {
+        const sumWeighted = rowsForWindow.reduce((sum, row) => {
+          const avg = Number(row.avgWaitMinutes);
+          const weight = Number(row.seatedCount || 0);
+          return sum + (Number.isFinite(avg) && weight > 0 ? avg * weight : 0);
+        }, 0);
+        const sumWeight = rowsForWindow.reduce((sum, row) => sum + Number(row.seatedCount || 0), 0);
+        return sumWeight > 0 ? Math.round((sumWeighted / sumWeight) * 10) / 10 : null;
+      })(),
+    });
+    const currentPeriod = sumWindow(currentWindow);
+    const previousPeriod = sumWindow(previousWindow);
+    const pctDelta = (current, previous) => {
+      const c = Number(current || 0);
+      const p = Number(previous || 0);
+      if (!Number.isFinite(c) || !Number.isFinite(p)) return null;
+      if (p === 0) return c === 0 ? 0 : null;
+      return Math.round(((c - p) / p) * 1000) / 10;
+    };
+
+    return {
+      branchCode: getBranchCode(),
+      from: currentFrom,
+      to,
+      days: safeDays,
+      availableHistoryDays: dailyRows.length,
+      previousWindowDays: previousWindow.length,
+      hasFullComparisonWindow,
+      comparisonLabel: hasFullComparisonWindow
+        ? `Compared with the previous ${safeDays}-day window`
+        : `Only ${dailyRows.length} day(s) of history are available, so a full previous ${safeDays}-day comparison is not yet possible`,
+      overview: {
+        totalRegistered,
+        totalCalled,
+        totalSeated,
+        totalSkipped,
+        overallAvgWait,
+        seatedRatePct: totalRegistered > 0 ? Math.round((totalSeated / totalRegistered) * 1000) / 10 : 0,
+        skipRatePct: totalRegistered > 0 ? Math.round((totalSkipped / totalRegistered) * 1000) / 10 : 0,
+      },
+      trend: {
+        currentPeriod,
+        previousPeriod,
+        registeredDeltaPct: pctDelta(currentPeriod.registeredCount, previousPeriod.registeredCount),
+        calledDeltaPct: pctDelta(currentPeriod.calledCount, previousPeriod.calledCount),
+        seatedDeltaPct: pctDelta(currentPeriod.seatedCount, previousPeriod.seatedCount),
+        skipDeltaPct: pctDelta(currentPeriod.skippedCount, previousPeriod.skippedCount),
+        avgWaitDeltaMins: (Number(currentPeriod.avgWaitMinutes || 0) - Number(previousPeriod.avgWaitMinutes || 0)) || 0,
+      },
+      topGroups: Array.from(perGroup.values())
+        .sort((a, b) => Number(b.registeredCount || 0) - Number(a.registeredCount || 0))
+        .slice(0, 5),
+      dailyRows,
+    };
+  }
+
   function safeParseJson(text, fallback = null) {
     try {
       return JSON.parse(String(text || ""));
     } catch {
       return fallback;
+    }
+  }
+
+  function normalizeScheduledReportKeys(keys) {
+    const allowed = new Set(["tickets", "daily_summary_csv", "custom_summary", "summary", "audit_logs", "audit_export"]);
+    const out = [];
+    for (const key of Array.isArray(keys) ? keys : []) {
+      const normalized = String(key || "").trim();
+      if (allowed.has(normalized) && !out.includes(normalized)) out.push(normalized);
+    }
+    return out.length ? out : ["daily_summary_csv"];
+  }
+
+  function normalizeScheduledReportConfig(raw) {
+    const cfg = raw && typeof raw === "object" ? raw : {};
+    const frequency = String(cfg.frequency || "daily").trim().toLowerCase() === "hourly" ? "hourly" : "daily";
+    const scopePresetRaw = String(cfg.scopePreset || "yesterday").trim().toLowerCase();
+    const scopePreset = ["today", "yesterday", "last7", "month_to_date"].includes(scopePresetRaw) ? scopePresetRaw : "yesterday";
+    return {
+      enabled: !!cfg.enabled,
+      frequency,
+      hourLocal: Math.max(0, Math.min(Number(cfg.hourLocal) || 6, 23)),
+      minuteLocal: Math.max(0, Math.min(Number(cfg.minuteLocal) || 0, 59)),
+      scopePreset,
+      reportKeys: normalizeScheduledReportKeys(cfg.reportKeys),
+      exportFolder: String(cfg.exportFolder || "").trim(),
+    };
+  }
+
+  function getScheduledReportConfig() {
+    return normalizeScheduledReportConfig(safeParseJson(getAppSetting(REPORT_SCHEDULE_CONFIG_KEY), {}));
+  }
+
+  function getScheduledReportLastResult() {
+    return safeParseJson(getAppSetting(REPORT_SCHEDULE_LAST_RESULT_KEY), null);
+  }
+
+  function resolveScheduledReportFolder(config) {
+    const explicit = String(config.exportFolder || "").trim();
+    return explicit || path.join(baseDir, "reports", "scheduled");
+  }
+
+  function computeScheduledReportScope(scopePreset) {
+    const today = ensureBusinessDate(db);
+    if (scopePreset === "today") {
+      return { from: today, to: today, scopeLabel: "Scheduled Today" };
+    }
+    if (scopePreset === "last7") {
+      return { from: addDaysYmd(today, -6), to: today, scopeLabel: "Scheduled Last 7 Days" };
+    }
+    if (scopePreset === "month_to_date") {
+      return { from: `${String(today).slice(0, 8)}01`, to: today, scopeLabel: "Scheduled Month-to-date" };
+    }
+    const y = addDaysYmd(today, -1);
+    return { from: y, to: y, scopeLabel: "Scheduled Yesterday" };
+  }
+
+  function getScheduleDueMarker(config, now = new Date()) {
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    const ymd = `${y}-${m}-${d}`;
+    if (config.frequency === "hourly") {
+      if (minute < Number(config.minuteLocal || 0)) return null;
+      return `${ymd}T${String(hour).padStart(2, "0")}:${String(config.minuteLocal).padStart(2, "0")}`;
+    }
+    const targetHour = Number(config.hourLocal || 0);
+    const targetMinute = Number(config.minuteLocal || 0);
+    if (hour < targetHour) return null;
+    if (hour === targetHour && minute < targetMinute) return null;
+    return `${ymd}T${String(targetHour).padStart(2, "0")}:${String(targetMinute).padStart(2, "0")}`;
+  }
+
+  function getScheduledReportState() {
+    const config = getScheduledReportConfig();
+    const lastResult = getScheduledReportLastResult();
+    return {
+      config,
+      lastResult,
+      exportFolder: resolveScheduledReportFolder(config),
+      availableReportKeys: [
+        { key: "tickets", label: "Tickets CSV" },
+        { key: "daily_summary_csv", label: "Daily Summary CSV" },
+        { key: "custom_summary", label: "Custom Summary CSV" },
+        { key: "summary", label: "Report Summary CSV" },
+        { key: "audit_logs", label: "Audit Logs CSV" },
+        { key: "audit_export", label: "Audit Export CSV" },
+      ],
+    };
+  }
+
+  let scheduledReportsInProgress = false;
+  async function runScheduledReportExport(trigger = "manual", actor = "SYSTEM") {
+    if (scheduledReportsInProgress) {
+      return { ok: false, skipped: true, reason: "in_progress" };
+    }
+    const config = getScheduledReportConfig();
+    if (!config.enabled && trigger === "timer") {
+      return { ok: false, skipped: true, reason: "disabled" };
+    }
+    if (trigger === "timer" && !isFeatureProvisioned("reporting.scheduled_csv")) {
+      return { ok: false, skipped: true, reason: "feature_disabled" };
+    }
+    const marker = trigger === "timer" ? getScheduleDueMarker(config) : `manual_${Date.now()}`;
+    const lastResult = getScheduledReportLastResult();
+    if (trigger === "timer" && !marker) {
+      return { ok: false, skipped: true, reason: "not_due" };
+    }
+    if (trigger === "timer" && String(lastResult?.runMarker || "") === String(marker || "")) {
+      return { ok: false, skipped: true, reason: "already_ran" };
+    }
+
+    scheduledReportsInProgress = true;
+    try {
+      const scope = computeScheduledReportScope(config.scopePreset);
+      const exportFolder = resolveScheduledReportFolder(config);
+      const folderStamp = fileStampNow();
+      const targetFolder = path.join(exportFolder, folderStamp);
+      fs.mkdirSync(targetFolder, { recursive: true });
+      const waitRef = parseWaitRef("hours:2");
+      const files = collectExportableReportFiles({
+        from: scope.from,
+        to: scope.to,
+        sinceMs: null,
+        scopeLabel: scope.scopeLabel,
+        waitRef,
+        reportKeys: config.reportKeys,
+      });
+      const written = [];
+      for (const file of files) {
+        const outPath = path.join(targetFolder, file.name);
+        fs.writeFileSync(outPath, file.data);
+        written.push({
+          key: file.key,
+          fileName: file.name,
+          filePath: outPath,
+          sizeBytes: Buffer.byteLength(file.data),
+        });
+      }
+      const result = {
+        ok: true,
+        trigger,
+        runMarker: marker,
+        startedAt: Date.now(),
+        from: scope.from,
+        to: scope.to,
+        scopeLabel: scope.scopeLabel,
+        exportFolder: targetFolder,
+        files: written,
+      };
+      setAppSetting(REPORT_SCHEDULE_LAST_RESULT_KEY, JSON.stringify(result));
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "REPORT_SCHEDULED_EXPORT_RUN",
+        JSON.stringify({
+          actor,
+          trigger,
+          runMarker: marker,
+          from: scope.from,
+          to: scope.to,
+          scopeLabel: scope.scopeLabel,
+          exportFolder: targetFolder,
+          files: written,
+        }),
+        Date.now(),
+      );
+      return result;
+    } finally {
+      scheduledReportsInProgress = false;
     }
   }
 
@@ -5005,6 +6911,99 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         ok: false,
         error: String((e && e.message) || e || "Connection test failed."),
       });
+    }
+  });
+
+  app.get("/api/admin/reports/analytics", requirePerm("REPORT_EXPORT_CSV"), requireProvisionedFeatureApi("reporting.advanced_center", "reporting.historical_analytics", "reporting.branch_trends"), (req, res) => {
+    try {
+      const days = Number(req.query.days || 30) || 30;
+      const insights = computeHistoricalInsights(days);
+      return res.json({ ok: true, insights });
+    } catch (e) {
+      console.error("[reports/analytics]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load report analytics." });
+    }
+  });
+
+  app.get("/api/admin/reports/schedule", requirePerm("REPORT_EXPORT_CSV"), requireProvisionedFeatureApi("reporting.scheduled_csv"), (_req, res) => {
+    try {
+      return res.json({ ok: true, schedule: getScheduledReportState() });
+    } catch (e) {
+      console.error("[reports/schedule/get]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load scheduled report settings." });
+    }
+  });
+
+  const handleScheduledReportFolderSelect = async (req, res) => {
+    try {
+      let dialog, BrowserWindow;
+      try {
+        const electron = require("electron");
+        dialog = electron.dialog;
+        BrowserWindow = electron.BrowserWindow;
+      } catch {
+        return res.status(400).json({ ok: false, error: "Folder picker requires Electron." });
+      }
+      if (!dialog) {
+        return res.status(400).json({ ok: false, error: "Electron dialog is not available." });
+      }
+      const win = (() => {
+        try {
+          const wins = (BrowserWindow && BrowserWindow.getAllWindows) ? BrowserWindow.getAllWindows() : [];
+          const adminWin = wins.find((w) => {
+            try {
+              const url = w.webContents && w.webContents.getURL ? w.webContents.getURL() : "";
+              return String(url).includes("/admin") || String(url).includes("admin.html");
+            } catch {
+              return false;
+            }
+          });
+          if (adminWin) return adminWin;
+          return (BrowserWindow.getFocusedWindow && BrowserWindow.getFocusedWindow()) || wins[0] || null;
+        } catch {
+          return null;
+        }
+      })();
+      const result = await dialog.showOpenDialog(win || undefined, {
+        title: "Choose Scheduled Reports Folder",
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled) return res.json({ ok: true, canceled: true });
+      const folder = String(result.filePaths?.[0] || "").trim();
+      if (!folder) return res.status(400).json({ ok: false, error: "No folder selected." });
+      return res.json({ ok: true, folder });
+    } catch (e) {
+      console.error("[reports/schedule/folder/select]", e);
+      return res.status(500).json({ ok: false, error: "Failed to open folder picker." });
+    }
+  };
+
+  app.post("/api/admin/reports/schedule/folder/select", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("reporting.scheduled_csv"), handleScheduledReportFolderSelect);
+  app.get("/api/admin/reports/schedule/folder/select", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("reporting.scheduled_csv"), handleScheduledReportFolderSelect);
+
+  app.post("/api/admin/reports/schedule", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("reporting.scheduled_csv"), express.json(), (req, res) => {
+    try {
+      const config = normalizeScheduledReportConfig(req.body || {});
+      setAppSetting(REPORT_SCHEDULE_CONFIG_KEY, JSON.stringify(config));
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "REPORT_SCHEDULED_EXPORT_CONFIG_SAVED",
+        JSON.stringify({ actor: actorFromReq(req), config }),
+        Date.now(),
+      );
+      return res.json({ ok: true, schedule: getScheduledReportState() });
+    } catch (e) {
+      console.error("[reports/schedule/save]", e);
+      return res.status(500).json({ ok: false, error: "Failed to save scheduled report settings." });
+    }
+  });
+
+  app.post("/api/admin/reports/schedule/run", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("reporting.scheduled_csv"), async (req, res) => {
+    try {
+      const result = await runScheduledReportExport("manual", actorFromReq(req));
+      return res.json({ ok: true, result, schedule: getScheduledReportState() });
+    } catch (e) {
+      console.error("[reports/schedule/run]", e);
+      return res.status(500).json({ ok: false, error: "Failed to run scheduled report export." });
     }
   });
 
@@ -5276,7 +7275,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       const called = db
         .prepare(
           `
-      SELECT id, groupCode, queueNum, name, calledAt, next_calls
+      SELECT id, groupCode, queueNum, name, status, calledAt, next_calls, calledNote, seatedAt, skippedAt
       FROM queue_items
       WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='CALLED'
       LIMIT 1
@@ -5294,6 +7293,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         parts.push(String(currentCalledAt));
       }
       const mergedNextCalls = parts.join(",");
+      const now = Date.now();
 
       db.prepare(
         `
@@ -5303,15 +7303,35 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     `
       ).run(mergedNextCalls, called.id);
 
+      const undoExpiresAt = now + 30 * 1000;
+      setStaffUndo(req, {
+        action: "QUEUE_CLEAR_CALLED",
+        resultingStatus: "WAITING",
+        actorUserId: actorFromReq(req)?.userId || null,
+        branchCode: bc,
+        businessDate,
+        groupCode,
+        ticketId: called.id,
+        expiresAt: undoExpiresAt,
+        previous: {
+          status: called.status,
+          calledAt: called.calledAt ?? null,
+          next_calls: called.next_calls ?? null,
+          calledNote: called.calledNote ?? null,
+          seatedAt: called.seatedAt ?? null,
+          skippedAt: called.skippedAt ?? null,
+        },
+      });
+
       db.prepare(
         `
       INSERT INTO audit_logs (action, payload, createdAt)
       VALUES (?, ?, ?)
     `
-      ).run("QUEUE_CLEAR_CALLED", JSON.stringify({ actor: actorFromReq(req), ...called, businessDate }), Date.now());
+      ).run("QUEUE_CLEAR_CALLED", JSON.stringify({ actor: actorFromReq(req), ...called, businessDate }), now);
 
       emitChanged(app, db, "QUEUE_CLEAR_CALLED");
-      res.json({ ok: true, cleared: called });
+      res.json({ ok: true, cleared: called, undo: { available: true, action: "QUEUE_CLEAR_CALLED", expiresAt: undoExpiresAt } });
     } catch (e) {
       console.error("[staff/clear-called]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -5326,6 +7346,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     try {
       const groupCode = normalizeGroup(req.body.groupCode);
       if (!groupCode) return res.status(400).json({ ok: false, error: "Invalid group." });
+      clearStaffUndo(req);
 
       // Calling behavior within the same bucket:
       // - AUTO (default): Priority first, then regular (previous behavior)
@@ -5445,6 +7466,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       });
 
       const called = tx();
+      announceDisplayTicket(called);
       emitChanged(app, db, "QUEUE_CALL", { groupCode });
       return res.json({ ok: true, called });
     } catch (e) {
@@ -5515,9 +7537,11 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         }),
         now
       );      // Imperative recall: tell display to replay attention (chime + pulse) without state diffing
+      const code = formatDisplayTicketCode(called);
+      announceDisplayTicket(called);
       try {
         const io = req.app.get("io");
-        if (io) io.emit("display:recall", { id: called.id, groupCode: called.groupCode, at: now });
+        if (io) io.emit("display:recall", { id: called.id, groupCode: called.groupCode, code, at: now });
       } catch {}
 
       // Also notify other clients that something changed (overview/SSE etc.)
@@ -5540,6 +7564,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     try {
       const groupCode = normalizeGroup(req.body.groupCode);
       if (!groupCode) return res.status(400).json({ ok: false, error: "Invalid group." });
+      clearStaffUndo(req);
 
       const id = String(req.body.id || "").trim();
       if (!id) return res.status(400).json({ ok: false, error: "Missing id." });
@@ -5689,6 +7714,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       });
 
       const called = tx();
+      announceDisplayTicket(called);
       emitChanged(app, db, "QUEUE_CALL", { groupCode });
       return res.json({ ok: true, called });
     } catch (e) {
@@ -5717,7 +7743,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         const called = db
           .prepare(
             `
-        SELECT id, groupCode, queueNum, name, pax, status
+        SELECT id, groupCode, queueNum, name, pax, status, calledAt, next_calls, calledNote, seatedAt, skippedAt
         FROM queue_items
         WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='CALLED'
         LIMIT 1
@@ -5775,8 +7801,27 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       });
 
       const seated = tx();
+      const undoExpiresAt = now + 30 * 1000;
+      setStaffUndo(req, {
+        action: "QUEUE_SEAT",
+        resultingStatus: "SEATED",
+        actorUserId: actor?.userId || null,
+        branchCode: bc,
+        businessDate,
+        groupCode,
+        ticketId: seated.id,
+        expiresAt: undoExpiresAt,
+        previous: {
+          status: "CALLED",
+          calledAt: seated.calledAt ?? null,
+          next_calls: seated.next_calls ?? null,
+          calledNote: seated.calledNote ?? null,
+          seatedAt: seated.seatedAt ?? null,
+          skippedAt: seated.skippedAt ?? null,
+        },
+      });
       emitChanged(app, db, "QUEUE_SEAT", { groupCode });
-      return res.json({ ok: true, seated });
+      return res.json({ ok: true, seated, undo: { available: true, action: "QUEUE_SEAT", expiresAt: undoExpiresAt } });
     } catch (e) {
       if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message });
       console.error("[staff/seat-called]", e);
@@ -5801,7 +7846,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         let target = db
           .prepare(
             `
-        SELECT id, groupCode, queueNum, status, name, pax
+        SELECT id, groupCode, queueNum, status, name, pax, calledAt, next_calls, calledNote, seatedAt, skippedAt
         FROM queue_items
         WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='CALLED'
         LIMIT 1
@@ -5813,7 +7858,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
           target = db
             .prepare(
               `
-          SELECT id, groupCode, queueNum, status, name, pax
+          SELECT id, groupCode, queueNum, status, name, pax, calledAt, next_calls, calledNote, seatedAt, skippedAt
           FROM queue_items
           WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='WAITING'
           ORDER BY queueNum ASC
@@ -5873,11 +7918,255 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       });
 
       const skipped = tx();
+      const undoExpiresAt = now + 30 * 1000;
+      setStaffUndo(req, {
+        action: "QUEUE_SKIP",
+        resultingStatus: "SKIPPED",
+        actorUserId: actor?.userId || null,
+        branchCode: bc,
+        businessDate,
+        groupCode,
+        ticketId: skipped.id,
+        expiresAt: undoExpiresAt,
+        previous: {
+          status: skipped.status,
+          calledAt: skipped.calledAt ?? null,
+          next_calls: skipped.next_calls ?? null,
+          calledNote: skipped.calledNote ?? null,
+          seatedAt: skipped.seatedAt ?? null,
+          skippedAt: skipped.skippedAt ?? null,
+        },
+      });
       emitChanged(app, db, "QUEUE_SKIP", { groupCode });
-      return res.json({ ok: true, skipped });
+      return res.json({ ok: true, skipped, undo: { available: true, action: "QUEUE_SKIP", expiresAt: undoExpiresAt } });
     } catch (e) {
       if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message });
       console.error("[staff/skip]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/staff/undo-last", requireAuth, (req, res) => {
+    const now = Date.now();
+    try {
+      const actor = actorFromReq(req);
+      const undo = getStaffUndo(req);
+      if (!undo) return res.status(400).json({ ok: false, error: "Nothing to undo." });
+      if (Number(undo.expiresAt || 0) <= now) {
+        clearStaffUndo(req);
+        return res.status(400).json({ ok: false, error: "Undo window expired." });
+      }
+      if (undo.actorUserId && actor?.userId && undo.actorUserId !== actor.userId) {
+        return res.status(403).json({ ok: false, error: "Undo is locked to the original staff user." });
+      }
+      if (!["QUEUE_SEAT", "QUEUE_SKIP", "QUEUE_CLEAR_CALLED"].includes(String(undo.action || ""))) {
+        clearStaffUndo(req);
+        return res.status(400).json({ ok: false, error: "Unsupported undo action." });
+      }
+
+      const bc = String(undo.branchCode || getBranchCode());
+      const businessDate = String(undo.businessDate || ensureBusinessDate(db));
+      const groupCode = normalizeGroup(undo.groupCode);
+      const ticketId = String(undo.ticketId || "");
+      const previous = undo.previous || {};
+      if (!groupCode || !ticketId) {
+        clearStaffUndo(req);
+        return res.status(400).json({ ok: false, error: "Undo payload is invalid." });
+      }
+
+      db.transaction(() => {
+        const cur = db.prepare(
+          `SELECT id, groupCode, status
+           FROM queue_items
+           WHERE id=? AND branchCode=? AND businessDate=?
+           LIMIT 1`
+        ).get(ticketId, bc, businessDate);
+        if (!cur) {
+          const err = new Error("Ticket not found.");
+          err.http = 404;
+          throw err;
+        }
+        if (cur.status !== undo.resultingStatus) {
+          const err = new Error("Ticket state changed already. Cannot undo.");
+          err.http = 409;
+          throw err;
+        }
+        if (String(previous.status || "") === "CALLED") {
+          const existingCalled = db.prepare(
+            `SELECT id
+             FROM queue_items
+             WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='CALLED' AND id<>?
+             LIMIT 1`
+          ).get(bc, businessDate, groupCode, ticketId);
+          if (existingCalled) {
+            const err = new Error("Another ticket is already CALLED in this group.");
+            err.http = 409;
+            throw err;
+          }
+        }
+
+        db.prepare(
+          `UPDATE queue_items
+           SET status=?,
+               calledAt=?,
+               next_calls=?,
+               calledNote=?,
+               seatedAt=?,
+               skippedAt=?
+           WHERE id=?`
+        ).run(
+          previous.status || "WAITING",
+          previous.calledAt ?? null,
+          previous.next_calls ?? null,
+          previous.calledNote ?? null,
+          previous.seatedAt ?? null,
+          previous.skippedAt ?? null,
+          ticketId
+        );
+
+        if (undo.action === "QUEUE_SEAT") {
+          db.prepare(
+            `UPDATE daily_group_stats
+             SET seatedCount = CASE WHEN seatedCount > 0 THEN seatedCount - 1 ELSE 0 END,
+                 updatedAt = ?
+             WHERE businessDate=? AND branchCode=? AND groupCode=?`
+          ).run(now, businessDate, bc, groupCode);
+        }
+        if (undo.action === "QUEUE_SKIP") {
+          db.prepare(
+            `UPDATE daily_group_stats
+             SET skippedCount = CASE WHEN skippedCount > 0 THEN skippedCount - 1 ELSE 0 END,
+                 updatedAt = ?
+             WHERE businessDate=? AND branchCode=? AND groupCode=?`
+          ).run(now, businessDate, bc, groupCode);
+        }
+
+        db.prepare(`INSERT INTO audit_logs (action, payload, createdAt) VALUES (?, ?, ?)`).run(
+          "QUEUE_UNDO",
+          JSON.stringify({
+            actor,
+            undoneAction: undo.action,
+            ticketId,
+            groupCode,
+            branchCode: bc,
+            businessDate,
+            restoredStatus: previous.status || "WAITING",
+          }),
+          now
+        );
+      })();
+
+      clearStaffUndo(req);
+      emitChanged(app, db, "QUEUE_UNDO", { groupCode });
+      return res.json({
+        ok: true,
+        undoneAction: undo.action,
+        restored: { id: ticketId, status: previous.status || "WAITING", groupCode },
+      });
+    } catch (e) {
+      if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message || "Error." });
+      console.error("[staff/undo-last]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/staff/reopen-ticket", requirePerm("QUEUE_CLEAR_CALLED"), (req, res) => {
+    try {
+      if (!isFeatureProvisioned("queue.reopen_completed")) {
+        return res.status(404).json({ ok: false, error: "Feature not enabled." });
+      }
+
+      const ticketId = String(req.body?.id || "").trim();
+      if (!ticketId) return res.status(400).json({ ok: false, error: "Ticket id is required." });
+
+      const branchCode = getBranchCode();
+      const businessDate = ensureBusinessDate(db);
+      const actor = actorFromReq(req);
+      const now = Date.now();
+
+      const reopened = db.transaction(() => {
+        const row = db.prepare(
+          `SELECT id, branchCode, businessDate, groupCode, queueNum, name, pax, status, priorityType,
+                  createdAtLocal, calledAt, next_calls, calledNote, seatedAt, skippedAt
+           FROM queue_items
+           WHERE id = ?
+             AND branchCode = ?
+             AND businessDate = ?
+           LIMIT 1`
+        ).get(ticketId, branchCode, businessDate);
+        if (!row) {
+          const err = new Error("Ticket not found for the current branch/day.");
+          err.http = 404;
+          throw err;
+        }
+
+        const currentStatus = String(row.status || "").toUpperCase();
+        if (!["SEATED", "SKIPPED"].includes(currentStatus)) {
+          const err = new Error("Only seated or skipped tickets can be reopened.");
+          err.http = 400;
+          throw err;
+        }
+
+        db.prepare(
+          `UPDATE queue_items
+           SET status='WAITING',
+               calledAt=NULL,
+               calledNote=NULL,
+               seatedAt=NULL,
+               skippedAt=NULL
+           WHERE id=?`
+        ).run(ticketId);
+
+        if (currentStatus === "SEATED") {
+          db.prepare(
+            `UPDATE daily_group_stats
+             SET seatedCount = CASE WHEN seatedCount > 0 THEN seatedCount - 1 ELSE 0 END
+             WHERE branchCode=? AND businessDate=? AND groupCode=?`
+          ).run(branchCode, businessDate, row.groupCode);
+        }
+        if (currentStatus === "SKIPPED") {
+          db.prepare(
+            `UPDATE daily_group_stats
+             SET skippedCount = CASE WHEN skippedCount > 0 THEN skippedCount - 1 ELSE 0 END
+             WHERE branchCode=? AND businessDate=? AND groupCode=?`
+          ).run(branchCode, businessDate, row.groupCode);
+        }
+
+        db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+          "QUEUE_REOPEN_COMPLETED",
+          JSON.stringify({
+            actor,
+            branchCode,
+            businessDate,
+            ticketId: row.id,
+            groupCode: row.groupCode,
+            queueNum: row.queueNum,
+            priorityType: row.priorityType,
+            previousStatus: currentStatus,
+          }),
+          now
+        );
+
+        return {
+          ...row,
+          previousStatus: currentStatus,
+          status: "WAITING",
+          calledAt: null,
+          calledNote: null,
+          seatedAt: null,
+          skippedAt: null,
+        };
+      })();
+
+      emitChanged(app, db, "QUEUE_REOPEN_COMPLETED", {
+        id: reopened.id,
+        groupCode: reopened.groupCode,
+        previousStatus: reopened.previousStatus,
+      });
+      return res.json({ ok: true, reopened });
+    } catch (e) {
+      if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message || "Error." });
+      console.error("[staff/reopen-ticket]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
     }
   });
@@ -6036,6 +8325,30 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
       console.error("[auto-rollover]", e);
     }
   }, 30 * 1000);
+
+  if (isFeatureProvisioned("operations.startup_self_test")) {
+    try {
+      runStartupSelfTest("startup", "SYSTEM");
+    } catch (e) {
+      console.error("[ops/startup-self-test]", e);
+    }
+  }
+
+  setInterval(() => {
+    try {
+      maybeRunAutoBackup("timer");
+    } catch (e) {
+      console.error("[ops/auto-backup]", e);
+    }
+  }, 5 * 60 * 1000).unref?.();
+
+  setInterval(() => {
+    try {
+      runScheduledReportExport("timer", "SYSTEM");
+    } catch (e) {
+      console.error("[reports/scheduled-csv]", e);
+    }
+  }, 60 * 1000).unref?.();
 
   return { server, io, db };
 }

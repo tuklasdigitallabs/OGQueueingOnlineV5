@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QSYS Provider Setup</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #111827; color: #f3f4f6; }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    .card { background: #1f2937; padding: 20px; border-radius: 12px; margin-bottom: 18px; }
+    h1, h2 { margin-top: 0; }
+    textarea, input, button { width: 100%; box-sizing: border-box; margin-top: 8px; }
+    textarea, input { padding: 10px; border-radius: 8px; border: 1px solid #374151; background: #111827; color: #f3f4f6; }
+    button { padding: 12px; border: 0; border-radius: 8px; background: #f59e0b; color: #111827; font-weight: 700; cursor: pointer; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #0b1220; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Provider Setup</h1>
+    <div class="card">
+      <h2>Installation Info</h2>
+      <pre id="info">Loading...</pre>
+    </div>
+    <div class="card">
+      <h2>Activate</h2>
+      <textarea id="activateToken" rows="6" placeholder="Paste activation token"></textarea>
+      <button id="activateBtn" type="button">Activate Installation</button>
+    </div>
+    <div class="card">
+      <h2>Renew</h2>
+      <textarea id="renewToken" rows="6" placeholder="Paste renewal token"></textarea>
+      <button id="renewBtn" type="button">Renew Installation</button>
+    </div>
+    <div class="card">
+      <h2>Result</h2>
+      <pre id="result">Ready.</pre>
+    </div>
+  </div>
+  <script src="/app-boot.js"></script>
+  <script>
+    const infoEl = document.getElementById("info");
+    const resultEl = document.getElementById("result");
+
+    async function loadInfo() {
+      const res = await fetch("/api/provider/install-info");
+      const data = await res.json();
+      infoEl.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function submitToken(url, token) {
+      resultEl.textContent = "Working...";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+      const data = await res.json();
+      resultEl.textContent = JSON.stringify(data, null, 2);
+      await loadInfo();
+    }
+
+    document.getElementById("activateBtn").addEventListener("click", async () => {
+      const token = document.getElementById("activateToken").value.trim();
+      if (!token) return;
+      await submitToken("/api/provider/activate", token);
+    });
+
+    document.getElementById("renewBtn").addEventListener("click", async () => {
+      const token = document.getElementById("renewToken").value.trim();
+      if (!token) return;
+      await submitToken("/api/provider/renew", token);
+    });
+
+    loadInfo().catch((err) => {
+      infoEl.textContent = String(err && err.message || err);
+    });
+  </script>
+</body>
+</html>

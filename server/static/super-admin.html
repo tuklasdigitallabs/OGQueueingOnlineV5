@@ -1,0 +1,412 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Super Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <style>
+      :root{
+        --bg:#f3eadc;
+        --panel:#faf6ee;
+        --card:#fbf7f0;
+        --line:rgba(0,0,0,.08);
+        --text:#1f2933;
+        --muted:rgba(31,41,51,.62);
+        --accent:#e10600;
+        --accent-soft:rgba(225,6,0,.08);
+        --good:#16a34a;
+        --shadow:0 10px 26px rgba(0,0,0,.10);
+        --radius:18px;
+      }
+      *{ box-sizing:border-box; }
+      body{
+        margin:0;
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+        color:var(--text);
+        background: var(--bg);
+        background-image: radial-gradient(900px 600px at 18% 12%, rgba(225,6,0,.05), transparent 55%);
+        background-attachment: fixed;
+      }
+      .shell{
+        max-width:1200px;
+        margin:0 auto;
+        padding:24px;
+      }
+      .hero{
+        display:flex;
+        justify-content:space-between;
+        gap:18px;
+        align-items:flex-start;
+        padding:24px;
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        background:rgba(255,255,255,.82);
+        box-shadow:var(--shadow);
+      }
+      .eyebrow{
+        margin:0 0 8px;
+        letter-spacing:.18em;
+        text-transform:uppercase;
+        font-size:11px;
+        color:var(--accent);
+      }
+      h1{
+        margin:0;
+        font-size:38px;
+        line-height:1;
+      }
+      .hero p{
+        margin:10px 0 0;
+        max-width:720px;
+        color:var(--muted);
+      }
+      .heroActions{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+      }
+      .groupActions{
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+        align-items:center;
+      }
+      button{
+        border:1px solid var(--line);
+        border-radius:14px;
+        padding:10px 12px;
+        font:inherit;
+        font-weight:900;
+        cursor:pointer;
+        background:rgba(60,40,20,.04);
+        color:var(--text);
+        transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      }
+      button:hover{
+        background:rgba(60,40,20,.08);
+        transform:translateY(-1px);
+      }
+      button.primary{
+        border-color:rgba(225,6,0,.55);
+        background:rgba(225,6,0,.10);
+        color:var(--text);
+      }
+      .meta{
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap:12px;
+        margin:18px 0;
+      }
+      .stat{
+        padding:16px;
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        background:rgba(255,255,255,.85);
+      }
+      .stat .label{
+        font-size:12px;
+        text-transform:uppercase;
+        letter-spacing:.12em;
+        color:var(--muted);
+      }
+      .stat .value{
+        margin-top:8px;
+        font-size:28px;
+        font-weight:700;
+      }
+      .statusBar{
+        min-height:20px;
+        margin:10px 0 18px;
+        color:var(--accent);
+      }
+      .pageHint{
+        margin:-6px 0 18px;
+        padding:12px 14px;
+        border:1px solid var(--line);
+        border-radius:14px;
+        background:rgba(255,255,255,.72);
+        color:var(--muted);
+        font-size:13px;
+        line-height:1.45;
+      }
+      .groups{
+        display:grid;
+        gap:16px;
+      }
+      .group{
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        padding:18px;
+        background:rgba(255,255,255,.85);
+        box-shadow:var(--shadow);
+      }
+      .groupHead{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:center;
+        margin-bottom:12px;
+      }
+      .groupHead h2{
+        margin:0;
+        font-size:20px;
+      }
+      .grid{
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap:12px;
+      }
+      .feature{
+        padding:14px;
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        background:var(--card);
+      }
+      .feature label{
+        display:flex;
+        gap:12px;
+        align-items:flex-start;
+        cursor:pointer;
+      }
+      .feature input{
+        margin-top:3px;
+        transform:scale(1.15);
+        accent-color:var(--good);
+      }
+      .featureName{
+        font-weight:700;
+      }
+      .featureBody{
+        display:block;
+      }
+      .featureDesc{
+        margin-top:6px;
+        color:var(--text);
+        font-size:13px;
+        line-height:1.4;
+      }
+      .featureKey{
+        margin-top:6px;
+        color:var(--muted);
+        font-size:12px;
+        word-break:break-word;
+      }
+      code{
+        font-family: Consolas, monospace;
+      }
+      @media (max-width: 700px){
+        .hero{ flex-direction:column; }
+        .heroActions{ width:100%; }
+        .heroActions button{ flex:1 1 180px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Hidden Provisioning Console</p>
+          <h1>Super Admin</h1>
+          <p>
+            This page provisions optional additions without surfacing them in the normal client UI.
+            Nothing here activates unless you explicitly enable the flag and wire the feature to check it.
+          </p>
+        </div>
+        <div class="heroActions">
+          <button id="internalToolsBtn" type="button">Internal Tools</button>
+          <button id="disableAllBtn" type="button">Disable All</button>
+          <button id="reloadBtn" type="button">Reload</button>
+          <button id="saveBtn" class="primary" type="button">Save Changes</button>
+          <button id="logoutBtn" type="button">Logout</button>
+        </div>
+      </section>
+
+      <section class="meta">
+        <div class="stat">
+          <div class="label">Signed In As</div>
+          <div id="userName" class="value">-</div>
+        </div>
+        <div class="stat">
+          <div class="label">Enabled Features</div>
+          <div id="enabledCount" class="value">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Catalog Size</div>
+          <div id="catalogCount" class="value">0</div>
+        </div>
+      </section>
+
+      <div id="status" class="statusBar"></div>
+      <div class="pageHint">
+        Most provisioned features apply after page refresh. Restart the app only for features that rely on startup initialization or background services that begin on boot.
+      </div>
+      <section id="groups" class="groups"></section>
+    </div>
+
+    <script src="/app-boot.js"></script>
+    <script>
+      const state = {
+        user: null,
+        features: [],
+      };
+
+      const groupsEl = document.getElementById("groups");
+      const statusEl = document.getElementById("status");
+      const userNameEl = document.getElementById("userName");
+      const enabledCountEl = document.getElementById("enabledCount");
+      const catalogCountEl = document.getElementById("catalogCount");
+
+      function setStatus(msg) {
+        statusEl.textContent = msg || "";
+      }
+
+      function setAllEnabled(enabled) {
+        document.querySelectorAll("input[data-key]").forEach((el) => {
+          el.checked = !!enabled;
+        });
+      }
+
+      function setGroupEnabled(group, enabled) {
+        document.querySelectorAll(`input[data-group="${CSS.escape(String(group || ""))}"]`).forEach((el) => {
+          el.checked = !!enabled;
+        });
+      }
+
+      function render() {
+        userNameEl.textContent = state.user ? state.user.fullName : "-";
+        const enabledCount = state.features.filter((f) => !!f.enabled).length;
+        enabledCountEl.textContent = String(enabledCount);
+        catalogCountEl.textContent = String(state.features.length);
+
+        const grouped = new Map();
+        for (const feature of state.features) {
+          const group = String(feature.group || "Other");
+          if (!grouped.has(group)) grouped.set(group, []);
+          grouped.get(group).push(feature);
+        }
+
+        groupsEl.innerHTML = "";
+        for (const [group, items] of grouped.entries()) {
+          const section = document.createElement("section");
+          section.className = "group";
+
+          const head = document.createElement("div");
+          head.className = "groupHead";
+          const title = document.createElement("h2");
+          title.textContent = group;
+          const meta = document.createElement("div");
+          meta.className = "groupActions";
+          const enableBtn = document.createElement("button");
+          enableBtn.type = "button";
+          enableBtn.textContent = "Enable All";
+          enableBtn.addEventListener("click", () => setGroupEnabled(group, true));
+          const disableBtn = document.createElement("button");
+          disableBtn.type = "button";
+          disableBtn.textContent = "Disable All";
+          disableBtn.addEventListener("click", () => setGroupEnabled(group, false));
+          const metaText = document.createElement("div");
+          metaText.textContent = `${items.filter((x) => x.enabled).length}/${items.length} enabled`;
+          meta.appendChild(enableBtn);
+          meta.appendChild(disableBtn);
+          meta.appendChild(metaText);
+          head.appendChild(title);
+          head.appendChild(meta);
+          section.appendChild(head);
+
+          const grid = document.createElement("div");
+          grid.className = "grid";
+          for (const item of items) {
+            const card = document.createElement("div");
+            card.className = "feature";
+            card.innerHTML = `
+              <label>
+                <input type="checkbox" data-key="${item.key}" data-group="${group}" ${item.enabled ? "checked" : ""} />
+                <div class="featureBody">
+                  <div class="featureName">${item.name}</div>
+                  <div class="featureDesc">${item.description || ""}</div>
+                  <div class="featureKey"><code>${item.key}</code></div>
+                </div>
+              </label>
+            `;
+            grid.appendChild(card);
+          }
+          section.appendChild(grid);
+          groupsEl.appendChild(section);
+        }
+      }
+
+      async function loadUser() {
+        const r = await fetch(window.appUrl("/api/super-admin/auth/me"), { cache: "no-store" });
+        if (r.status === 401 || r.status === 403) {
+          window.location.assign(window.appUrl("/super-admin-login"));
+          return;
+        }
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || "Failed to load user");
+        state.user = j.user || null;
+      }
+
+      async function loadFeatures() {
+        const r = await fetch(window.appUrl("/api/super-admin/features"), { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || "Failed to load features");
+        state.features = Array.isArray(j.features) ? j.features : [];
+      }
+
+      async function refresh() {
+        setStatus("Loading feature catalog...");
+        try {
+          await loadUser();
+          await loadFeatures();
+          render();
+          setStatus("");
+        } catch (err) {
+          setStatus(err.message || "Failed to load");
+        }
+      }
+
+      async function save() {
+        const payload = {};
+        document.querySelectorAll("input[data-key]").forEach((el) => {
+          payload[el.getAttribute("data-key")] = !!el.checked;
+        });
+        setStatus("Saving feature provisioning...");
+        try {
+          const r = await fetch(window.appUrl("/api/super-admin/features"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ features: payload }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.ok) throw new Error(j.error || "Save failed");
+          state.features = Array.isArray(j.features) ? j.features : [];
+          render();
+          setStatus("Provisioning updated.");
+        } catch (err) {
+          setStatus(err.message || "Save failed");
+        }
+      }
+
+      async function logout() {
+        try {
+          await fetch(window.appUrl("/api/super-admin/auth/logout"), { method: "POST" });
+        } finally {
+          window.location.assign(window.appUrl("/super-admin-login"));
+        }
+      }
+
+      document.getElementById("reloadBtn").addEventListener("click", refresh);
+      document.getElementById("disableAllBtn").addEventListener("click", () => setAllEnabled(false));
+      document.getElementById("saveBtn").addEventListener("click", save);
+      document.getElementById("logoutBtn").addEventListener("click", logout);
+      document.getElementById("internalToolsBtn").addEventListener("click", () => {
+        window.location.assign(window.appUrl("/internal-tools"));
+      });
+
+      refresh();
+    </script>
+  </body>
+</html>

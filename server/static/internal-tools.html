@@ -1,0 +1,722 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QSys Internal Tools</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root{
+        --bg:#f3eadc;
+        --panel:#faf6ee;
+        --card:#fbf7f0;
+        --line:rgba(0,0,0,.08);
+        --text:#1f2933;
+        --muted:rgba(31,41,51,.62);
+        --accent:#e10600;
+        --warn:#f59e0b;
+        --bad:#dc2626;
+        --good:#16a34a;
+        --shadow:0 10px 26px rgba(0,0,0,.10);
+        --radius:18px;
+      }
+      *{ box-sizing:border-box; }
+      body{
+        margin:0;
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+        color:var(--text);
+        background: var(--bg);
+        background-image: radial-gradient(900px 600px at 18% 12%, rgba(225,6,0,.05), transparent 55%);
+        background-attachment: fixed;
+      }
+      .shell{
+        max-width:1200px;
+        margin:0 auto;
+        padding:24px;
+      }
+      .hero, .card{
+        border:1px solid var(--line);
+        border-radius:var(--radius);
+        background:rgba(255,255,255,.85);
+        box-shadow:var(--shadow);
+      }
+      .hero{
+        padding:24px;
+        display:flex;
+        justify-content:space-between;
+        gap:16px;
+        align-items:flex-start;
+      }
+      .eyebrow{
+        margin:0 0 8px;
+        text-transform:uppercase;
+        letter-spacing:.16em;
+        font-size:11px;
+        color:var(--accent);
+      }
+      h1{ margin:0; font-size:36px; }
+      h2{ margin:0 0 10px; font-size:24px; }
+      .sub{ margin:10px 0 0; max-width:760px; color:var(--muted); }
+      .actions{ display:flex; gap:10px; flex-wrap:wrap; }
+      .stack{ display:grid; gap:16px; margin-top:18px; }
+      .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      .card{ padding:20px; }
+      button{
+        border:1px solid var(--line);
+        border-radius:14px;
+        padding:10px 12px;
+        font:inherit;
+        font-weight:900;
+        cursor:pointer;
+        background:rgba(60,40,20,.04);
+        color:var(--text);
+        transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      }
+      button:hover{
+        background:rgba(60,40,20,.08);
+        transform:translateY(-1px);
+      }
+      button.primary{
+        border-color:rgba(225,6,0,.55);
+        background:rgba(225,6,0,.10);
+        color:var(--text);
+      }
+      button.danger{
+        border-color:rgba(239,68,68,.55);
+        background:rgba(239,68,68,.12);
+        color:var(--text);
+      }
+      input, select, textarea{
+        width:100%;
+        padding:10px 12px;
+        border-radius:14px;
+        border:1px solid var(--line);
+        background:#fff;
+        color:var(--text);
+        font:inherit;
+      }
+      label{ display:block; margin:10px 0 6px; font-weight:700; }
+      table{ width:100%; border-collapse:collapse; margin-top:10px; }
+      th, td{
+        padding:10px 8px;
+        border-bottom:1px solid var(--line);
+        text-align:left;
+        vertical-align:top;
+        font-size:14px;
+      }
+      .muted{ color:var(--muted); }
+      .meta{
+        margin-top:12px;
+        color:var(--muted);
+        white-space:pre-line;
+        font-size:14px;
+      }
+      .dangerBox{
+        margin-top:10px;
+        padding:14px 16px;
+        border-radius:var(--radius);
+        border:1px solid rgba(239,68,68,.28);
+        background:rgba(239,68,68,.10);
+      }
+      .status{
+        min-height:20px;
+        margin-top:12px;
+        color:var(--warn);
+        white-space:pre-line;
+      }
+      .ok{ color:var(--good); }
+      .sectionHead{
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        align-items:flex-start;
+      }
+      .badge{
+        display:inline-block;
+        padding:6px 10px;
+        border-radius:999px;
+        border:1px solid var(--line);
+        font-size:12px;
+        font-weight:900;
+        background:rgba(60,40,20,.04);
+      }
+      @media (max-width: 900px){
+        .hero, .grid2{ grid-template-columns:1fr; display:grid; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Hidden Internal Surface</p>
+          <h1>Internal Tools</h1>
+          <p class="sub">Restricted tools for internal support and platform administration. This page uses the super-admin session and owns controls removed from the client-facing admin UI.</p>
+        </div>
+        <div class="actions">
+          <button id="btnSuperAdmin" type="button">Super Admin</button>
+          <button id="btnLogout" type="button">Logout</button>
+        </div>
+      </section>
+
+      <section class="stack">
+        <div class="card">
+          <div class="sectionHead">
+            <div>
+              <h2>Context</h2>
+              <div class="muted">Current branch, activation, and session information.</div>
+            </div>
+            <span id="sessionBadge" class="badge">Loading...</span>
+          </div>
+          <div id="contextMeta" class="meta">Loading environment...</div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h2>Branch Code Tool</h2>
+            <div id="branchMeta" class="meta">Loading branch config...</div>
+            <label for="branchName">Branch Name</label>
+            <input id="branchName" />
+            <label for="branchTimezone">Timezone</label>
+            <input id="branchTimezone" />
+            <div class="actions" style="margin-top:12px;">
+              <button id="btnSaveBranch" type="button">Save Name / Timezone</button>
+              <button id="btnChangeBranchCode" class="danger" type="button">Change Branch Code</button>
+            </div>
+            <div id="branchStatus" class="status"></div>
+          </div>
+
+          <div class="card">
+            <h2>Device Maintenance</h2>
+            <div id="deviceMeta" class="meta">Loading display state...</div>
+            <div class="actions" style="margin-top:12px;">
+              <button id="btnGeneratePair" type="button">Generate Pair Code</button>
+              <button id="btnRevokeAllDevices" class="danger" type="button">Revoke All Pairing</button>
+            </div>
+            <div id="deviceStatus" class="status"></div>
+            <table>
+              <thead>
+                <tr><th>Label</th><th>Branch</th><th>Last Seen</th><th>Status</th></tr>
+              </thead>
+              <tbody id="deviceTable"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h2>Elevated User Roles</h2>
+            <div class="muted">Create or manage elevated users without exposing those controls in normal admin.</div>
+            <label for="adminName">Admin Name</label>
+            <input id="adminName" placeholder="e.g. Branch Admin" />
+            <div class="grid2" style="margin-top:10px;">
+              <div>
+                <label for="adminRole">Role</label>
+                <select id="adminRole">
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="SUPERVISOR">SUPERVISOR</option>
+                  <option value="STAFF">STAFF</option>
+                </select>
+              </div>
+              <div>
+                <label for="adminPin">PIN</label>
+                <input id="adminPin" inputmode="numeric" maxlength="6" />
+              </div>
+            </div>
+            <div class="actions" style="margin-top:12px;">
+              <button id="btnCreateElevatedUser" type="button">Create / Add User</button>
+              <button id="btnReloadElevatedUsers" type="button">Reload Users</button>
+            </div>
+            <div id="userStatus" class="status"></div>
+            <table>
+              <thead>
+                <tr><th>Name</th><th>Role</th><th>Active</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="userTable"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h2>Permissions Matrix</h2>
+            <div class="muted">Direct role-permission editing for platform support only.</div>
+            <div class="actions" style="margin-top:12px;">
+              <button id="btnReloadPerms" type="button">Reload Matrix</button>
+              <button id="btnSavePerms" class="primary" type="button">Save Matrix</button>
+            </div>
+            <div id="permStatus" class="status"></div>
+            <div style="overflow:auto;">
+              <table id="permMatrixTable">
+                <thead><tr><th>Permission</th><th>STAFF</th><th>SUPERVISOR</th><th>ADMIN</th></tr></thead>
+                <tbody><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Integration Credentials</h2>
+          <div id="integrationMeta" class="meta">Loading Google Drive configuration...</div>
+          <div class="grid2">
+            <div>
+              <label for="gdriveFolderId">Google Drive Folder ID</label>
+              <input id="gdriveFolderId" />
+              <label for="gdriveAuthMode">Auth Mode</label>
+              <select id="gdriveAuthMode">
+                <option value="oauth">OAuth</option>
+                <option value="service_account">Service Account</option>
+              </select>
+              <label for="gdriveOauthClientId">OAuth Client ID</label>
+              <input id="gdriveOauthClientId" />
+              <label for="gdriveOauthClientSecret">OAuth Client Secret</label>
+              <input id="gdriveOauthClientSecret" type="password" />
+              <label for="gdriveOauthRedirectUri">OAuth Redirect URI</label>
+              <input id="gdriveOauthRedirectUri" />
+              <div class="actions" style="margin-top:12px;">
+                <button id="btnSaveGdriveSettings" type="button">Save Config</button>
+                <button id="btnStartOauth" type="button">Start OAuth</button>
+                <button id="btnClearOauth" class="danger" type="button">Clear OAuth Token</button>
+              </div>
+            </div>
+            <div>
+              <label>OAuth Client JSON</label>
+              <input id="gdriveOauthClientFile" disabled />
+              <div class="actions" style="margin-top:10px;">
+                <button id="btnPickOauthFile" type="button">Choose OAuth JSON</button>
+                <button id="btnClearOauthFile" class="danger" type="button">Clear OAuth JSON</button>
+              </div>
+              <label style="margin-top:14px;">Service Account JSON</label>
+              <input id="gdriveServiceAccountFile" disabled />
+              <div class="actions" style="margin-top:10px;">
+                <button id="btnPickServiceFile" type="button">Choose Service Account</button>
+                <button id="btnClearServiceFile" class="danger" type="button">Clear Service Account</button>
+                <button id="btnTestGdrive" type="button">Test Connection</button>
+              </div>
+              <div id="integrationStatus" class="status"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Seed Test Data</h2>
+          <div class="dangerBox">
+            <strong>Destructive action</strong><br />
+            This deletes the selected seeded date range for the current branch and inserts demo data for testing.
+          </div>
+          <div class="grid2" style="margin-top:14px;">
+            <div>
+              <label for="seedMonths">Seed Range</label>
+              <select id="seedMonths">
+                <option value="1">1 month</option>
+                <option value="2">2 months</option>
+                <option value="3">3 months</option>
+              </select>
+            </div>
+            <div>
+              <label for="seedSummary">Summary</label>
+              <input id="seedSummary" value="Seeds the current month-to-date range." disabled />
+            </div>
+          </div>
+          <div class="actions" style="margin-top:14px;">
+            <button id="btnSeed" class="primary" type="button">Seed Selected Test Data</button>
+          </div>
+          <div id="seedStatus" class="status"></div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app-boot.js"></script>
+    <script>
+      const state = { me: null, health: null, branch: null, users: [], perms: null, devices: null, settings: {} };
+      const $ = (id) => document.getElementById(id);
+
+      function setStatus(id, text, ok) {
+        const el = $(id);
+        if (!el) return;
+        el.textContent = text || "";
+        el.classList.toggle("ok", !!ok);
+      }
+
+      async function jget(url) {
+        const r = await fetch(window.appUrl(url), { cache: "no-store" });
+        if (r.status === 401 || r.status === 403) {
+          window.location.assign(window.appUrl("/super-admin-login"));
+          return { ok: false, error: "Not authenticated" };
+        }
+        return await r.json().catch(() => ({ ok: false, error: "Invalid response" }));
+      }
+
+      async function jpost(url, body) {
+        const r = await fetch(window.appUrl(url), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        });
+        if (r.status === 401 || r.status === 403) {
+          window.location.assign(window.appUrl("/super-admin-login"));
+          return { ok: false, error: "Not authenticated" };
+        }
+        return await r.json().catch(() => ({ ok: false, error: "Invalid response" }));
+      }
+
+      function fmtTime(ms) {
+        if (!ms) return "-";
+        try { return new Date(ms).toLocaleString(); } catch { return String(ms); }
+      }
+
+      function escapeHtml(v) {
+        return String(v || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function getSeedRangeLabel(months) {
+        const n = Math.max(1, Math.min(3, Number(months || 1) || 1));
+        return `${n} month${n === 1 ? "" : "s"}`;
+      }
+
+      function updateSeedSummary() {
+        const months = Math.max(1, Math.min(3, Number($("seedMonths")?.value || 1) || 1));
+        $("seedSummary").value =
+          months === 1
+            ? "Seeds the current month-to-date range."
+            : `Seeds the last ${getSeedRangeLabel(months)} up to today.`;
+      }
+
+      async function loadContext() {
+        const [me, health, install] = await Promise.all([
+          jget("/api/super-admin/auth/me"),
+          jget("/api/health"),
+          jget("/api/provider/install-info"),
+        ]);
+        if (!me?.ok) throw new Error(me?.error || "Failed to load session");
+        if (!health?.ok) throw new Error(health?.error || "Failed to load branch context");
+        state.me = me.user || null;
+        state.health = health;
+        const licenseExpiresAt =
+          Number(install?.licenseExpiresAt || 0) ||
+          Number(health?.licenseExpiresAt || 0) ||
+          0;
+        const expiryText = licenseExpiresAt
+          ? `${fmtTime(licenseExpiresAt)}${Number.isFinite(Number(install?.daysRemaining)) ? ` (${Number(install.daysRemaining)} day(s) remaining)` : ""}`
+          : "-";
+        $("sessionBadge").textContent = `${state.me.fullName || "-"} (${state.me.roleId || "-"})`;
+        $("contextMeta").textContent =
+          `Branch: ${health.branchCode || "-"}${health.branchName ? ` (${health.branchName})` : ""}\n` +
+          `Business Date: ${health.currentBusinessDate || "-"}\n` +
+          `Activation: ${health.activationStatus || "-"}\n` +
+          `License Expires: ${expiryText}`;
+      }
+
+      async function loadBranch() {
+        const j = await jget("/api/admin/branch");
+        if (!j?.ok) throw new Error(j?.error || "Failed to load branch");
+        state.branch = j.branch || {};
+        $("branchName").value = state.branch.branchName || "";
+        $("branchTimezone").value = state.branch.timezone || "Asia/Manila";
+        $("branchMeta").textContent =
+          `Current Code: ${state.branch.branchCode || "-"}\n` +
+          `Current Name: ${state.branch.branchName || "-"}\n` +
+          `Timezone: ${state.branch.timezone || "-"}`;
+      }
+
+      async function saveBranchBasics() {
+        const payload = {
+          branchName: String($("branchName").value || "").trim(),
+          branchCode: String(state.branch?.branchCode || "").trim(),
+          timezone: String($("branchTimezone").value || "").trim() || "Asia/Manila",
+        };
+        const j = await jpost("/api/admin/branch", payload);
+        if (!j?.ok) return setStatus("branchStatus", j.error || "Save failed");
+        setStatus("branchStatus", "Branch settings updated.", true);
+        await loadBranch();
+      }
+
+      async function changeBranchCode() {
+        const current = String(state.branch?.branchCode || "").trim().toUpperCase();
+        const code = prompt("Enter new Branch Code:", current);
+        if (code === null) return;
+        const nextCode = String(code || "").trim().toUpperCase();
+        if (!nextCode) return setStatus("branchStatus", "No branch code entered.");
+        const confirmLoss = prompt("Type CHANGE to confirm branch code migration:", "");
+        if (String(confirmLoss || "").trim().toUpperCase() !== "CHANGE") return setStatus("branchStatus", "Cancelled.");
+        const j = await jpost("/api/admin/branch", {
+          branchName: String($("branchName").value || "").trim() || state.branch?.branchName || "",
+          branchCode: nextCode,
+          timezone: String($("branchTimezone").value || "").trim() || state.branch?.timezone || "Asia/Manila",
+          confirmLoss: true,
+        });
+        if (!j?.ok) return setStatus("branchStatus", j.error || "Branch code change failed.");
+        setStatus("branchStatus", `Branch code changed to ${nextCode}.`, true);
+        await loadBranch();
+      }
+
+      async function loadDevices() {
+        const j = await jget("/api/admin/display/devices");
+        if (!j?.ok) throw new Error(j?.error || "Failed to load devices");
+        state.devices = j;
+        $("deviceMeta").textContent =
+          `Last Pair Code: ${j.lastPairCode?.code || "-"}\n` +
+          `Created: ${j.lastPairCode?.createdAt ? fmtTime(j.lastPairCode.createdAt) : "-"}`;
+        const tb = $("deviceTable");
+        tb.innerHTML = "";
+        const rows = Array.isArray(j.devices) ? j.devices : [];
+        if (!rows.length) {
+          tb.innerHTML = `<tr><td colspan="4" class="muted">No paired devices.</td></tr>`;
+          return;
+        }
+        for (const d of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${escapeHtml(d.label || "-")}</td><td>${escapeHtml(d.branchCode || "-")}</td><td>${escapeHtml(fmtTime(d.lastSeenAt))}</td><td>${d.revokedAt ? "Revoked" : "Active"}</td>`;
+          tb.appendChild(tr);
+        }
+      }
+
+      async function generatePairCode() {
+        const j = await jpost("/api/admin/display/pair-code", {});
+        if (!j?.ok) return setStatus("deviceStatus", j.error || "Failed to generate pair code.");
+        setStatus("deviceStatus", `Pair code generated: ${j.code}`, true);
+        await loadDevices();
+      }
+
+      async function revokeAllDevices() {
+        if (!confirm("Revoke all paired displays?")) return;
+        const j = await jpost("/api/admin/display/devices/revoke-all", {});
+        if (!j?.ok) return setStatus("deviceStatus", j.error || "Failed to revoke pairing.");
+        setStatus("deviceStatus", `Revoked ${Number(j.revoked || 0)} device(s).`, true);
+        await loadDevices();
+      }
+
+      async function loadUsers() {
+        const j = await jget("/api/admin/users");
+        if (!j?.ok) throw new Error(j?.error || "Failed to load users");
+        state.users = Array.isArray(j.users) ? j.users : [];
+        const tb = $("userTable");
+        tb.innerHTML = "";
+        const rows = state.users.filter((u) => ["ADMIN", "SUPERVISOR"].includes(String(u.roleId || "").toUpperCase()));
+        if (!rows.length) {
+          tb.innerHTML = `<tr><td colspan="4" class="muted">No elevated users.</td></tr>`;
+          return;
+        }
+        for (const u of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(u.fullName || "-")}</td>
+            <td>${escapeHtml(u.roleId || "-")}</td>
+            <td>${u.isActive ? "Yes" : "No"}</td>
+            <td>
+              <button type="button" data-edit="${escapeHtml(u.userId)}">Edit</button>
+              <button type="button" data-pin="${escapeHtml(u.userId)}">Reset PIN</button>
+            </td>
+          `;
+          tb.appendChild(tr);
+        }
+        tb.querySelectorAll("[data-edit]").forEach((btn) => btn.addEventListener("click", async () => {
+          const user = state.users.find((u) => u.userId === btn.getAttribute("data-edit"));
+          if (!user) return;
+          const name = prompt("Full name:", user.fullName || "");
+          if (name === null) return;
+          const role = prompt("Role (STAFF / SUPERVISOR / ADMIN):", user.roleId || "SUPERVISOR");
+          if (role === null) return;
+          const active = confirm(`Set ${name} as active? Click Cancel to disable.`);
+          const j2 = await jpost("/api/admin/users/update", { userId: user.userId, fullName: name, roleId: String(role || "").trim().toUpperCase(), isActive: active });
+          if (!j2?.ok) return setStatus("userStatus", j2.error || "Update failed.");
+          setStatus("userStatus", "User updated.", true);
+          await loadUsers();
+        }));
+        tb.querySelectorAll("[data-pin]").forEach((btn) => btn.addEventListener("click", async () => {
+          const user = state.users.find((u) => u.userId === btn.getAttribute("data-pin"));
+          if (!user) return;
+          const pin = prompt(`New 6-digit PIN for ${user.fullName}:`, "");
+          if (pin === null) return;
+          const j2 = await jpost("/api/admin/users/reset-pin", { userId: user.userId, pin });
+          if (!j2?.ok) return setStatus("userStatus", j2.error || "PIN reset failed.");
+          setStatus("userStatus", "PIN reset.", true);
+        }));
+      }
+
+      async function createElevatedUser() {
+        const fullName = String($("adminName").value || "").trim();
+        const roleId = String($("adminRole").value || "ADMIN").trim().toUpperCase();
+        const pin = String($("adminPin").value || "").trim();
+        const j = await jpost("/api/admin/users/create", { fullName, roleId, pin });
+        if (!j?.ok) return setStatus("userStatus", j.error || "Create failed.");
+        setStatus("userStatus", "Elevated user created.", true);
+        $("adminName").value = "";
+        $("adminPin").value = "";
+        await loadUsers();
+      }
+
+      async function loadPerms() {
+        const j = await jget("/api/admin/permissions");
+        if (!j?.ok) throw new Error(j?.error || "Failed to load permissions");
+        state.perms = j;
+        const roles = ["STAFF", "SUPERVISOR", "ADMIN"];
+        const tb = $("permMatrixTable").querySelector("tbody");
+        tb.innerHTML = "";
+        for (const p of (j.permissions || [])) {
+          const tr = document.createElement("tr");
+          const cells = roles.map((role) => {
+            const checked = j.matrix?.[role]?.[p.permKey] ? "checked" : "";
+            return `<td><input type="checkbox" data-role="${role}" data-perm="${escapeHtml(p.permKey)}" ${checked} /></td>`;
+          }).join("");
+          tr.innerHTML = `<td><b>${escapeHtml(p.permName || p.permKey)}</b><div class="muted">${escapeHtml(p.permKey)}</div></td>${cells}`;
+          tb.appendChild(tr);
+        }
+      }
+
+      async function savePerms() {
+        const matrix = { STAFF: {}, SUPERVISOR: {}, ADMIN: {} };
+        document.querySelectorAll("#permMatrixTable input[type='checkbox']").forEach((el) => {
+          const role = el.getAttribute("data-role");
+          const perm = el.getAttribute("data-perm");
+          matrix[role][perm] = el.checked ? 1 : 0;
+        });
+        const j = await jpost("/api/admin/permissions", { matrix });
+        if (!j?.ok) return setStatus("permStatus", j.error || "Save failed.");
+        setStatus("permStatus", "Permissions saved.", true);
+      }
+
+      async function loadIntegrations() {
+        const j = await jget("/api/admin/settings");
+        if (!j?.ok) throw new Error(j?.error || "Failed to load settings");
+        state.settings = j.settings || {};
+        $("gdriveFolderId").value = state.settings["gdrive.folderId"] || "";
+        $("gdriveAuthMode").value = state.settings["gdrive.authMode"] || "oauth";
+        $("gdriveOauthClientId").value = state.settings["gdrive.oauthClientId"] || "";
+        $("gdriveOauthClientSecret").value = state.settings["gdrive.oauthClientSecret"] || "";
+        $("gdriveOauthRedirectUri").value = state.settings["gdrive.oauthRedirectUri"] || `${window.location.origin}${window.appUrl("/api/admin/gdrive/oauth/callback")}`;
+        $("gdriveOauthClientFile").value = state.settings["gdrive.oauthClientFile"] || "";
+        $("gdriveServiceAccountFile").value = state.settings["gdrive.serviceAccountFile"] || "";
+        $("integrationMeta").textContent =
+          `Auth Mode: ${state.settings["gdrive.authMode"] || "oauth"}\n` +
+          `Folder ID: ${state.settings["gdrive.folderId"] || "-"}\n` +
+          `OAuth Refresh Token: ${state.settings["gdrive.oauthRefreshToken"] ? "Configured" : "Not configured"}`;
+      }
+
+      async function saveGdriveSettings() {
+        const updates = {
+          "gdrive.authMode": $("gdriveAuthMode").value,
+          "gdrive.folderId": String($("gdriveFolderId").value || "").trim(),
+          "gdrive.oauthClientId": String($("gdriveOauthClientId").value || "").trim(),
+          "gdrive.oauthClientSecret": String($("gdriveOauthClientSecret").value || "").trim(),
+          "gdrive.oauthRedirectUri": String($("gdriveOauthRedirectUri").value || "").trim(),
+        };
+        const j = await jpost("/api/admin/settings", updates);
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Save failed.");
+        setStatus("integrationStatus", "Integration settings saved.", true);
+        await loadIntegrations();
+      }
+
+      async function pickOauthFile() {
+        const j = await jpost("/api/admin/gdrive/oauth-client/select", {});
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to pick OAuth JSON.");
+        setStatus("integrationStatus", "OAuth JSON loaded.", true);
+        await loadIntegrations();
+      }
+
+      async function clearOauthFile() {
+        const j = await jpost("/api/admin/gdrive/oauth-client/clear", {});
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to clear OAuth JSON.");
+        setStatus("integrationStatus", "OAuth JSON cleared.", true);
+        await loadIntegrations();
+      }
+
+      async function pickServiceFile() {
+        const j = await jpost("/api/admin/gdrive/service-account/select", {});
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to pick service account.");
+        setStatus("integrationStatus", "Service account JSON loaded.", true);
+        await loadIntegrations();
+      }
+
+      async function clearServiceFile() {
+        const j = await jpost("/api/admin/gdrive/service-account/clear", {});
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to clear service account.");
+        setStatus("integrationStatus", "Service account cleared.", true);
+        await loadIntegrations();
+      }
+
+      async function startOauth() {
+        const payload = {
+          authMode: $("gdriveAuthMode").value,
+          folderId: $("gdriveFolderId").value,
+          oauthClientId: $("gdriveOauthClientId").value,
+          oauthClientSecret: $("gdriveOauthClientSecret").value,
+          oauthRedirectUri: $("gdriveOauthRedirectUri").value,
+        };
+        const j = await jpost("/api/admin/gdrive/oauth/start", payload);
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to start OAuth.");
+        window.open(j.authUrl, "_blank");
+        setStatus("integrationStatus", "OAuth window opened.", true);
+      }
+
+      async function clearOauth() {
+        const j = await jpost("/api/admin/gdrive/oauth/clear", {});
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to clear OAuth token.");
+        setStatus("integrationStatus", "OAuth token cleared.", true);
+        await loadIntegrations();
+      }
+
+      async function testGdrive() {
+        const payload = {
+          authMode: $("gdriveAuthMode").value,
+          folderId: $("gdriveFolderId").value,
+          oauthClientId: $("gdriveOauthClientId").value,
+          oauthClientSecret: $("gdriveOauthClientSecret").value,
+          oauthRedirectUri: $("gdriveOauthRedirectUri").value,
+          oauthRefreshToken: state.settings["gdrive.oauthRefreshToken"] || "",
+          serviceAccountFile: $("gdriveServiceAccountFile").value,
+        };
+        const j = await jpost("/api/admin/upload/test", payload);
+        if (!j?.ok) return setStatus("integrationStatus", j.error || "Connection test failed.");
+        setStatus("integrationStatus", "Google Drive connection test succeeded.", true);
+      }
+
+      async function seedTodayData() {
+        const months = Math.max(1, Math.min(3, Number($("seedMonths").value || 1) || 1));
+        const label = getSeedRangeLabel(months);
+        if (!confirm(`Seed ${label} of test data? This will delete current branch queue rows in that seeded range.`)) return;
+        const j = await jpost("/api/admin/system/seed-today", { months });
+        if (!j?.ok) return setStatus("seedStatus", j.error || "Seed failed.");
+        setStatus("seedStatus", j.message || "Seed completed.", true);
+      }
+
+      async function boot() {
+        try {
+          await loadContext();
+          await Promise.all([loadBranch(), loadDevices(), loadUsers(), loadPerms(), loadIntegrations()]);
+        } catch (err) {
+          setStatus("seedStatus", err.message || "Failed to load internal tools.");
+        }
+      }
+
+      $("btnLogout").addEventListener("click", async () => {
+        try { await fetch(window.appUrl("/api/super-admin/auth/logout"), { method: "POST" }); }
+        finally { window.location.assign(window.appUrl("/super-admin-login")); }
+      });
+      $("btnSuperAdmin").addEventListener("click", () => { window.location.assign(window.appUrl("/super-admin")); });
+      $("btnSaveBranch").addEventListener("click", saveBranchBasics);
+      $("btnChangeBranchCode").addEventListener("click", changeBranchCode);
+      $("btnGeneratePair").addEventListener("click", generatePairCode);
+      $("btnRevokeAllDevices").addEventListener("click", revokeAllDevices);
+      $("btnCreateElevatedUser").addEventListener("click", createElevatedUser);
+      $("btnReloadElevatedUsers").addEventListener("click", loadUsers);
+      $("btnReloadPerms").addEventListener("click", loadPerms);
+      $("btnSavePerms").addEventListener("click", savePerms);
+      $("btnSaveGdriveSettings").addEventListener("click", saveGdriveSettings);
+      $("btnPickOauthFile").addEventListener("click", pickOauthFile);
+      $("btnClearOauthFile").addEventListener("click", clearOauthFile);
+      $("btnPickServiceFile").addEventListener("click", pickServiceFile);
+      $("btnClearServiceFile").addEventListener("click", clearServiceFile);
+      $("btnStartOauth").addEventListener("click", startOauth);
+      $("btnClearOauth").addEventListener("click", clearOauth);
+      $("btnTestGdrive").addEventListener("click", testGdrive);
+      $("btnSeed").addEventListener("click", seedTodayData);
+      $("seedMonths").addEventListener("change", updateSeedSummary);
+
+      updateSeedSummary();
+      boot();
+    </script>
+  </body>
+</html>

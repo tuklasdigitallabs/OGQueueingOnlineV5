@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QSYS Super Admin Recovery</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #111827; color: #f3f4f6; }
+    .wrap { max-width: 720px; margin: 10vh auto; background: #1f2937; padding: 24px; border-radius: 12px; }
+    button { padding: 12px 16px; border: 0; border-radius: 8px; background: #ef4444; color: #fff; font-weight: 700; cursor: pointer; }
+    pre { white-space: pre-wrap; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Super Admin Recovery</h1>
+    <p>This endpoint is intended for loopback-only recovery. Use it only when locked out of administrative access.</p>
+    <button id="recoverBtn" type="button">Reset Super Admin</button>
+    <pre id="status"></pre>
+  </div>
+  <script src="/app-boot.js"></script>
+  <script>
+    const statusEl = document.getElementById("status");
+    document.getElementById("recoverBtn").addEventListener("click", async () => {
+      statusEl.textContent = "Running recovery...";
+      const res = await fetch("/api/internal/super-admin/recover", { method: "POST", headers: { "Content-Type": "application/json" } });
+      const data = await res.json();
+      statusEl.textContent = JSON.stringify(data, null, 2);
+    });
+  </script>
+</body>
+</html>
