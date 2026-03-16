@@ -660,7 +660,9 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   global.__app = app;
   app.set("query parser", "simple");
   app.set("trust proxy", true);
-  app.use(helmet());
+  app.use(helmet({
+    hsts: false,
+  }));
 
   // Persistent SQLite session store (avoids default MemoryStore limitations).
   class SQLiteSessionStore extends session.Store {
