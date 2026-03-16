@@ -252,6 +252,7 @@
       const state = {
         user: null,
         features: [],
+        dirty: false,
       };
 
       const groupsEl = document.getElementById("groups");
@@ -264,16 +265,36 @@
         statusEl.textContent = msg || "";
       }
 
+      function syncFeatureStateFromInputs() {
+        const next = new Map(
+          state.features.map((feature) => [String(feature.key || ""), { ...feature }])
+        );
+        document.querySelectorAll("input[data-key]").forEach((el) => {
+          const key = String(el.getAttribute("data-key") || "");
+          if (!next.has(key)) return;
+          next.get(key).enabled = !!el.checked;
+        });
+        state.features = Array.from(next.values());
+      }
+
       function setAllEnabled(enabled) {
         document.querySelectorAll("input[data-key]").forEach((el) => {
           el.checked = !!enabled;
         });
+        syncFeatureStateFromInputs();
+        state.dirty = true;
+        render();
+        setStatus("Unsaved changes.");
       }
 
       function setGroupEnabled(group, enabled) {
         document.querySelectorAll(`input[data-group="${CSS.escape(String(group || ""))}"]`).forEach((el) => {
           el.checked = !!enabled;
         });
+        syncFeatureStateFromInputs();
+        state.dirty = true;
+        render();
+        setStatus("Unsaved changes.");
       }
 
       function render() {
@@ -337,6 +358,15 @@
           section.appendChild(grid);
           groupsEl.appendChild(section);
         }
+
+        document.querySelectorAll("input[data-key]").forEach((el) => {
+          el.addEventListener("change", () => {
+            syncFeatureStateFromInputs();
+            state.dirty = true;
+            render();
+            setStatus("Unsaved changes.");
+          }, { once: true });
+        });
       }
 
       async function loadUser() {
@@ -362,6 +392,7 @@
         try {
           await loadUser();
           await loadFeatures();
+          state.dirty = false;
           render();
           setStatus("");
         } catch (err) {
@@ -383,7 +414,8 @@
           });
           const j = await r.json().catch(() => ({}));
           if (!r.ok || !j.ok) throw new Error(j.error || "Save failed");
-          state.features = Array.isArray(j.features) ? j.features : [];
+          await loadFeatures();
+          state.dirty = false;
           render();
           setStatus("Provisioning updated.");
         } catch (err) {
