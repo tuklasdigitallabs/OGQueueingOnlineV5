@@ -955,13 +955,27 @@ function waitingMins(r){
       return isPriority ? `P${g}-${qn}` : `${g}-${qn}`;
     }
 
+    function branchAwareApiUrl(url){
+      const raw = String(url || "");
+      const code = String(currentBranchCodeForNav() || "").trim().toUpperCase();
+      if (!code || !raw.startsWith("/api/")) return raw;
+      try{
+        const u = new URL(raw, window.location.origin);
+        if (!u.searchParams.get("branchCode")) u.searchParams.set("branchCode", code);
+        return u.pathname + u.search;
+      }catch{
+        const sep = raw.includes("?") ? "&" : "?";
+        return `${raw}${sep}branchCode=${encodeURIComponent(code)}`;
+      }
+    }
+
     async function api(url, method, body){
       const opt = { method: method || "GET", headers: {} };
       if (body !== undefined){
         opt.headers["Content-Type"] = "application/json";
         opt.body = JSON.stringify(body);
       }
-      const res = await fetch(url, opt);
+      const res = await fetch(branchAwareApiUrl(url), opt);
       let data = null;
       try { data = await res.json(); } catch {}
       return { res, data };
@@ -1071,7 +1085,7 @@ function waitingMins(r){
       if (!pill || !txt || !dot) return;
 
       try{
-        const r = await fetch("/api/health", { cache:"no-store" });
+        const r = await fetch(branchAwareApiUrl("/api/health"), { cache:"no-store" });
         if (!r.ok) throw new Error("bad");
         pill.classList.remove("bad");
         pill.classList.add("ok");
@@ -1737,7 +1751,7 @@ function getQueuedMs(item) {
     });
 
     $("logoutBtn").addEventListener("click", async () => {
-      try{ await fetch("/api/staff/auth/logout", { method:"POST" }); }catch{}
+      try{ await fetch(branchAwareApiUrl("/api/staff/auth/logout"), { method:"POST" }); }catch{}
       window.location.href = staffLoginUrl();
     });
     $("branchSwitch")?.addEventListener("change", async (ev) => {
@@ -1817,8 +1831,10 @@ function getQueuedMs(item) {
     }
 
     try{
+      const branchCode = String(currentBranchCodeForNav() || "").trim().toUpperCase();
       rtSocket = io({
         path: window.appUrl("/socket.io"),
+        query: branchCode ? { branchCode } : undefined,
         transports: ["websocket", "polling"],
       });
       rtSocket.on("state:changed", () => loadState());
