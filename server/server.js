@@ -8282,6 +8282,17 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
 
   /* ---------- socket ---------- */
   const server = http.createServer(app);
+  const allowedSocketHosts = new Set(["127.0.0.1", "localhost"]);
+  for (const raw of [
+    process.env.QSYS_PUBLIC_HOST,
+    process.env.PUBLIC_HOST,
+    process.env.APP_HOST,
+    "onegourmetph.com",
+    "www.onegourmetph.com",
+  ]) {
+    const host = String(raw || "").trim().toLowerCase();
+    if (host) allowedSocketHosts.add(host);
+  }
   const io = new Server(server, {
     path: pathWithBase("/socket.io"),
     cors: {
@@ -8290,7 +8301,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
         try {
           const u = new URL(String(origin));
           const host = String(u.hostname || "").toLowerCase();
-          if (host === "127.0.0.1" || host === "localhost") return cb(null, true);
+          if (allowedSocketHosts.has(host)) return cb(null, true);
         } catch {}
         return cb(new Error("Not allowed by CORS"));
       },

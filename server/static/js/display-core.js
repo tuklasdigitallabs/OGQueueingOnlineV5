@@ -1201,7 +1201,10 @@ function dbgDisp(...args){
     });
 
     // Socket
-    const socket = io({ path: window.appUrl("/socket.io") });
+    const socket = io({
+      path: window.appUrl("/socket.io"),
+      transports: ["websocket", "polling"],
+    });
 
 
 

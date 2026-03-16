@@ -1737,7 +1737,10 @@ function getQueuedMs(item) {
     }
 
     try{
-      rtSocket = io({ path: window.appUrl("/socket.io") });
+      rtSocket = io({
+        path: window.appUrl("/socket.io"),
+        transports: ["websocket", "polling"],
+      });
       rtSocket.on("state:changed", () => loadState());
     }catch{}
 
