@@ -1066,9 +1066,6 @@ function waitingMins(r){
 
     function hasFeature(key){
       const k = String(key);
-      if (state.queueTools?.features && Object.prototype.hasOwnProperty.call(state.queueTools.features, k)) {
-        return !!state.queueTools.features[k];
-      }
       return !!state.features[k];
     }
 
@@ -1076,9 +1073,19 @@ function waitingMins(r){
       const { res, data } = await api("/api/staff/feature-flags", "GET");
       if (!res.ok || !data || !data.ok){
         state.features = {};
+        state.queueTools = null;
+        renderQueueTools();
         return false;
       }
       state.features = data.features || {};
+      if (
+        !state.features["queue.recovery_tools"] &&
+        !state.features["queue.reopen_completed"] &&
+        !state.features["queue.wait_forecast"]
+      ) {
+        state.queueTools = null;
+      }
+      renderQueueTools();
       return true;
     }
 
@@ -1299,13 +1306,19 @@ function getQueuedMs(item) {
     }
 
     async function loadQueueTools(){
+      if (
+        !hasFeature("queue.recovery_tools") &&
+        !hasFeature("queue.reopen_completed") &&
+        !hasFeature("queue.wait_forecast")
+      ) {
+        state.queueTools = null;
+        renderQueueTools();
+        return;
+      }
       try{
         const { res, data } = await api(`/api/staff/queue-tools?groupCode=${encodeURIComponent(groupPick())}`, "GET");
         if (!res.ok || !data || !data.ok) throw new Error("queue-tools");
         state.queueTools = data;
-        if (data.features && typeof data.features === "object") {
-          state.features = { ...(state.features || {}), ...data.features };
-        }
       }catch{
         state.queueTools = null;
       }
