@@ -124,6 +124,30 @@
     }
   }
 
+  function renderBranchValidation(status) {
+    const configuredCode = normalizeBranchCode(state.launcherConfig?.branchCode || el.branchCodeInput?.value);
+    if (!configuredCode) {
+      setAgentStatus("Enter the branch code for the store display before opening the kiosk window.", true);
+      return;
+    }
+    if (status?.branchValid) {
+      const label = status.branchName ? `${status.branchName} (${configuredCode})` : configuredCode;
+      setAgentStatus(`Display agent is pointed at ${label}.`, false);
+      return;
+    }
+    const suggested = normalizeBranchCode(status?.suggestedBranchCode);
+    if (suggested) {
+      setAgentStatus(`Branch code ${configuredCode} was not found on the server. Try ${suggested} instead.`, true);
+      return;
+    }
+    const available = Array.isArray(status?.availableBranches) ? status.availableBranches.map((row) => row.branchCode).filter(Boolean) : [];
+    if (available.length) {
+      setAgentStatus(`Branch code ${configuredCode} was not found on the server. Available: ${available.join(", ")}.`, true);
+      return;
+    }
+    setAgentStatus(`Branch code ${configuredCode} could not be validated on the server.`, true);
+  }
+
   function setHealth(ok, text) {
     el.healthDot.classList.remove("ok", "bad");
     el.healthDot.classList.add(ok ? "ok" : "bad");
@@ -197,9 +221,11 @@
       if (status.baseUrl && el.baseUrl) el.baseUrl.textContent = String(status.baseUrl);
       if (status.businessDate) el.businessDate.textContent = String(status.businessDate);
       if (status.branchCode && el.branchCode) el.branchCode.textContent = String(status.branchCode);
+      renderBranchValidation(status);
       return true;
     } catch (e) {
       setHealth(false, "Server offline");
+      setAgentStatus("Server is offline or unreachable from this display PC.", true);
       return false;
     }
   }

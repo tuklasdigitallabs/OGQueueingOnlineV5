@@ -550,6 +550,9 @@ ipcMain.handle("launcher-status:get", async () => {
     branchCode,
     businessDate: "",
     branchName: "",
+    branchValid: false,
+    availableBranches: [],
+    suggestedBranchCode: "",
     baseUrl: base,
   };
   try {
@@ -568,6 +571,22 @@ ipcMain.handle("launcher-status:get", async () => {
     }
     if (!out.branchCode && info.json?.branchCode) {
       out.branchCode = String(info.json.branchCode);
+    }
+  } catch {}
+
+  try {
+    const branches = await fetchJsonMaybe(`${base}/api/public/branches`);
+    const rows = Array.isArray(branches.json?.branches) ? branches.json.branches : [];
+    out.availableBranches = rows.map((row) => ({
+      branchCode: String(row?.branchCode || "").trim().toUpperCase(),
+      branchName: String(row?.branchName || "").trim(),
+    })).filter((row) => row.branchCode);
+    const matched = out.availableBranches.find((row) => row.branchCode === branchCode);
+    if (matched) {
+      out.branchValid = true;
+      if (!out.branchName && matched.branchName) out.branchName = matched.branchName;
+    } else if (out.availableBranches.length === 1) {
+      out.suggestedBranchCode = out.availableBranches[0].branchCode;
     }
   } catch {}
 
