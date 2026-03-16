@@ -2343,6 +2343,44 @@ app.get("/app-boot.js", (_req, res) => {
   }
 })();`);
 });
+app.get("/b/:branchCode/app-boot.js", (_req, res) => {
+  const basePathJson = JSON.stringify(APP_BASE_PATH);
+  res.type("application/javascript").send(`(() => {
+  const basePath = ${basePathJson};
+
+  function withBase(input) {
+    const raw = String(input || "");
+    if (!basePath) return raw || "/";
+    if (!raw) return basePath;
+    if (/^(?:[a-z]+:)?\\/\\//i.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:") || raw.startsWith("#")) return raw;
+    if (!raw.startsWith("/")) return raw;
+    if (raw === basePath || raw.startsWith(basePath + "/") || raw.startsWith(basePath + "?")) return raw;
+    return basePath + raw;
+  }
+
+  window.__APP_BASE_PATH__ = basePath;
+  window.appUrl = withBase;
+  window.appAbsoluteUrl = function(input) {
+    return window.location.origin + withBase(input);
+  };
+
+  const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+  if (nativeFetch) {
+    window.fetch = function(input, init) {
+      if (typeof input === "string") return nativeFetch(withBase(input), init);
+      return nativeFetch(input, init);
+    };
+  }
+
+  const NativeEventSource = window.EventSource;
+  if (NativeEventSource) {
+    window.EventSource = function(url, config) {
+      return new NativeEventSource(withBase(url), config);
+    };
+    window.EventSource.prototype = NativeEventSource.prototype;
+  }
+})();`);
+});
 
 app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   try {
