@@ -2,6 +2,8 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
@@ -9,6 +11,8 @@ COPY electron ./electron
 COPY server ./server
 COPY package.json ./package.json
 
-EXPOSE 3000
+RUN cd node_modules/better-sqlite3 && npm run install --build-from-source
+
+EXPOSE 3100
 
 CMD ["npm", "run", "start:server"]
