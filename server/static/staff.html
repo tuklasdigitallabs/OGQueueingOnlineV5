@@ -89,6 +89,17 @@
       white-space:nowrap;
     }
     .pill strong{ color:var(--text); font-weight:800; }
+    .miniSelect{
+      border:1px solid var(--line);
+      background:var(--panel);
+      color:var(--text);
+      padding:8px 10px;
+      border-radius:999px;
+      font-size:12.5px;
+      font-weight:700;
+      min-width:170px;
+      max-width:240px;
+    }
 
     .roleTag{
       font-size:11px;
@@ -159,17 +170,63 @@
       border-color: rgba(239,68,68,.45);
       background: rgba(239,68,68,.10);
     }
+    .filterBar{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .searchInput{
+      flex:1 1 220px;
+      min-width:220px;
+      border:1px solid rgba(0,0,0,.12);
+      background:rgba(255,255,255,.78);
+      color:var(--text);
+      border-radius:14px;
+      padding:11px 14px;
+      font-size:14px;
+      outline:none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
+    }
+    .searchInput:focus{
+      border-color: rgba(225,6,0,.35);
+      box-shadow: 0 0 0 3px rgba(225,6,0,.10);
+    }
+    .filterPills{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .fPill{
+      border:1px solid rgba(0,0,0,.10);
+      background:linear-gradient(180deg, rgba(248,243,233,.98), rgba(236,227,209,.94));
+      color:#5f6671;
+      padding:9px 14px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:850;
+      cursor:pointer;
+      transition:transform .08s ease, border-color .12s ease, background .12s ease, color .12s ease;
+    }
+    .fPill:hover{ transform:translateY(-1px); border-color: rgba(225,6,0,.20); }
+    .fPill.active{
+      color:var(--accent);
+      border-color: rgba(225,6,0,.35);
+      background:rgba(225,6,0,.10);
+    }
 
     /* Layout */
     .wrap{
-      max-width:1220px;
+      max-width:1580px;
       margin:0 auto;
       padding:18px;
     }
     .grid{
       display:grid;
-      grid-template-columns: 1.3fr .7fr;
+      grid-template-columns: minmax(230px, .56fr) minmax(0, 1.45fr) minmax(320px, .78fr);
       gap:16px;
+      align-items:start;
     }
     @media (max-width: 980px){
       .grid{ grid-template-columns: 1fr; }
@@ -328,6 +385,112 @@
       font-size:12px;
       color: var(--muted);
       line-height:1.5;
+    }
+    .undoBar{
+      margin-top:10px;
+      border:1px dashed rgba(225,6,0,.35);
+      background:rgba(225,6,0,.06);
+      border-radius:12px;
+      padding:10px;
+      display:none;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      font-size:12.5px;
+      color:var(--text);
+    }
+    .toolBlock{
+      margin-top:14px;
+      padding-top:14px;
+      border-top:1px solid rgba(0,0,0,.10);
+      display:none;
+    }
+    .toolTitle{
+      font-weight:800;
+      font-size:13px;
+      margin-bottom:8px;
+    }
+    .toolPanel{
+      border:1px solid rgba(0,0,0,.08);
+      border-radius:14px;
+      background:rgba(60,40,20,.04);
+      padding:12px;
+    }
+    .toolHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .toolTabs{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .toolTab{
+      border:1px solid rgba(0,0,0,.10);
+      background:#fff;
+      color:var(--muted);
+      border-radius:999px;
+      padding:7px 10px;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .toolTab.active{
+      background:rgba(225,6,0,.10);
+      border-color:rgba(225,6,0,.35);
+      color:var(--accent);
+    }
+    .toolSection{ display:none; }
+    .toolSection.active{ display:block; }
+    .recoveryList{
+      display:grid;
+      gap:8px;
+      margin-top:10px;
+      max-height:240px;
+      overflow:auto;
+      padding-right:4px;
+    }
+    .recoveryRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px;
+      border:1px solid rgba(0,0,0,.08);
+      border-radius:12px;
+      background:#fff;
+    }
+    .recoveryMeta{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:2px;
+    }
+    .forecastGrid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:8px;
+      margin-top:10px;
+    }
+    .forecastStat{
+      border:1px solid rgba(0,0,0,.08);
+      border-radius:12px;
+      background:#fff;
+      padding:10px;
+    }
+    .forecastStat .label{
+      font-size:11px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.06em;
+    }
+    .forecastStat .value{
+      margin-top:6px;
+      font-size:20px;
+      font-weight:900;
+      color:var(--text);
     }
 
     /* Header tools on the right card */
@@ -518,7 +681,37 @@
   <div class="wrap">
     <div class="grid">
 
-      <!-- LEFT: Queue -->
+      <!-- LEFT: Queue Tools -->
+      <div class="card" id="queueToolsShell" style="display:none;">
+        <div class="card-h">
+          <h2>Queue Tools</h2>
+          <button class="btn" id="queueToolsRefreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="card-b">
+          <div class="toolPanel">
+            <div class="toolTabs">
+              <button class="toolTab active" id="queueTabForecast" type="button">Forecast</button>
+              <button class="toolTab" id="queueTabRecovery" type="button">Recovery</button>
+            </div>
+
+            <div class="toolSection active" id="queueSectionForecast">
+              <div class="hint" id="queueForecastHint">Forecasts use current-day branch activity for the selected group.</div>
+              <div class="forecastGrid" id="queueForecastGrid">
+                <div class="hint">Loading forecast...</div>
+              </div>
+            </div>
+
+            <div class="toolSection" id="queueSectionRecovery">
+              <div class="hint" id="queueRecoveryHint">Recover recently seated or skipped tickets for the selected group.</div>
+              <div class="recoveryList" id="queueRecoveryList">
+                <div class="hint">Loading recovery tools...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER: Queue -->
       <div class="card">
         <div class="card-h">
           <h2>Today’s Queue</h2>
@@ -533,9 +726,18 @@
           <div class="groups" id="groupSummary"></div>
 
           <div class="list" style="margin-top:14px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
               <div style="color:var(--muted); font-size:12px;">Tickets (WAITING + CALLED)</div>
-              <button class="btn" id="refreshBtn">Refresh</button>
+              <div class="filterBar">
+                <input id="queueSearch" class="searchInput" type="search" placeholder="Search code / name / pax" />
+                <div class="filterPills" id="ticketFilterPills">
+                  <button type="button" class="fPill active" data-filter="ALL">All</button>
+                  <button type="button" class="fPill" data-filter="WAITING">Waiting</button>
+                  <button type="button" class="fPill" data-filter="CALLED">Called</button>
+                  <button type="button" class="fPill" data-filter="LONGEST_WAIT">Longest Wait</button>
+                </div>
+                <button class="btn" id="refreshBtn">Refresh</button>
+              </div>
             </div>
             <div id="queueList"></div>
           </div>
@@ -548,6 +750,9 @@
           <h2>Actions</h2>
           <div class="hdrTools">
             <span class="miniPill" id="displayStatus">Display: —</span>
+            <select id="displayTarget" class="miniSelect" title="Choose display screen">
+              <option value="">Display screen…</option>
+            </select>
             <button class="btn" id="openDisplayBtn">Open Display</button>
             <button class="btn" id="closeDisplayBtn">Close Display</button>
           </div>
@@ -575,6 +780,10 @@
           </div>
 
           <div class="hint" id="permHint">—</div>
+          <div class="undoBar" id="undoBar">
+            <span id="undoText">Undo available</span>
+            <button class="btn" id="undoBtn" type="button">Undo</button>
+          </div>
 
           <div style="margin-top:14px; border-top:1px solid rgba(0,0,0,.10); padding-top:14px; display:none">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -755,9 +964,19 @@ function waitingMins(r){
     const state = {
       me: null,
       permissions: {},
+      features: {},
       snapshot: null,
       lastRows: [],
-      selectedGroup: "B" // default: 2–3 pax
+      queueTools: null,
+      queueToolsTab: "forecast",
+      selectedGroup: "B", // default: 2–3 pax
+      ticketFilter: "ALL",
+      queueSearch: "",
+      displayTargets: [],
+      displayOn: false,
+      pendingDisplayId: "",
+      undoExpiresAt: 0,
+      undoTimer: null
     };
 
     function hasPerm(key){
@@ -771,6 +990,24 @@ function waitingMins(r){
       if (p && typeof p === "object" && (p.allowed === 1 || p.allowed === true || p.allowed === "1")) return true;
 
       return false;
+    }
+
+    function hasFeature(key){
+      const k = String(key);
+      if (state.queueTools?.features && Object.prototype.hasOwnProperty.call(state.queueTools.features, k)) {
+        return !!state.queueTools.features[k];
+      }
+      return !!state.features[k];
+    }
+
+    async function loadFeatureFlags(){
+      const { res, data } = await api("/api/staff/feature-flags", "GET");
+      if (!res.ok || !data || !data.ok){
+        state.features = {};
+        return false;
+      }
+      state.features = data.features || {};
+      return true;
     }
 
     async function refreshServerStatus(){
@@ -832,13 +1069,37 @@ function getQueuedMs(item) {
 
     async function refreshDisplayStatus(){
       const el = $("displayStatus");
+      const sel = $("displayTarget");
       if (!el) return;
 
       try{
         const { res, data } = await api("/api/system/display/state", "GET");
         if (!res.ok || !data || !data.ok) throw new Error("bad");
         const on = !!data.on;
-        el.textContent = on ? "Display: ON" : "Display: OFF";
+        state.displayOn = on;
+        const displays = Array.isArray(data.displays) ? data.displays : [];
+        const currentId = data.displayId == null ? "" : String(data.displayId);
+        const active = currentId
+          ? displays.find((d) => String(d.id) === currentId)
+          : null;
+        el.textContent = on ? `Display: ON${active ? ` (${active.label})` : ""}` : "Display: OFF";
+        state.displayTargets = displays;
+        if (sel){
+          const preferredId = state.pendingDisplayId || currentId || sel.value || "";
+          sel.innerHTML = `<option value="">Display screen…</option>`;
+          for (const d of displays){
+            const opt = document.createElement("option");
+            opt.value = String(d.id);
+            opt.textContent = d.label || `Screen ${d.id}`;
+            sel.appendChild(opt);
+          }
+          sel.value = preferredId;
+          if (!sel.value && !currentId && displays[0]) sel.value = String(displays[0].id);
+          if (state.pendingDisplayId && currentId === state.pendingDisplayId) {
+            state.pendingDisplayId = "";
+          }
+          sel.disabled = displays.length <= 1;
+        }
       }catch{
         el.textContent = "Display: UNKNOWN";
       }
@@ -865,6 +1126,144 @@ function getQueuedMs(item) {
       return true;
     }
 
+    function renderQueueTools(){
+      const forecastOn = hasFeature("queue.wait_forecast");
+      const recoveryOn = hasFeature("queue.recovery_tools") || hasFeature("queue.reopen_completed");
+      const hasAnyQueueTools = forecastOn || recoveryOn;
+      if ($("queueToolsShell")) $("queueToolsShell").style.display = hasAnyQueueTools ? "block" : "none";
+      if (!hasAnyQueueTools) {
+        $("queueForecastGrid").innerHTML = `<div class="hint">No queue tools provisioned for this branch.</div>`;
+        $("queueRecoveryList").innerHTML = `<div class="hint">No queue recovery tools provisioned for this branch.</div>`;
+        return;
+      }
+
+      if (!forecastOn && state.queueToolsTab === "forecast") state.queueToolsTab = "recovery";
+      if (!recoveryOn && state.queueToolsTab === "recovery") state.queueToolsTab = "forecast";
+
+      const forecastTab = $("queueTabForecast");
+      const recoveryTab = $("queueTabRecovery");
+      const forecastSection = $("queueSectionForecast");
+      const recoverySection = $("queueSectionRecovery");
+      if (forecastTab) {
+        forecastTab.style.display = forecastOn ? "" : "none";
+        forecastTab.classList.toggle("active", state.queueToolsTab === "forecast");
+      }
+      if (recoveryTab) {
+        recoveryTab.style.display = recoveryOn ? "" : "none";
+        recoveryTab.classList.toggle("active", state.queueToolsTab === "recovery");
+      }
+      if (forecastSection) forecastSection.classList.toggle("active", forecastOn && state.queueToolsTab === "forecast");
+      if (recoverySection) recoverySection.classList.toggle("active", recoveryOn && state.queueToolsTab === "recovery");
+
+      const tools = state.queueTools || {};
+      const forecast = tools.waitForecast || null;
+      const forecastGrid = $("queueForecastGrid");
+      if (forecastGrid) {
+        if (!forecastOn) {
+          forecastGrid.innerHTML = "";
+        } else if (!forecast) {
+          forecastGrid.innerHTML = `<div class="hint">No forecast data available yet.</div>`;
+        } else {
+          const stats = [
+            { label: "Waiting Now", value: forecast.waitingCount ?? 0 },
+            { label: "Called Now", value: forecast.calledCount ?? 0 },
+            { label: "Avg Wait To Call", value: forecast.avgWaitToCalledMinutes != null ? `${forecast.avgWaitToCalledMinutes} min` : "-" },
+            { label: "Backlog Projection", value: forecast.projectedMinutesForBacklog != null ? `${forecast.projectedMinutesForBacklog} min` : "-" },
+          ];
+          forecastGrid.innerHTML = stats.map((item) => `
+            <div class="forecastStat">
+              <div class="label">${escapeHtml(item.label)}</div>
+              <div class="value">${escapeHtml(item.value)}</div>
+            </div>
+          `).join("");
+        }
+      }
+
+      const list = $("queueRecoveryList");
+      if (list) {
+        const rows = Array.isArray(tools.recentRecoverable) ? tools.recentRecoverable : [];
+        if (!recoveryOn) {
+          list.innerHTML = "";
+        } else if (!rows.length) {
+          list.innerHTML = `<div class="hint">No recent seated or skipped tickets for this group.</div>`;
+        } else {
+          list.innerHTML = rows.map((r) => {
+            const when = formatTime(r.seatedAt || r.skippedAt || r.calledAt || r.createdAtLocal);
+            const canReopen = hasFeature("queue.reopen_completed") && hasPerm("QUEUE_CLEAR_CALLED");
+            return `
+              <div class="recoveryRow">
+                <div>
+                  <div class="code">${escapeHtml(codeFor(r))}</div>
+                  <div class="recoveryMeta">${escapeHtml(r.name || "Guest")} • ${escapeHtml(r.status || "-")} • ${escapeHtml(when)}</div>
+                </div>
+                ${canReopen ? `<button class="btn" type="button" data-reopen-id="${escapeHtml(r.id)}">Reopen</button>` : ``}
+              </div>
+            `;
+          }).join("");
+          list.querySelectorAll("[data-reopen-id]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const id = btn.getAttribute("data-reopen-id");
+              if (!id) return;
+              if (!window.confirm("Reopen this ticket back to WAITING?")) return;
+              btn.disabled = true;
+              try{
+                const { res, data } = await api("/api/staff/reopen-ticket", "POST", { id });
+                if (!res.ok || !data || !data.ok) return toast(data?.error || "Reopen failed", "bad");
+                toast("Ticket reopened", "ok");
+                await loadState();
+              }catch{
+                toast("Network error", "bad");
+              } finally {
+                btn.disabled = false;
+              }
+            });
+          });
+        }
+      }
+    }
+
+    async function loadQueueTools(){
+      try{
+        const { res, data } = await api(`/api/staff/queue-tools?groupCode=${encodeURIComponent(groupPick())}`, "GET");
+        if (!res.ok || !data || !data.ok) throw new Error("queue-tools");
+        state.queueTools = data;
+        if (data.features && typeof data.features === "object") {
+          state.features = { ...(state.features || {}), ...data.features };
+        }
+      }catch{
+        state.queueTools = null;
+      }
+      renderQueueTools();
+    }
+
+    function setQueueToolsTab(tab){
+      state.queueToolsTab = String(tab || "forecast").toLowerCase() === "recovery" ? "recovery" : "forecast";
+      renderQueueTools();
+    }
+
+    function setUndoBar(payload){
+      const wrap = $("undoBar");
+      const txt = $("undoText");
+      if (!wrap || !txt) return;
+      if (!payload || !payload.available || !payload.expiresAt){
+        wrap.style.display = "none";
+        state.undoExpiresAt = 0;
+        if (state.undoTimer){ clearInterval(state.undoTimer); state.undoTimer = null; }
+        return;
+      }
+      state.undoExpiresAt = Number(payload.expiresAt) || 0;
+      const label = String(payload.action || "Action").replaceAll("_", " ");
+      wrap.style.display = "flex";
+      const paint = () => {
+        const left = Math.max(0, Math.ceil((state.undoExpiresAt - Date.now()) / 1000));
+        txt.textContent = `Undo ${label} (${left}s)`;
+        if (left <= 0) setUndoBar(null);
+      };
+      paint();
+      if (state.undoTimer) clearInterval(state.undoTimer);
+      state.undoTimer = setInterval(paint, 500);
+    }
+
     function applyPermsToButtons(){
       $("callNextBtn").disabled = !hasPerm("QUEUE_CALL_NEXT");
       $("seatBtn").disabled     = !hasPerm("QUEUE_SEAT");
@@ -874,6 +1273,84 @@ function getQueuedMs(item) {
     }
 
     function groupPick(){ return state.selectedGroup || "B"; }
+
+    function currentDisplayId(){
+      const v = $("displayTarget")?.value ?? "";
+      return v === "" ? null : Number(v);
+    }
+
+    function currentGroupRows(){
+      const rows = Array.isArray(state.lastRows) ? state.lastRows : [];
+      const g = String(groupPick() || "B").toUpperCase();
+      return rows.filter(r => String(r.groupCode || "").toUpperCase() === g);
+    }
+
+    function applyTicketFilters(rows){
+      let out = Array.isArray(rows) ? rows.slice() : [];
+      const query = String(state.queueSearch || "").trim().toLowerCase();
+      const filter = String(state.ticketFilter || "ALL").toUpperCase();
+
+      if (filter === "WAITING" || filter === "CALLED"){
+        out = out.filter((r) => String(r.status || "").toUpperCase() === filter);
+      }
+
+      if (query){
+        out = out.filter((r) => {
+          const hay = [
+            codeFor(r),
+            r.name,
+            r.groupCode,
+            r.priorityType,
+            r.pax,
+          ]
+            .map((v) => String(v || "").toLowerCase())
+            .join(" ");
+          return hay.includes(query);
+        });
+      }
+
+      if (filter === "LONGEST_WAIT"){
+        out.sort((a, b) => (waitingMins(b) ?? -1) - (waitingMins(a) ?? -1));
+      }
+
+      return out;
+    }
+
+    function renderGroupView(){
+      const rows = currentGroupRows();
+      renderList(applyTicketFilters(rows));
+      fillOverrideTickets(rows.filter((r) => String(r.status || "").toUpperCase() === "WAITING"));
+      const hasCalled = rows.some(r => String(r.status || "").toUpperCase() === "CALLED");
+      $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+    }
+
+    function applyTicketFilterPills(){
+      const box = $("ticketFilterPills");
+      const search = $("queueSearch");
+      if (!box) return;
+      const btns = Array.from(box.querySelectorAll(".fPill"));
+
+      function setActive(filter){
+        state.ticketFilter = filter;
+        for (const b of btns){
+          b.classList.toggle("active", String(b.getAttribute("data-filter") || "").toUpperCase() === filter);
+        }
+      }
+
+      setActive(String(state.ticketFilter || "ALL").toUpperCase());
+
+      for (const b of btns){
+        b.addEventListener("click", () => {
+          setActive(String(b.getAttribute("data-filter") || "ALL").toUpperCase());
+          renderGroupView();
+        });
+      }
+
+      search?.addEventListener("input", () => {
+        state.queueSearch = search.value || "";
+        renderGroupView();
+      });
+    }
 
     function applyGroupPills(){
       const box = $("groupPickPills");
@@ -895,13 +1372,8 @@ function getQueuedMs(item) {
         b.addEventListener("click", async () => {
           const g = b.getAttribute("data-group") || "B";
           setActive(g);
-          // refresh list for selected group
-          const rows = Array.isArray(state.lastRows) ? state.lastRows : [];
-          const filtered = rows.filter(r => String(r.groupCode||"").toUpperCase() === g);
-          renderList(filtered);
-          fillOverrideTickets(filtered);
-          const hasCalled = filtered.some(r => r.status === "CALLED");
-          $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+          renderGroupView();
+          await loadQueueTools();
         });
       }
     }
@@ -927,14 +1399,8 @@ function getQueuedMs(item) {
       $("calledCount").textContent = c;
 
       renderSummary(rows);
-
-      const g = groupPick();
-      const filtered = rows.filter(r => r.groupCode === g);
-      renderList(filtered);
-      fillOverrideTickets(filtered);
-
-      const hasCalled = filtered.some(r => r.status === "CALLED");
-      $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+      renderGroupView();
+      await loadQueueTools();
     }
 
     function renderSummary(rows){
@@ -1100,6 +1566,8 @@ function getQueuedMs(item) {
           return;
         }
         toast(okMsg || "Done", "ok");
+        if (data.undo?.available) setUndoBar(data.undo);
+        else setUndoBar(null);
         await loadState();
         await loadAudit();
         nudgeRealtime();
@@ -1120,6 +1588,13 @@ function getQueuedMs(item) {
 
     $("refreshBtn").addEventListener("click", loadState);
     $("auditRefreshBtn").addEventListener("click", loadAudit);
+    $("queueToolsRefreshBtn")?.addEventListener("click", loadQueueTools);
+    $("queueTabForecast")?.addEventListener("click", () => setQueueToolsTab("forecast"));
+    $("queueTabRecovery")?.addEventListener("click", () => setQueueToolsTab("recovery"));
+    $("undoBtn")?.addEventListener("click", async () => {
+      await doAction("/api/staff/undo-last", {}, "Undone");
+      setUndoBar(null);
+    });
 
     $("callNextBtn").addEventListener("click", async () => {
       if (!hasPerm("QUEUE_CALL_NEXT")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
@@ -1210,9 +1685,37 @@ function getQueuedMs(item) {
     });
 
     $("openDisplayBtn")?.addEventListener("click", async () => {
-      const { res, data } = await api("/api/system/display/open", "POST", {});
-      if (!res.ok || !data?.ok) return toast(data?.error || "Failed to open display", "bad");
-      toast("Display opened", "ok");
+      const displayId = currentDisplayId();
+      const body = displayId == null ? {} : { displayId };
+      state.pendingDisplayId = displayId == null ? "" : String(displayId);
+      const { res, data } = await api("/api/system/display/open", "POST", body);
+      if (!res.ok || !data?.ok) {
+        state.pendingDisplayId = "";
+        return toast(data?.error || "Failed to open display", "bad");
+      }
+      const opened = Array.isArray(data.displays)
+        ? data.displays.find((d) => String(d.id) === String(data.displayId ?? ""))
+        : null;
+      toast(opened ? `Display opened on ${opened.label}` : "Display opened", "ok");
+      refreshDisplayStatus();
+    });
+
+    $("displayTarget")?.addEventListener("change", async () => {
+      const displayId = currentDisplayId();
+      state.pendingDisplayId = displayId == null ? "" : String(displayId);
+      if (!state.displayOn) return;
+
+      const body = displayId == null ? {} : { displayId };
+      const { res, data } = await api("/api/system/display/open", "POST", body);
+      if (!res.ok || !data?.ok) {
+        state.pendingDisplayId = "";
+        return toast(data?.error || "Failed to move display", "bad");
+      }
+
+      const moved = Array.isArray(data.displays)
+        ? data.displays.find((d) => String(d.id) === String(data.displayId ?? ""))
+        : null;
+      toast(moved ? `Display moved to ${moved.label}` : "Display moved", "ok");
       refreshDisplayStatus();
     });
 
@@ -1241,9 +1744,11 @@ function getQueuedMs(item) {
     (async function boot(){
       const ok = await loadMe();
       if (!ok) return;
+      await loadFeatureFlags();
 
       applyPermsToButtons();
       applyGroupPills();
+      applyTicketFilterPills();
 
       await refreshServerStatus();
       setInterval(refreshServerStatus, 2000);
@@ -1256,7 +1761,7 @@ function getQueuedMs(item) {
           const rows = Array.isArray(state.lastRows) ? state.lastRows : [];
           const g = groupPick();
           const filtered = rows.filter(r => String(r.groupCode||'').toUpperCase() === String(g).toUpperCase());
-          renderList(filtered);
+          renderList(applyTicketFilters(filtered));
           const hasCalled = filtered.some(r => r.status === 'CALLED');
           $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
         }catch{}

@@ -15,4 +15,5 @@ contextBridge.exposeInMainWorld("qsys", {
   openAdmin: () => ipcRenderer.send("launcher-open", "admin"),
   openGuest: () => ipcRenderer.send("launcher-open", "guest"),
   openDisplay: () => ipcRenderer.send("launcher-open", "display"),
+  shutdownApp: () => ipcRenderer.send("launcher-open", "shutdown"),
 });

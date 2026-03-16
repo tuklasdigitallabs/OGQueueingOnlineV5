@@ -12,6 +12,7 @@ const {
   screen,
   shell, // ✅ NEW
 } = require("electron");
+const { execFile } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
@@ -26,6 +27,18 @@ app.commandLine.appendSwitch("disable-site-isolation-trials");
 
 // Start your local Express server
 const { startServer } = require("../server/server");
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  try {
+    dialog.showErrorBox(
+      "QSys Already Running",
+      "Another QSys instance is already running.\n\nPlease close the existing QSys window first before opening a new one."
+    );
+  } catch {}
+  app.quit();
+  try { app.exit(0); } catch {}
+}
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -153,6 +166,8 @@ let isQuitting = false;
 let tray = null;
 let baseDirGlobal = null;
 let cfgGlobal = null;
+let currentDisplayId = null;
+let displaySpeechProc = null;
 
 // ===== Force to "Screen 2" (sorted index 1) =====
 function getScreen2Bounds() {
@@ -175,6 +190,104 @@ function forceWindowToScreen2(bw) {
   bw.setFullScreen(true);
 }
 
+function getDisplayTargetList() {
+  const displays = [...screen.getAllDisplays()].sort((a, b) => {
+    if (a.bounds.x !== b.bounds.x) return a.bounds.x - b.bounds.x;
+    return a.bounds.y - b.bounds.y;
+  });
+  return displays.map((d, idx) => ({
+    id: Number(d.id),
+    label: `Screen ${idx + 1}${d.primary ? " (Primary)" : ""} - ${d.bounds.width}x${d.bounds.height} @ ${d.bounds.x},${d.bounds.y}`,
+    bounds: { ...d.bounds },
+    primary: !!d.primary,
+  }));
+}
+
+function getDisplayBoundsById(displayId) {
+  const normalized = Number(displayId);
+  if (Number.isFinite(normalized)) {
+    const match = screen.getAllDisplays().find((d) => Number(d.id) === normalized);
+    if (match) return match.bounds;
+  }
+  return getScreen2Bounds();
+}
+
+function forceWindowToDisplay(bw, displayId) {
+  if (!bw || bw.isDestroyed()) return;
+  const b = getDisplayBoundsById(displayId);
+  bw.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height }, false);
+  bw.setFullScreen(true);
+}
+
+function stopDisplaySpeech() {
+  try {
+    if (displaySpeechProc && !displaySpeechProc.killed) displaySpeechProc.kill();
+  } catch {}
+  displaySpeechProc = null;
+}
+
+function escapePowerShellString(value) {
+  return `'${String(value || "").replace(/'/g, "''")}'`;
+}
+
+function buildDisplaySpeechText({ text, code } = {}) {
+  const custom = String(text || "").trim();
+  if (custom) return custom;
+
+  const compact = String(code || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  if (!compact) return "";
+
+  const isPriority = compact.startsWith("P") && compact.length >= 3;
+  const group = isPriority ? compact.slice(0, 2) : compact.slice(0, 1);
+  const digits = (isPriority ? compact.slice(2) : compact.slice(1))
+    .split("")
+    .filter(Boolean)
+    .join(" ");
+
+  if (!digits) return `Now serving ${group}. Please proceed to the counter.`;
+  return `Now serving ${group} ${digits}. Please proceed to the counter.`;
+}
+
+function speakDisplayText({ text, code } = {}) {
+  const spokenText = buildDisplaySpeechText({ text, code });
+  if (!spokenText) return { ok: false, error: "Missing announcement text" };
+
+  stopDisplaySpeech();
+
+  const command = [
+    "Add-Type -AssemblyName System.Speech",
+    "$speaker = New-Object System.Speech.Synthesis.SpeechSynthesizer",
+    "$speaker.Volume = 100",
+    "$speaker.Rate = 0",
+    `$speaker.Speak(${escapePowerShellString(spokenText)})`,
+  ].join("; ");
+
+  try {
+    displaySpeechProc = execFile(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        command,
+      ],
+      { windowsHide: true },
+      () => {
+        displaySpeechProc = null;
+      }
+    );
+    return { ok: true, text: spokenText };
+  } catch (error) {
+    displaySpeechProc = null;
+    return { ok: false, error: String(error && error.message ? error.message : error) };
+  }
+}
+
 /**
  * ✅ TOP-LEVEL helpers (tray + server endpoints need these)
  */
@@ -193,7 +306,7 @@ function showKioskWindow() {
   const w = ensureKioskWindow();
   if (!w || w.isDestroyed()) return;
 
-  forceWindowToScreen2(w);
+  forceWindowToDisplay(w, currentDisplayId);
   w.show();
   w.focus();
 }
@@ -250,6 +363,11 @@ ipcMain.on("launcher-open", (_evt, target) => {
   if (target === "admin") return shell.openExternal(`${base}/admin`);
   if (target === "guest") return shell.openExternal(`${base}/guest`);
   if (target === "display") return showKioskWindow();
+  if (target === "shutdown") {
+    isQuitting = true;
+    stopDisplaySpeech();
+    return app.quit();
+  }
 
   // fallback
   return shell.openExternal(base);
@@ -285,11 +403,11 @@ function createKioskWindow(port, kioskUrl) {
   });
 
   win.once("ready-to-show", () => {
-    forceWindowToScreen2(win);
+    forceWindowToDisplay(win, currentDisplayId);
     win.show();
   });
 
-  const reforce = () => forceWindowToScreen2(win);
+  const reforce = () => forceWindowToDisplay(win, currentDisplayId);
   screen.on("display-added", reforce);
   screen.on("display-removed", reforce);
   screen.on("display-metrics-changed", reforce);
@@ -430,6 +548,38 @@ function waitForServer(port, timeoutMs = 20000) {
   });
 }
 
+function probeExistingQSys(port, timeoutMs = 1800) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}/api/health`, { timeout: timeoutMs }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(body || "{}");
+          const looksLikeQSys =
+            !!json &&
+            json.ok === true &&
+            Number(json.port) === Number(port) &&
+            typeof json.currentBusinessDate === "string" &&
+            typeof json.todayManila === "string";
+          resolve(looksLikeQSys ? json : null);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
 function createSplashWindow() {
   const splash = new BrowserWindow({
     width: 520,
@@ -485,6 +635,43 @@ function showBlockingStartupError(message, details) {
   }
 }
 
+function showAlreadyRunningError(port, details) {
+  const message = "QSys is already running on this PC.";
+  const detail =
+    "Please close the existing QSys instance first before opening a new one." +
+    (details ? `\n\n${details}` : "") +
+    `\n\nDetected local QSys server: http://127.0.0.1:${port}`;
+  try {
+    dialog.showMessageBoxSync({
+      type: "warning",
+      buttons: ["OK"],
+      defaultId: 0,
+      noLink: true,
+      title: "QSys Already Running",
+      message,
+      detail,
+    });
+  } catch {
+    try {
+      dialog.showErrorBox("QSys Already Running", `${message}\n\n${detail}`);
+    } catch {}
+  }
+}
+
+function focusPrimaryWindow() {
+  const preferred = [launcherWin, win].find((w) => w && !w.isDestroyed());
+  if (!preferred) return;
+  try {
+    if (preferred.isMinimized()) preferred.restore();
+  } catch {}
+  try { preferred.show(); } catch {}
+  try { preferred.focus(); } catch {}
+}
+
+app.on("second-instance", () => {
+  focusPrimaryWindow();
+});
+
 app.whenReady().then(async () => {
   powerSaveBlocker.start("prevent-display-sleep");
 
@@ -503,6 +690,19 @@ app.whenReady().then(async () => {
   cfg.displayMode = normalizeDisplayMode(cfg.displayMode);
   cfg.kioskUrl = resolveKioskUrl(cfg);
   cfgGlobal = cfg;
+
+  const existingQSys = await probeExistingQSys(cfg.port);
+  if (existingQSys) {
+    if (splash && !splash.isDestroyed()) splash.close();
+    focusPrimaryWindow();
+    showAlreadyRunningError(
+      cfg.port,
+      existingQSys.branchName ? `Running branch: ${String(existingQSys.branchName).trim()}` : ""
+    );
+    isQuitting = true;
+    setTimeout(() => app.quit(), 200);
+    return;
+  }
 
   const logsDir = path.join(baseDir, "logs");
   ensureDir(logsDir);
@@ -546,13 +746,14 @@ app.whenReady().then(async () => {
 
   // Allow server.js endpoints (staff app) to open/close display window
   global.QSYS_DISPLAY = {
-    open: () => {
+    open: ({ displayId } = {}) => {
+      currentDisplayId = Number.isFinite(Number(displayId)) ? Number(displayId) : null;
       const w = ensureKioskWindow();
       if (w && !w.isDestroyed()) {
-        forceWindowToScreen2(w);
+        forceWindowToDisplay(w, currentDisplayId);
         w.show();
         w.focus();
-        return { ok: true, on: true };
+        return { ok: true, on: true, displayId: currentDisplayId, displays: getDisplayTargetList() };
       }
       return { ok: false, error: "Display window not initialized" };
     },
@@ -565,8 +766,29 @@ app.whenReady().then(async () => {
     },
     state: () => {
       const on = !!(win && !win.isDestroyed() && win.isVisible());
-      return { ok: true, on };
+      return { ok: true, on, displayId: currentDisplayId, displays: getDisplayTargetList() };
     },
+    targets: () => ({ ok: true, displays: getDisplayTargetList(), displayId: currentDisplayId }),
+    attention: () => {
+      try { shell.beep(); } catch {}
+      try {
+        setTimeout(() => {
+          try { shell.beep(); } catch {}
+        }, 180);
+      } catch {}
+      try {
+        if (win && !win.isDestroyed()) {
+          win.webContents
+            .executeJavaScript(
+              "(() => { try { window.DisplayUI?.forceHeroPulse?.(); return { ok: true }; } catch (error) { return { ok: false, error: String(error && error.message ? error.message : error) }; } })();",
+              true
+            )
+            .catch(() => {});
+        }
+      } catch {}
+      return { ok: true };
+    },
+    announce: ({ text, code } = {}) => speakDisplayText({ text, code }),
     setMode: (mode) => setDisplayMode(mode),
     getMode: () => ({ ok: true, mode: normalizeDisplayMode(cfgGlobal?.displayMode) }),
   };

@@ -21,6 +21,27 @@ function dbgDisp(...args){
 (function () {
   "use strict";
 
+  try {
+    const isInteractiveTarget = (target) => {
+      try {
+        return !!(target && typeof target.closest === "function" && target.closest("[data-display-interactive]"));
+      } catch {
+        return false;
+      }
+    };
+    document.addEventListener("DOMContentLoaded", () => {
+      try {
+        document.body?.classList.add("display-locked");
+      } catch {}
+    }, { once: true });
+    ["selectstart", "dragstart", "contextmenu", "mousedown", "dblclick"].forEach((eventName) => {
+      document.addEventListener(eventName, (ev) => {
+        if (isInteractiveTarget(ev.target)) return;
+        ev.preventDefault();
+      }, true);
+    });
+  } catch {}
+
   function dbg(msg, obj) {
     let plain = "";
     try {
@@ -51,6 +72,10 @@ function dbgDisp(...args){
   const SETTINGS_KEY = "qsys_display_settings";
   const UI_SCALE_KEY = "qsys_ui_scale";
   const DISPLAY_TOKEN_STORAGE = "qsys_display_token";
+  const UI_SCALE_MIN = 0.7;
+  const UI_SCALE_MAX = 1.8;
+  const UI_BASE_WIDTH = 1920;
+  const UI_BASE_HEIGHT = 1080;
 
   function getDisplayToken() {
     dbg("getDisplayToken()", {
@@ -200,12 +225,7 @@ function dbgDisp(...args){
 
   async function fetchAdminDisplaySettings() {
     try {
-      let token = "";
-      try {
-        token = ensureDisplayTokenUI();
-      } catch {
-        return null;
-      }
+      const token = getDisplayToken();
       const url = token
         ? "/api/display/settings?token=" + encodeURIComponent(token)
         : "/api/display/settings";
@@ -264,26 +284,51 @@ function dbgDisp(...args){
   function getUiScale() {
     const v = Number(localStorage.getItem(UI_SCALE_KEY) || "1");
     if (!Number.isFinite(v)) return 1;
-    return Math.max(0.9, Math.min(1.8, v));
+    return Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, v));
+  }
+
+  function getViewportUiScaleCap() {
+    const w = Math.max(1, Number(window.innerWidth) || UI_BASE_WIDTH);
+    const h = Math.max(1, Number(window.innerHeight) || UI_BASE_HEIGHT);
+    const fit = Math.min(w / UI_BASE_WIDTH, h / UI_BASE_HEIGHT);
+    const capped = fit * 1.05;
+    return Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, capped));
+  }
+
+  function clampUiScale(v) {
+    const raw = Number(v);
+    const requested = Number.isFinite(raw) ? raw : 1;
+    const hard = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, requested));
+    return Math.min(hard, getViewportUiScaleCap());
   }
 
   function applyUiScale(v) {
-    const scale = Math.max(0.9, Math.min(1.8, Number(v) || 1));
+    const scale = clampUiScale(v);
     document.documentElement.style.setProperty("--uiScale", String(scale));
     localStorage.setItem(UI_SCALE_KEY, String(scale));
 
     const lbl = document.getElementById("uiScaleLabel");
     if (lbl) lbl.textContent = `Scale: ${scale.toFixed(2)}x`;
+    return scale;
   }
 
   function initUiScale() {
     const start = getUiScale();
-    applyUiScale(start);
+    const applied = applyUiScale(start);
 
     const r = document.getElementById("uiScaleRange");
     if (r) {
-      r.value = String(start);
-      r.addEventListener("input", () => applyUiScale(r.value));
+      r.min = String(UI_SCALE_MIN);
+      r.max = String(UI_SCALE_MAX);
+      r.value = String(applied);
+      r.addEventListener("input", () => {
+        r.value = String(applyUiScale(r.value));
+      });
+      const onResize = () => {
+        const wanted = Number(localStorage.getItem(UI_SCALE_KEY) || r.value || "1");
+        r.value = String(applyUiScale(wanted));
+      };
+      window.addEventListener("resize", onResize, { passive: true });
     }
   }
 
@@ -567,6 +612,11 @@ function dbgDisp(...args){
     passive: true,
   });
   window.addEventListener("keydown", unlockChimeOnce, { once: true });
+  window.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => {
+      try { unlockChimeOnce(); } catch {}
+    }, 250);
+  }, { once: true });
 
   // ===== Helpers for queue formatting =====
   function isPriorityRow(r) {

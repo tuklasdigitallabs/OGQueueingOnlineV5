@@ -48,16 +48,20 @@ let __heroNumTimer = null;
     const called = (rows || []).filter(r => upper(r?.status) === 'CALLED');
     if (!called.length) return null;
 
-    // Priority first, then oldest calledAt, then lowest queueNum
+    // Show the most recently active called ticket.
+    // latestCallAt is updated on both CALL and CALL AGAIN when available.
     const scored = called.map(r => {
-      const pri = isPriorityGroupCode(r?.groupCode) ? 0 : 1;
+      const latestCallAt = Number(r?.latestCallAt || 0);
       const calledAt = Number(r?.calledAt || 0);
-      const ts = (Number.isFinite(calledAt) && calledAt > 0) ? calledAt : 9e15;
+      const latestTs = (Number.isFinite(latestCallAt) && latestCallAt > 0)
+        ? latestCallAt
+        : ((Number.isFinite(calledAt) && calledAt > 0) ? calledAt : -1);
+      const calledTs = (Number.isFinite(calledAt) && calledAt > 0) ? calledAt : -1;
       const qn = Number(r?.queueNum || 0);
-      return { r, pri, ts, qn };
+      return { r, latestTs, calledTs, qn };
     });
 
-    scored.sort((a,b) => (a.pri - b.pri) || (a.ts - b.ts) || (a.qn - b.qn));
+    scored.sort((a,b) => (b.latestTs - a.latestTs) || (b.calledTs - a.calledTs) || (a.qn - b.qn));
     return scored[0]?.r || null;
   }
 

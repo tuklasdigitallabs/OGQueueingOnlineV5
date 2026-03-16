@@ -16,6 +16,7 @@
     btnGuest: $("btnGuest"),
     btnDisplay: $("btnDisplay"),
     btnRefresh: $("btnRefresh"),
+    btnShutdown: $("btnShutdown"),
 
     bootPct: $("bootPct"),
     bootBarFill: $("bootBarFill"),
@@ -141,6 +142,7 @@
     el.btnAdmin?.addEventListener("click", () => qsys.openAdmin());
     el.btnGuest?.addEventListener("click", () => qsys.openGuest());
     el.btnDisplay?.addEventListener("click", () => qsys.openDisplay());
+    el.btnShutdown?.addEventListener("click", () => qsys.shutdownApp());
 
     el.btnRefresh?.addEventListener("click", async () => {
       const ok = await pingHealth();
