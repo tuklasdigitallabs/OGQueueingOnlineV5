@@ -341,6 +341,13 @@ function dbgDisp(...args){
   let __announceGeneration = 0;
   const __activeVoiceNodes = new Set();
 
+  function displayAudioBase() {
+    try {
+      if (typeof window.appUrl === "function") return window.appUrl("/static/assets/audio");
+    } catch {}
+    return "/static/assets/audio";
+  }
+
   function unlockChimeOnce() {
     if (__audioUnlocked) return;
     const chime = window.DisplayUI?.getChimeEl?.();
@@ -562,7 +569,7 @@ function dbgDisp(...args){
 
   // Warm the cache once the user interacts (avoids autoplay decode issues)
   function warmVoiceCache() {
-    const base = "/static/assets/audio";
+    const base = displayAudioBase();
     const srcs = [
       `${base}/now_serving.mp3`,
       `${base}/proceed_to_counter.mp3`,
@@ -581,7 +588,7 @@ function dbgDisp(...args){
   async function playQueueVoice(code, generation) {
     if (!code) return;
 
-    const base = "/static/assets/audio";
+    const base = displayAudioBase();
     const s = String(code).toUpperCase().replace("-", "");
 
     // Examples:
