@@ -1456,6 +1456,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
 
     <div id="toastWrap"></div>
 
+    <script src="./app-boot.js"></script>
     <script>
       // ---------- helpers ----------
       const $ = (id) => document.getElementById(id);
@@ -1514,7 +1515,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
       function handleAuthRedirect(res) {
   if (res.status === 401) {
     // session missing/expired => go login
-    window.location.href = "/admin-login";
+    window.location.href = window.appUrl("/admin-login");
     return true;
   }
   return false;
@@ -1656,7 +1657,7 @@ async function jpost(url, body) {
         try {
           await jpost("/api/admin/auth/logout", {});
         } catch {}
-        window.location.href = "/admin-login";
+        window.location.href = window.appUrl("/admin-login");
       }
 
       function setActiveSetupPane(pane) {
@@ -1875,7 +1876,7 @@ async function jpost(url, body) {
       
       function getQrPngUrl(branchCode) {
   // Uses your server-side QR generator endpoint
-  return `${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`;
+  return window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`);
 }
 
 function refreshQrPreview() {
@@ -1959,7 +1960,7 @@ function openPrintWindowForQr(imgSrc, branchName, branchCode) {
 /* ---------- QR Setup (Wi-Fi + Queue) ---------- */
 
 function getWifiQrPngUrl() {
-  return `${window.location.origin}/api/admin/wifi-qrcode.png?t=${Date.now()}`;
+  return window.appAbsoluteUrl(`/api/admin/wifi-qrcode.png?t=${Date.now()}`);
 }
 
 function refreshWifiQrPreview() {
@@ -1988,7 +1989,7 @@ function refreshQueueQrPreview2() {
   const txt = $("queueQrUrlText");
   if (!img || !hint || !txt) return;
 
-  const url = `${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`;
+  const url = window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`);
   img.src = url;
   txt.value = url;
   hint.textContent = "Scan to open the Guest queueing page.";
@@ -2179,7 +2180,7 @@ function downloadQrNow() {
           $("gdriveOauthClientSecret").value = SETTINGS_CACHE?.["gdrive.oauthClientSecret"] || "";
           {
             const rawRedirect = String(SETTINGS_CACHE?.["gdrive.oauthRedirectUri"] || "").trim();
-            const fallbackRedirect = `${window.location.origin}/api/admin/gdrive/oauth/callback`;
+            const fallbackRedirect = window.appAbsoluteUrl("/api/admin/gdrive/oauth/callback");
             $("gdriveOauthRedirectUri").value =
               /\/api\/admin\/gdrive\/oauth\/callback$/i.test(rawRedirect) ? rawRedirect : fallbackRedirect;
           }
@@ -4137,11 +4138,11 @@ $("btnUploadNow").addEventListener("click", uploadNow);
       // QR Setup
       $("btnSaveWifi")?.addEventListener("click", saveWifiSettings);
       $("btnDownloadWifiQr")?.addEventListener("click", () => downloadImage(getWifiQrPngUrl(), "wifi-qr.png"));
-      $("btnDownloadQueueQr")?.addEventListener("click", () => downloadImage(`${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`, "queue-qr.png"));
+      $("btnDownloadQueueQr")?.addEventListener("click", () => downloadImage(window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`), "queue-qr.png"));
       $("btnPrintQrPair")?.addEventListener("click", () => {
         const ssid = String($("wifiSsid")?.value || "").trim();
         const wifiUrl = getWifiQrPngUrl();
-        const queueUrl = `${window.location.origin}/api/admin/qrcode.png?t=${Date.now()}`;
+        const queueUrl = window.appAbsoluteUrl(`/api/admin/qrcode.png?t=${Date.now()}`);
         openPrintWindowForQrPair(wifiUrl, queueUrl, ssid);
       });
 

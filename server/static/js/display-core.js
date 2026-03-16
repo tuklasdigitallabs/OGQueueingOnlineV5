@@ -778,7 +778,9 @@ function dbgDisp(...args){
 
       if (j && j.ok && Array.isArray(j.files) && j.files.length) {
         // Filter out Dash init fragments if present
-        state.playlist = j.files.filter((p) => !/dashinit/i.test(p));
+        state.playlist = j.files
+          .filter((p) => !/dashinit/i.test(p))
+          .map((p) => window.appUrl(p));
       } else {
         state.playlist = [];
       }
@@ -1149,7 +1151,7 @@ function dbgDisp(...args){
     });
 
     // Socket
-    const socket = io();
+    const socket = io({ path: window.appUrl("/socket.io") });
 
 
 

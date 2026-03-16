@@ -629,7 +629,8 @@
 
   <div class="toastWrap" id="toastWrap"></div>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="./app-boot.js"></script>
+  <script src="./socket.io/socket.io.js"></script>
   <script>
     function $(id){ return document.getElementById(id); }
 
@@ -846,7 +847,7 @@ function getQueuedMs(item) {
     async function loadMe(){
       const { res, data } = await api("/api/staff/auth/me", "GET");
       if (!res.ok || !data || !data.ok){
-        window.location.href = "/staff-login";
+        window.location.href = window.appUrl("/staff-login");
         return false;
       }
       state.me = data.user || null;
@@ -909,7 +910,7 @@ function getQueuedMs(item) {
       const { res, data } = await api("/api/state", "GET");
       if (!res.ok || !data || !data.ok){
         toast("Not authenticated", "bad", "Please login again.");
-        window.location.href = "/staff-login";
+        window.location.href = window.appUrl("/staff-login");
         return;
       }
 
@@ -1205,7 +1206,7 @@ function getQueuedMs(item) {
 
     $("logoutBtn").addEventListener("click", async () => {
       try{ await fetch("/api/staff/auth/logout", { method:"POST" }); }catch{}
-      window.location.href = "/staff-login";
+      window.location.href = window.appUrl("/staff-login");
     });
 
     $("openDisplayBtn")?.addEventListener("click", async () => {
@@ -1233,7 +1234,7 @@ function getQueuedMs(item) {
     }
 
     try{
-      rtSocket = io();
+      rtSocket = io({ path: window.appUrl("/socket.io") });
       rtSocket.on("state:changed", () => loadState());
     }catch{}
 

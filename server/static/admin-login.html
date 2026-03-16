@@ -157,6 +157,7 @@
     <div class="err" id="err"></div>
   </div>
 
+  <script src="./app-boot.js"></script>
   <script>
     const $n = document.getElementById("fullName");
     const $p = document.getElementById("pin");
@@ -196,7 +197,7 @@
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
         // Server already enforces ADMIN role on /api/admin/auth/login
 
-        location.href = "/admin";
+        location.href = window.appUrl("/admin");
       } catch {
         $e.textContent = "Server error";
       }

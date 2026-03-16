@@ -19,6 +19,39 @@ const os = require("os");
 const QRCode = require("qrcode");
 const helmet = require("helmet");
 
+function normalizeBasePath(input) {
+  const raw = String(input || "").trim();
+  if (!raw || raw === "/") return "";
+
+  let out = raw.startsWith("/") ? raw : `/${raw}`;
+  out = out.replace(/\/{2,}/g, "/");
+  if (out.length > 1) out = out.replace(/\/+$/, "");
+  return out === "/" ? "" : out;
+}
+
+const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH || "");
+
+function pathWithBase(p) {
+  const next = String(p || "");
+  if (!APP_BASE_PATH) return next || "/";
+  if (!next || next === "/") return APP_BASE_PATH;
+  return `${APP_BASE_PATH}${next.startsWith("/") ? next : `/${next}`}`;
+}
+
+function stripBasePathFromUrl(url) {
+  const raw = String(url || "");
+  if (!APP_BASE_PATH) return raw || "/";
+  if (
+    raw === APP_BASE_PATH ||
+    raw.startsWith(`${APP_BASE_PATH}/`) ||
+    raw.startsWith(`${APP_BASE_PATH}?`)
+  ) {
+    const stripped = raw.slice(APP_BASE_PATH.length) || "/";
+    return stripped.startsWith("/") ? stripped : `/${stripped}`;
+  }
+  return raw || "/";
+}
+
 
 /* -------------------- helpers -------------------- */
 
@@ -726,6 +759,14 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   }
 
   const sessionStore = new SQLiteSessionStore(db, { defaultTtlMs: 1000 * 60 * 60 * 12 });
+  app.set("basePath", APP_BASE_PATH);
+
+  if (APP_BASE_PATH) {
+    app.use((req, _res, next) => {
+      req.url = stripBasePathFromUrl(req.url || "/");
+      next();
+    });
+  }
 
   // ✅ Session (SECURITY ADDON)
   const configuredSessionSecret = String(process.env.SESSION_SECRET || "").trim();
@@ -825,7 +866,7 @@ app.get("/static/js/:file", (req, res) => {
   /* ===================== SECURITY ADDON: auth + perms ===================== */
 
   function getSessionUser(req) {
-    const url = String(req.originalUrl || req.path || "");
+    const url = stripBasePathFromUrl(String(req.path || req.originalUrl || ""));
     // Session separation: Admin and Staff must never overwrite each other
     if (url.startsWith("/api/admin/") || url.startsWith("/admin")) {
       return (req.session && req.session.adminUser) ? req.session.adminUser : null;
@@ -958,7 +999,7 @@ function requireStaffApi(req, res, next) {
 function requirePermPage(permKey) {
   return (req, res, next) => {
     const u = getSessionUser(req);
-    if (!u) return res.redirect("/admin-login");
+    if (!u) return res.redirect(pathWithBase("/admin-login"));
     if (!hasPerm(u, permKey)) return res.status(403).send("Forbidden");
     next();
   };
@@ -966,16 +1007,16 @@ function requirePermPage(permKey) {
 
   function requireStaffPage(req, res, next) {
   const u = getSessionUser(req);
-  if (!u) return res.redirect("/staff-login");
+  if (!u) return res.redirect(pathWithBase("/staff-login"));
   next();
 }
 
 function requireAdminPage(req, res, next) {
   const u = getSessionUser(req);
-  if (!u) return res.redirect("/admin-login");
+  if (!u) return res.redirect(pathWithBase("/admin-login"));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (roleId !== "ADMIN") return res.redirect("/staff"); // or res.status(403).send("Forbidden");
+  if (roleId !== "ADMIN") return res.redirect(pathWithBase("/staff")); // or res.status(403).send("Forbidden");
   next();
 }
 
@@ -1261,7 +1302,7 @@ app.get("/qr/guest", async (req, res) => {
     const lan = getLanIPv4();
     const baseHost = lan ? `${lan}:${portStr}` : host;
 
-    const guestUrl = `${proto}://${baseHost}/guest`;
+    const guestUrl = `${proto}://${baseHost}${pathWithBase("/guest")}`;
 
 
     const png = await QRCode.toBuffer(guestUrl, {
@@ -1275,6 +1316,45 @@ app.get("/qr/guest", async (req, res) => {
     console.error("[QR]", err);
     res.status(500).send("QR generation failed");
   }
+});
+
+app.get("/app-boot.js", (_req, res) => {
+  const basePathJson = JSON.stringify(APP_BASE_PATH);
+  res.type("application/javascript").send(`(() => {
+  const basePath = ${basePathJson};
+
+  function withBase(input) {
+    const raw = String(input || "");
+    if (!basePath) return raw || "/";
+    if (!raw) return basePath;
+    if (/^(?:[a-z]+:)?\\/\\//i.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:") || raw.startsWith("#")) return raw;
+    if (!raw.startsWith("/")) return raw;
+    if (raw === basePath || raw.startsWith(basePath + "/") || raw.startsWith(basePath + "?")) return raw;
+    return basePath + raw;
+  }
+
+  window.__APP_BASE_PATH__ = basePath;
+  window.appUrl = withBase;
+  window.appAbsoluteUrl = function(input) {
+    return window.location.origin + withBase(input);
+  };
+
+  const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+  if (nativeFetch) {
+    window.fetch = function(input, init) {
+      if (typeof input === "string") return nativeFetch(withBase(input), init);
+      return nativeFetch(input, init);
+    };
+  }
+
+  const NativeEventSource = window.EventSource;
+  if (NativeEventSource) {
+    window.EventSource = function(url, config) {
+      return new NativeEventSource(withBase(url), config);
+    };
+    window.EventSource.prototype = NativeEventSource.prototype;
+  }
+})();`);
 });
 
 app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
@@ -1322,11 +1402,11 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   try {
     const orientation = String(getAppSetting("display.orientation") || "landscape");
     if (orientation === "portrait") {
-      return res.redirect(302, "/display-portrait.html");
+      return res.redirect(302, pathWithBase("/display-portrait.html"));
     }
-    return res.redirect(302, "/display-landscape.html");
+    return res.redirect(302, pathWithBase("/display-landscape.html"));
   } catch {
-    return res.redirect(302, "/display-landscape.html");
+    return res.redirect(302, pathWithBase("/display-landscape.html"));
   }
 });
 
@@ -1371,6 +1451,9 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
 
 
   app.get("/guest", (_, res) => res.sendFile(path.join(__dirname, "static", "guest.html")));
+  app.get("/test", (_req, res) =>
+    res.sendFile(path.join(__dirname, "static", "test.html"))
+  );
  
   // ✅ Admin page requires login (so permission-gated actions like Media Folder work)
    app.get("/admin", requireAdminPage, (_, res) =>
@@ -5908,6 +5991,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
   /* ---------- socket ---------- */
   const server = http.createServer(app);
   const io = new Server(server, {
+    path: pathWithBase("/socket.io"),
     cors: {
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);

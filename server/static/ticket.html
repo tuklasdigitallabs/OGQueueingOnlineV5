@@ -213,6 +213,7 @@
     </div>
   </main>
 
+  <script src="../app-boot.js"></script>
   <script>
     function qs(name){
       return new URL(window.location.href).searchParams.get(name) || "";
@@ -265,7 +266,7 @@
         setGroupBadge(t.group);
 
         var back = document.getElementById("backToRegister");
-        if (back) back.href = "/static/guest.html";
+        if (back) back.href = window.appUrl("/guest");
       }catch(e){
         console.error(e);
         alert("Unable to load ticket info.");

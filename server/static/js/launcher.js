@@ -203,7 +203,7 @@
   }
 
   async function boot() {
-    el.baseUrl.textContent = location.origin;
+    el.baseUrl.textContent = window.appAbsoluteUrl("/");
 
     await runStartupLoading();
     const actionsBound = bindActions();

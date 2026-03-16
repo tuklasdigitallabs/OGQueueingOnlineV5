@@ -1,0 +1,16 @@
+services:
+  qsys:
+    build:
+      context: .
+      dockerfile: Dockerfile.qsys
+    container_name: og_qsys
+    restart: unless-stopped
+    env_file:
+      - .env.qsys
+    ports:
+      - "3000:3000"
+    volumes:
+      - qsys_data:/data
+
+volumes:
+  qsys_data:

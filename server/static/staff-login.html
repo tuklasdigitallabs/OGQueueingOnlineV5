@@ -173,6 +173,7 @@
     <div class="err" id="err"></div>
   </div>
 
+  <script src="./app-boot.js"></script>
   <script>
     const $n = document.getElementById("fullName");
     const $p = document.getElementById("pin");
@@ -213,7 +214,7 @@
         });
         const j = await r.json();
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
-        location.href = "/staff";
+        location.href = window.appUrl("/staff");
       } catch {
         $e.textContent = "Server error";
       }

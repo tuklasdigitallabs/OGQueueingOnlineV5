@@ -555,14 +555,15 @@ line-height: 0.86;
 </div>
 
   <!-- Core expects this -->
-  <audio id="chime" src="/static/chime.mp3" preload="auto"></audio>
+  <audio id="chime" src="./static/chime.mp3" preload="auto"></audio>
   <div id="status">Loading…</div>
 
   <!-- IMPORTANT ORDER:
        1) socket.io
        2) DisplayUI renderer
        3) display-core (boots everything, incl. video playlist) -->
-  <script src="/socket.io/socket.io.js">
+  <script src="./app-boot.js"></script>
+  <script src="./socket.io/socket.io.js">
   // 🔔 Recall attention: replay pulse + chime even if same ticket
   socket.on("QUEUE_RECALL", () => {
     try{
@@ -572,7 +573,7 @@ line-height: 0.86;
   });
 
 </script>
-  <script src="/static/js/display-ui-portrait.js">
+  <script src="./static/js/display-ui-portrait.js">
   // 🔔 Recall attention: replay pulse + chime even if same ticket
   socket.on("QUEUE_RECALL", () => {
     try{
@@ -582,7 +583,7 @@ line-height: 0.86;
   });
 
 </script>
-  <script src="/static/js/display-core.js">
+  <script src="./static/js/display-core.js">
   // 🔔 Recall attention: replay pulse + chime even if same ticket
   socket.on("QUEUE_RECALL", () => {
     try{

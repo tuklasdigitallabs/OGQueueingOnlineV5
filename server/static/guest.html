@@ -286,6 +286,7 @@
       </div>
     </div>
 
+    <script src="./app-boot.js"></script>
     <script>
       const f = document.getElementById("f");
       const nameEl = document.getElementById("name");
@@ -361,7 +362,7 @@
             return showErr(j.error || "Failed.");
           }
 
-          window.location.href = "/static/ticket.html?id=" + encodeURIComponent(j.id);
+          window.location.href = window.appUrl("/static/ticket.html?id=" + encodeURIComponent(j.id));
 
         } catch (e2) {
           showErr("Network error. Please try again.");
