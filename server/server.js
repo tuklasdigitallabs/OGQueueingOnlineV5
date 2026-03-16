@@ -38,6 +38,10 @@ function pathWithBase(p) {
   return `${APP_BASE_PATH}${next.startsWith("/") ? next : `/${next}`}`;
 }
 
+function setPrivateSurfaceNoIndex(res) {
+  res.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+}
+
 function stripBasePathFromUrl(url) {
   const raw = String(url || "");
   if (!APP_BASE_PATH) return raw || "/";
@@ -901,6 +905,24 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
     hsts: false,
     contentSecurityPolicy: false,
   }));
+  app.get("/robots.txt", (_req, res) => {
+    res.type("text/plain").send([
+      "User-agent: *",
+      `Disallow: ${pathWithBase("/staff")}`,
+      `Disallow: ${pathWithBase("/staff-login")}`,
+      `Disallow: ${pathWithBase("/admin")}`,
+      `Disallow: ${pathWithBase("/admin-login")}`,
+      `Disallow: ${pathWithBase("/super-admin")}`,
+      `Disallow: ${pathWithBase("/super-admin-login")}`,
+      `Disallow: ${pathWithBase("/super-admin-recover")}`,
+      `Disallow: ${pathWithBase("/internal-tools")}`,
+      `Disallow: ${pathWithBase("/provider-setup")}`,
+      `Disallow: ${pathWithBase("/display")}`,
+      `Disallow: ${pathWithBase("/display-landscape.html")}`,
+      `Disallow: ${pathWithBase("/display-portrait.html")}`,
+      "",
+    ].join("\n"));
+  });
 
   // Persistent SQLite session store (avoids default MemoryStore limitations).
   class SQLiteSessionStore extends session.Store {
@@ -1904,6 +1926,7 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
 });
 
   app.get("/display", (req, res) => {
+  setPrivateSurfaceNoIndex(res);
   try {
     const orientation = String(getAppSetting("display.orientation") || "landscape");
     if (orientation === "portrait") {
@@ -1918,15 +1941,15 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
 
   // Serve the landscape display entry HTML
   app.get("/display-landscape.html", (_req, res) =>
-    res.sendFile(path.join(__dirname, "static", "display-landscape.html"))
+    (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "display-landscape.html")))
   );
   
   // Serve the portrait display entry HTML
   app.get("/display-portrait.html", (_req, res) =>
-    res.sendFile(path.join(__dirname, "static", "display-portrait.html"))
+    (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "display-portrait.html")))
   );
 app.get("/staff", requireStaffPage, (_, res) =>
-  res.sendFile(path.join(__dirname, "static", "staff.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")))
 );
 
 /* ---------- Admin: QR (PNG for preview / print / download) ---------- */
@@ -1962,36 +1985,36 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
  
   // ✅ Admin page requires login (so permission-gated actions like Media Folder work)
    app.get("/admin", requireAdminPage, (_, res) =>
-  res.sendFile(path.join(__dirname, "static", "admin.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")))
 );
 
 app.get("/admin-login", (_, res) =>
-  res.sendFile(path.join(__dirname, "static", "admin-login.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")))
 );
 
 app.get("/super-admin-login", (_req, res) =>
-  res.sendFile(path.join(__dirname, "static", "super-admin-login.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin-login.html")))
 );
 
 app.get("/super-admin-recover", (_req, res) =>
-  res.sendFile(path.join(__dirname, "static", "super-admin-recover.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin-recover.html")))
 );
 
 app.get("/provider-setup", (_req, res) =>
-  res.sendFile(path.join(__dirname, "static", "provider-setup.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "provider-setup.html")))
 );
 
 app.get("/super-admin", requireSuperAdminPage, (_req, res) =>
-  res.sendFile(path.join(__dirname, "static", "super-admin.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin.html")))
 );
 
 app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
-  res.sendFile(path.join(__dirname, "static", "internal-tools.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "internal-tools.html")))
 );
 
 
   app.get("/staff-login", (_, res) =>
-  res.sendFile(path.join(__dirname, "static", "staff-login.html"))
+  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")))
 );
 
 
