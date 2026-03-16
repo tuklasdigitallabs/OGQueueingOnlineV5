@@ -340,6 +340,7 @@ function dbgDisp(...args){
   let __lastAnnouncedAt = 0;
   let __announceGeneration = 0;
   const __activeVoiceNodes = new Set();
+  let __speechUtterance = null;
 
   function displayAudioBase() {
     try {
@@ -409,9 +410,63 @@ function dbgDisp(...args){
       }
       __activeVoiceNodes.clear();
     } catch {}
+    try {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      __speechUtterance = null;
+    } catch {}
   }
 
   function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  function buildSpeechTextFromCode(code) {
+    const compact = String(code || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+    if (!compact) return "";
+    const isPriority = compact.startsWith("P") && compact.length >= 3;
+    const group = isPriority ? compact.slice(0, 2) : compact.slice(0, 1);
+    const digits = (isPriority ? compact.slice(2) : compact.slice(1))
+      .split("")
+      .filter(Boolean)
+      .join(" ");
+    if (!digits) return `Now serving ${group}. Please proceed to the counter.`;
+    return `Now serving ${group} ${digits}. Please proceed to the counter.`;
+  }
+
+  function speakWithSpeechSynthesis(code, generation) {
+    return new Promise((resolve) => {
+      try {
+        if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== "function") {
+          resolve(false);
+          return;
+        }
+        const text = buildSpeechTextFromCode(code);
+        if (!text) {
+          resolve(false);
+          return;
+        }
+        const utter = new window.SpeechSynthesisUtterance(text);
+        utter.rate = 0.95;
+        utter.pitch = 1;
+        utter.volume = 1;
+        utter.onend = () => {
+          if (generation === __announceGeneration) __speechUtterance = null;
+          resolve(true);
+        };
+        utter.onerror = () => {
+          if (generation === __announceGeneration) __speechUtterance = null;
+          resolve(false);
+        };
+        __speechUtterance = utter;
+        try { window.speechSynthesis.cancel(); } catch {}
+        window.speechSynthesis.speak(utter);
+      } catch {
+        resolve(false);
+      }
+    });
+  }
 
   async function playChimeThenVoice(code, generation){
     const c = String(code || "").trim();
@@ -608,9 +663,11 @@ function dbgDisp(...args){
 
     try {
       await playVoiceSequence(srcs, generation);
-    } catch {
-      // If WebAudio fails for any reason, do nothing (chime still plays)
-    }
+      return;
+    } catch {}
+    try {
+      await speakWithSpeechSynthesis(code, generation);
+    } catch {}
   }
 
   // Attach unlock listeners once (safe even if audio element missing)
