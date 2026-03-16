@@ -229,8 +229,12 @@
       gap:16px;
       align-items:start;
     }
+    .grid.noQueueTools{
+      grid-template-columns: minmax(0, 1.55fr) minmax(320px, .82fr);
+    }
     @media (max-width: 980px){
       .grid{ grid-template-columns: 1fr; }
+      .grid.noQueueTools{ grid-template-columns: 1fr; }
       .who{ justify-content:flex-start; text-align:left; }
       .brand{ min-width:auto; }
     }
@@ -685,7 +689,7 @@
   </div>
 
   <div class="wrap">
-    <div class="grid">
+    <div class="grid" id="staffGrid">
 
       <!-- LEFT: Queue Tools -->
       <div class="card" id="queueToolsShell" style="display:none;">
@@ -1202,6 +1206,7 @@ function getQueuedMs(item) {
       const recoveryOn = hasFeature("queue.recovery_tools") || hasFeature("queue.reopen_completed");
       const hasAnyQueueTools = forecastOn || recoveryOn;
       if ($("queueToolsShell")) $("queueToolsShell").style.display = hasAnyQueueTools ? "block" : "none";
+      $("staffGrid")?.classList.toggle("noQueueTools", !hasAnyQueueTools);
       if (!hasAnyQueueTools) {
         $("queueForecastGrid").innerHTML = `<div class="hint">No queue tools provisioned for this branch.</div>`;
         $("queueRecoveryList").innerHTML = `<div class="hint">No queue recovery tools provisioned for this branch.</div>`;
