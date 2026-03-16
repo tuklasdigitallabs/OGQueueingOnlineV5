@@ -19,9 +19,6 @@
     btnSaveAgentConfig: $("btnSaveAgentConfig"),
     btnRefreshAgentConfig: $("btnRefreshAgentConfig"),
 
-    btnStaff: $("btnStaff"),
-    btnAdmin: $("btnAdmin"),
-    btnGuest: $("btnGuest"),
     btnDisplay: $("btnDisplay"),
     btnRefresh: $("btnRefresh"),
     btnShutdown: $("btnShutdown"),
@@ -307,9 +304,6 @@
       return false;
     }
 
-    el.btnStaff?.addEventListener("click", () => qsys.openStaff());
-    el.btnAdmin?.addEventListener("click", () => qsys.openAdmin());
-    el.btnGuest?.addEventListener("click", () => qsys.openGuest());
     el.btnDisplay?.addEventListener("click", () => qsys.openDisplay());
     el.btnShutdown?.addEventListener("click", () => qsys.shutdownApp());
 

@@ -361,8 +361,8 @@
     <main class="app">
       <header class="topbar">
         <div class="brand">
-          <h1>QSys Control Center</h1>
-          <p class="sub">Local server + launcher (offline)</p>
+          <h1>QSys Display Agent</h1>
+          <p class="sub">Branch display launcher for the online QSYS platform</p>
         </div>
 
         <div class="pill" title="Live server health" role="status" aria-live="polite" aria-atomic="true">
@@ -380,22 +380,16 @@
           </div>
           <div class="cardBody actions">
             <div class="btnRow">
-              <button type="button" class="btn btnPrimary" id="btnStaff">Staff Login</button>
-              <button type="button" class="btn btnAccent" id="btnAdmin">Admin Login</button>
-            </div>
-
-            <div class="btnRow">
-              <button type="button" class="btn btnPrimary" id="btnGuest">Guest App</button>
-              <button type="button" class="btn btnNeutral" id="btnDisplay">Open Display</button>
-            </div>
-
-            <div class="btnRow">
+              <button type="button" class="btn btnPrimary" id="btnDisplay">Open Display</button>
               <button type="button" class="btn btnGhost" id="btnRefresh">Refresh Status</button>
+            </div>
+
+            <div class="btnRow">
               <button type="button" class="btn btnGhost" id="btnShutdown">Shutdown App</button>
             </div>
 
             <div class="note">
-              Staff/Admin/Guest opens in your default browser using the configured online branch URLs. Display opens in kiosk window on the selected screen. Shutdown closes the local QSys app.
+              This PC is intended to host the branch queue display. Configure the online branch and target screen, then open the display in kiosk mode. Shutdown closes the local display agent.
             </div>
           </div>
         </section>
@@ -480,7 +474,7 @@
       </div>
 
       <div class="footer">
-        <div>(c) QSys Local</div>
+        <div>(c) QSys Display Agent</div>
       </div>
     </main>
 
