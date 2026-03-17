@@ -29,6 +29,7 @@ app.commandLine.appendSwitch("disable-site-isolation-trials");
 const { startServer } = require("../server/server");
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
+const ONLINE_SERVER_URL = "https://onegourmetph.com/qsys";
 if (!gotSingleInstanceLock) {
   try {
     dialog.showErrorBox(
@@ -111,7 +112,7 @@ function loadConfig(baseDir) {
   if (!fs.existsSync(cfgPath)) {
     const defaultCfg = {
       port: 3000,
-      serverUrl: "",
+      serverUrl: ONLINE_SERVER_URL,
       branchCode: "DEV",
       targetDisplayId: null,
       displayMode: "landscape",
@@ -129,7 +130,7 @@ function loadConfig(baseDir) {
   } catch (e) {
     const fallback = {
       port: 3000,
-      serverUrl: "",
+      serverUrl: ONLINE_SERVER_URL,
       branchCode: "DEV",
       targetDisplayId: null,
       displayMode: "landscape",
@@ -160,7 +161,7 @@ function normalizeDisplayMode(mode) {
 
 function normalizeServerUrl(serverUrl, port) {
   const raw = String(serverUrl || "").trim();
-  if (!raw) return `http://127.0.0.1:${port}`;
+  if (!raw) return ONLINE_SERVER_URL;
   return raw.replace(/\/+$/, "");
 }
 
@@ -525,7 +526,7 @@ ipcMain.handle("launcher-config:save", async (_evt, payload) => {
   if (!cfgGlobal || !baseDirGlobal) return { ok: false, error: "Config not initialized" };
   const next = {
     ...cfgGlobal,
-    serverUrl: String(payload?.serverUrl || "").trim(),
+    serverUrl: normalizeServerUrl(payload?.serverUrl, cfgGlobal.port),
     branchCode: normalizeBranchCode(payload?.branchCode),
     displayMode: normalizeDisplayMode(payload?.displayMode),
     targetDisplayId: Number.isFinite(Number(payload?.targetDisplayId)) ? Number(payload.targetDisplayId) : null,
@@ -829,7 +830,7 @@ app.whenReady().then(async () => {
   migrateDevDataIfNeeded(baseDir);
 
   const cfg = loadConfig(baseDir);
-  cfg.serverUrl = String(cfg.serverUrl || "").trim();
+  cfg.serverUrl = normalizeServerUrl(cfg.serverUrl, cfg.port);
   cfg.branchCode = normalizeBranchCode(cfg.branchCode);
   cfg.targetDisplayId = Number.isFinite(Number(cfg.targetDisplayId)) ? Number(cfg.targetDisplayId) : null;
   cfg.displayMode = normalizeDisplayMode(cfg.displayMode);
