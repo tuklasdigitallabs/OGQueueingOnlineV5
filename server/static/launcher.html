@@ -233,7 +233,7 @@
       }
 
       @media (min-width: 860px) {
-        .grid { grid-template-columns: 1.1fr 0.9fr; }
+        .grid { grid-template-columns: 0.78fr 1.22fr; }
       }
 
       .stack {
@@ -279,7 +279,7 @@
 
       .kvRow {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: var(--s);
         padding: 12px;
@@ -289,11 +289,31 @@
       }
 
       .k { font-size: 12px; color: var(--muted); }
-      .v { font-size: 12px; color: rgba(229,231,235,.95); font-weight: 600; }
+      .v { font-size: 12px; color: rgba(229,231,235,.95); font-weight: 600; overflow-wrap: anywhere; }
+      .fieldControl {
+        width: 100%;
+        max-width: 360px;
+        min-width: 0;
+        background: rgba(15,23,42,.75);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 10px;
+        color: inherit;
+      }
+      .valueBlock {
+        width: 100%;
+        max-width: 420px;
+        min-width: 0;
+        text-align: left;
+      }
 
       .actions {
         display: grid;
         gap: var(--s);
+      }
+
+      .actions .btnRow {
+        grid-template-columns: 1fr;
       }
 
       .btnRow {
@@ -419,7 +439,6 @@
           <div class="cardBody actions">
             <div class="btnRow">
               <button type="button" class="btn btnPrimary" id="btnDisplay">Open Display</button>
-              <button type="button" class="btn btnGhost" id="btnRefresh">Refresh Status</button>
             </div>
 
             <div class="btnRow">
@@ -440,30 +459,30 @@
             <div class="kv">
               <div class="kvRow">
                 <div class="k">Server URL</div>
-                <div class="v mono" id="serverUrlValue">https://onegourmetph.com/qsys</div>
+                <div class="v mono valueBlock" id="serverUrlValue">https://onegourmetph.com/qsys</div>
               </div>
               <div class="kvRow">
                 <div class="k">Branch Code</div>
-                <select class="v mono" id="branchCodeInput" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;">
+                <select class="v mono fieldControl" id="branchCodeInput">
                   <option value="">Select branch...</option>
                 </select>
               </div>
               <div class="kvRow">
                 <div class="k">Display Mode</div>
-                <select class="v" id="displayModeInput" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;">
+                <select class="v fieldControl" id="displayModeInput">
                   <option value="landscape">Landscape</option>
                   <option value="portrait">Portrait</option>
                 </select>
               </div>
               <div class="kvRow">
                 <div class="k">Target Screen</div>
-                <select class="v" id="displayTargetInput" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;">
+                <select class="v fieldControl" id="displayTargetInput">
                   <option value="">Primary / Auto</option>
                 </select>
               </div>
               <div class="kvRow">
                 <div class="k">Resolved Display URL</div>
-                <div class="v mono" id="resolvedDisplayUrl">-</div>
+                <div class="v mono valueBlock" id="resolvedDisplayUrl">-</div>
               </div>
             </div>
 

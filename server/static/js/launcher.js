@@ -22,7 +22,6 @@
     btnRefreshAgentConfig: $("btnRefreshAgentConfig"),
 
     btnDisplay: $("btnDisplay"),
-    btnRefresh: $("btnRefresh"),
     btnShutdown: $("btnShutdown"),
 
     bootPct: $("bootPct"),
@@ -358,11 +357,6 @@
 
     el.btnDisplay?.addEventListener("click", () => qsys.openDisplay());
     el.btnShutdown?.addEventListener("click", () => qsys.shutdownApp());
-
-    el.btnRefresh?.addEventListener("click", async () => {
-      const ok = await pingHealth();
-      if (ok) await fetchBranchInfoBestEffort();
-    });
 
     el.btnSaveAgentConfig?.addEventListener("click", async () => {
       try {

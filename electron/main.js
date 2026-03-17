@@ -334,6 +334,7 @@ function showKioskWindow() {
   const w = ensureKioskWindow();
   if (!w || w.isDestroyed()) return;
 
+  reloadDisplayWindow();
   forceWindowToDisplay(w, currentDisplayId);
   w.show();
   w.focus();
