@@ -370,12 +370,30 @@
     const startedAt = Date.now();
 
     const checks = [
-      { label: "bridge://window.qsys", run: async () => { if (!window.qsys) throw new Error("bridge missing"); } },
-      { label: "/api/health", run: async () => probe("/api/health", "GET") },
-      { label: "/display", run: async () => probe("/display", "HEAD") },
-      { label: "/guest", run: async () => probe("/guest", "HEAD") },
-      { label: "/static/launcher.html", run: async () => probe("/static/launcher.html", "HEAD") },
-      { label: "/static/js/launcher.js", run: async () => probe("/static/js/launcher.js", "HEAD") },
+      {
+        label: "Display bridge",
+        run: async () => {
+          if (!window.qsys) throw new Error("bridge missing");
+        },
+      },
+      {
+        label: "Display setup",
+        run: async () => {
+          const res = await window.qsys?.getLauncherConfig?.();
+          if (!res?.ok) throw new Error(res?.error || "config unavailable");
+        },
+      },
+      {
+        label: "Monitor detection",
+        run: async () => {
+          const res = await window.qsys?.getDisplayTargets?.();
+          if (!res?.ok) throw new Error(res?.error || "display targets unavailable");
+        },
+      },
+      {
+        label: "Display endpoint",
+        run: async () => probe("/display", "HEAD"),
+      },
     ];
 
     let done = 0;
@@ -384,7 +402,7 @@
 
     for (const item of checks) {
       const stepStartedAt = Date.now();
-      if (el.bootNow) el.bootNow.textContent = `Loading ${item.label}`;
+      if (el.bootNow) el.bootNow.textContent = `Checking ${item.label}...`;
       const stateEl = addBootRow(item.label);
       try {
         await item.run();
@@ -409,11 +427,11 @@
 
     const totalElapsed = Date.now() - startedAt;
     if (totalElapsed < MIN_BOOT_MS) {
-      if (el.bootNow) el.bootNow.textContent = "Finalizing startup...";
+      if (el.bootNow) el.bootNow.textContent = "Finalizing display agent...";
       await sleep(MIN_BOOT_MS - totalElapsed);
     }
 
-    if (el.bootNow) el.bootNow.textContent = "Startup checks complete";
+    if (el.bootNow) el.bootNow.textContent = "Display agent ready";
     document.body.classList.add("ready");
   }
 
