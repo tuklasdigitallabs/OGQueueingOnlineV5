@@ -236,6 +236,11 @@
         .grid { grid-template-columns: 1.1fr 0.9fr; }
       }
 
+      .stack {
+        display: grid;
+        gap: var(--s);
+      }
+
       .card {
         border: 1px solid var(--border);
         border-radius: var(--r);
@@ -372,29 +377,7 @@
         </div>
       </header>
 
-      <div class="grid">
-        <!-- Left: Actions -->
-        <section class="card" aria-labelledby="quickActionsHeading">
-          <div class="cardHeader">
-            <h2 id="quickActionsHeading">Quick Actions</h2>
-          </div>
-          <div class="cardBody actions">
-            <div class="btnRow">
-              <button type="button" class="btn btnPrimary" id="btnDisplay">Open Display</button>
-              <button type="button" class="btn btnGhost" id="btnRefresh">Refresh Status</button>
-            </div>
-
-            <div class="btnRow">
-              <button type="button" class="btn btnGhost" id="btnShutdown">Shutdown App</button>
-            </div>
-
-            <div class="note">
-              This PC is intended to host the branch queue display. Configure the online branch and target screen, then open the display in kiosk mode. Shutdown closes the local display agent.
-            </div>
-          </div>
-        </section>
-
-        <!-- Right: Status -->
+      <div class="stack">
         <section class="card" aria-labelledby="statusHeading">
           <div class="cardHeader">
             <h2 id="statusHeading">Status</h2>
@@ -406,7 +389,7 @@
                 <div class="v" id="serverStatus" aria-live="polite">-</div>
               </div>
 
-              <div class="kvRow">
+              <div class="kvRow" id="branchCodeRow" style="display:none;">
                 <div class="k">Branch Code</div>
                 <div class="v mono" id="branchCode">-</div>
               </div>
@@ -428,6 +411,27 @@
           </div>
         </section>
 
+        <div class="grid">
+        <section class="card" aria-labelledby="quickActionsHeading">
+          <div class="cardHeader">
+            <h2 id="quickActionsHeading">Quick Actions</h2>
+          </div>
+          <div class="cardBody actions">
+            <div class="btnRow">
+              <button type="button" class="btn btnPrimary" id="btnDisplay">Open Display</button>
+              <button type="button" class="btn btnGhost" id="btnRefresh">Refresh Status</button>
+            </div>
+
+            <div class="btnRow">
+              <button type="button" class="btn btnGhost" id="btnShutdown">Shutdown App</button>
+            </div>
+
+            <div class="note">
+              This PC is intended to host the branch queue display. Configure the online branch and target screen, then open the display in kiosk mode. Shutdown closes the local display agent.
+            </div>
+          </div>
+        </section>
+
         <section class="card" aria-labelledby="agentConfigHeading">
           <div class="cardHeader">
             <h2 id="agentConfigHeading">Display Agent Setup</h2>
@@ -436,11 +440,13 @@
             <div class="kv">
               <div class="kvRow">
                 <div class="k">Server URL</div>
-                <input class="v mono" id="serverUrlInput" type="text" placeholder="https://onegourmetph.com/qsys" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;" />
+                <div class="v mono" id="serverUrlValue">https://onegourmetph.com/qsys</div>
               </div>
               <div class="kvRow">
                 <div class="k">Branch Code</div>
-                <input class="v mono" id="branchCodeInput" type="text" placeholder="YL-MOA" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;" />
+                <select class="v mono" id="branchCodeInput" style="width:60%;background:rgba(15,23,42,.75);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:inherit;">
+                  <option value="">Select branch...</option>
+                </select>
               </div>
               <div class="kvRow">
                 <div class="k">Display Mode</div>
@@ -471,6 +477,7 @@
             </div>
           </div>
         </section>
+        </div>
       </div>
 
       <div class="footer">

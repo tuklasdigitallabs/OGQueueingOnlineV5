@@ -1,5 +1,6 @@
 (function () {
   const $ = (id) => document.getElementById(id);
+  const HARD_CODED_SERVER_URL = "https://onegourmetph.com/qsys";
 
   const el = {
     healthDot: $("healthDot"),
@@ -7,10 +8,11 @@
     baseUrl: $("baseUrl"),
 
     serverStatus: $("serverStatus"),
+    branchCodeRow: $("branchCodeRow"),
     branchCode: $("branchCode"),
     businessDate: $("businessDate"),
     localTime: $("localTime"),
-    serverUrlInput: $("serverUrlInput"),
+    serverUrlValue: $("serverUrlValue"),
     branchCodeInput: $("branchCodeInput"),
     displayModeInput: $("displayModeInput"),
     displayTargetInput: $("displayTargetInput"),
@@ -33,6 +35,7 @@
   const state = {
     launcherConfig: null,
     displayTargets: [],
+    availableBranches: [],
   };
 
   function normalizeServerUrl(serverUrl) {
@@ -72,11 +75,30 @@
 
   function currentConfigFromForm() {
     return {
-      serverUrl: normalizeServerUrl(el.serverUrlInput?.value),
+      serverUrl: HARD_CODED_SERVER_URL,
       branchCode: normalizeBranchCode(el.branchCodeInput?.value),
       displayMode: normalizeDisplayMode(el.displayModeInput?.value),
       targetDisplayId: getSelectedDisplayTargetId(),
     };
+  }
+
+  function renderBranchOptions(selectedCode) {
+    if (!el.branchCodeInput) return;
+    const current = normalizeBranchCode(selectedCode);
+    el.branchCodeInput.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = state.availableBranches.length ? "Select branch..." : "No branches found";
+    el.branchCodeInput.appendChild(placeholder);
+
+    for (const branch of state.availableBranches) {
+      const option = document.createElement("option");
+      option.value = branch.branchCode;
+      option.textContent = branch.branchName ? `${branch.branchName} (${branch.branchCode})` : branch.branchCode;
+      el.branchCodeInput.appendChild(option);
+    }
+
+    el.branchCodeInput.value = current || "";
   }
 
   function renderDisplayTargets(selectedId) {
@@ -111,30 +133,31 @@
 
   function renderLauncherConfig(config) {
     state.launcherConfig = config || null;
-    if (el.serverUrlInput) el.serverUrlInput.value = String(config?.serverUrl || "");
-    if (el.branchCodeInput) el.branchCodeInput.value = normalizeBranchCode(config?.branchCode);
+    if (el.serverUrlValue) el.serverUrlValue.textContent = HARD_CODED_SERVER_URL;
+    renderBranchOptions(config?.branchCode);
     if (el.displayModeInput) el.displayModeInput.value = normalizeDisplayMode(config?.displayMode);
     renderDisplayTargets(config?.targetDisplayId ?? null);
     renderResolvedDisplayUrl();
     if (el.baseUrl) {
-      el.baseUrl.textContent = normalizeServerUrl(config?.serverUrl) || String(config?.localLauncherUrl || window.appAbsoluteUrl("/"));
-    }
-    if (el.branchCode) {
-      el.branchCode.textContent = normalizeBranchCode(config?.branchCode) || "-";
+      el.baseUrl.textContent = HARD_CODED_SERVER_URL;
     }
   }
 
   function renderBranchValidation(status) {
     const configuredCode = normalizeBranchCode(state.launcherConfig?.branchCode || el.branchCodeInput?.value);
     if (!configuredCode) {
+      if (el.branchCodeRow) el.branchCodeRow.style.display = "none";
       setAgentStatus("Enter the branch code for the store display before opening the kiosk window.", true);
       return;
     }
     if (status?.branchValid) {
+      if (el.branchCodeRow) el.branchCodeRow.style.display = "";
+      if (el.branchCode) el.branchCode.textContent = configuredCode;
       const label = status.branchName ? `${status.branchName} (${configuredCode})` : configuredCode;
       setAgentStatus(`Display agent is pointed at ${label}.`, false);
       return;
     }
+    if (el.branchCodeRow) el.branchCodeRow.style.display = "none";
     const suggested = normalizeBranchCode(status?.suggestedBranchCode);
     if (suggested) {
       setAgentStatus(`Branch code ${configuredCode} was not found on the server. Try ${suggested} instead.`, true);
@@ -220,7 +243,10 @@
       setHealth(true, "Server online");
       if (status.baseUrl && el.baseUrl) el.baseUrl.textContent = String(status.baseUrl);
       if (status.businessDate) el.businessDate.textContent = String(status.businessDate);
-      if (status.branchCode && el.branchCode) el.branchCode.textContent = String(status.branchCode);
+      if (Array.isArray(status.availableBranches)) {
+        state.availableBranches = status.availableBranches;
+        renderBranchOptions(state.launcherConfig?.branchCode || el.branchCodeInput?.value);
+      }
       renderBranchValidation(status);
       return true;
     } catch (e) {
@@ -358,7 +384,7 @@
     });
 
     el.serverUrlInput?.addEventListener("input", renderResolvedDisplayUrl);
-    el.branchCodeInput?.addEventListener("input", renderResolvedDisplayUrl);
+    el.branchCodeInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.displayModeInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.displayTargetInput?.addEventListener("change", renderResolvedDisplayUrl);
     return true;
