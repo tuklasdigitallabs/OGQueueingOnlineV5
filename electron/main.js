@@ -835,6 +835,7 @@ app.whenReady().then(async () => {
   cfg.targetDisplayId = Number.isFinite(Number(cfg.targetDisplayId)) ? Number(cfg.targetDisplayId) : null;
   cfg.displayMode = normalizeDisplayMode(cfg.displayMode);
   cfg.kioskUrl = resolveKioskUrl(cfg);
+  saveConfig(baseDir, cfg);
   cfgGlobal = cfg;
   currentDisplayId = cfg.targetDisplayId;
 
