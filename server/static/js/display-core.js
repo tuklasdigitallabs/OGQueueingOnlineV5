@@ -909,8 +909,8 @@ function dbgDisp(...args){
       }
 
       const url = token
-        ? `/api/media/list?token=${encodeURIComponent(token)}`
-        : "/api/media/list";
+        ? withDisplayBranch(`/api/media/list?token=${encodeURIComponent(token)}`)
+        : withDisplayBranch("/api/media/list");
       const headers = token ? { "x-display-token": token } : {};
 
       const r = await fetch(url, { cache: "no-store", headers });
@@ -922,10 +922,16 @@ function dbgDisp(...args){
           .filter((p) => !/dashinit/i.test(p))
           .map((p) => window.appUrl(p));
       } else {
-        state.playlist = [];
+        state.playlist = [
+          "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
+          "/static/media/" + encodeURIComponent("SaveInsta.App - 3101717398286427917_369353778.mp4"),
+        ].map((p) => window.appUrl(p));
       }
     } catch {
-      state.playlist = [];
+      state.playlist = [
+        "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
+        "/static/media/" + encodeURIComponent("SaveInsta.App - 3101717398286427917_369353778.mp4"),
+      ].map((p) => window.appUrl(p));
     }
   }
 

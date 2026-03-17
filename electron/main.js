@@ -374,6 +374,13 @@ ipcMain.on("kiosk-move-mode", () => {
   win.setFullScreen(false);
   win.setKiosk(false);
   win.setAlwaysOnTop(false);
+  win.setResizable(true);
+  const b = getDisplayBoundsById(currentDisplayId);
+  const width = Math.max(960, Math.round(b.width * 0.86));
+  const height = Math.max(540, Math.round(b.height * 0.86));
+  const x = Math.round(b.x + (b.width - width) / 2);
+  const y = Math.round(b.y + (b.height - height) / 2);
+  win.setBounds({ x, y, width, height }, true);
   win.focus();
 });
 

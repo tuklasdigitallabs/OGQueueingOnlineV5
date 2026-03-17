@@ -68,7 +68,7 @@ function isPriorityRowSafe(row){
 
   function setDash(el, text){
     if (!el) return;
-    if (!text){ el.textContent = "-"; el.classList.add("dash"); }
+    if (!text){ el.textContent = ""; el.classList.add("dash"); }
     else { el.textContent = text; el.classList.remove("dash"); }
   }
 
