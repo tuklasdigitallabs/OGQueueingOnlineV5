@@ -11,7 +11,7 @@ function ensureDir(dir) {
  * <baseDir>/data/qsys.db
  *
  * In DEV: baseDir = projectRoot/data
- * In PROD: baseDir = C:\ProgramData\QSysLocal
+ * In PROD: baseDir = C:\ProgramData\QSysOnline
  */
 function openDb(baseDir) {
   const dataDir = path.join(baseDir, "data");

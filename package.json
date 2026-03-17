@@ -1,7 +1,7 @@
 {
   "name": "qsys-standalone",
   "version": "1.0.0",
-  "description": "QSys Standalone Offline Queueing System",
+  "description": "QSys Online Display Agent",
   "main": "electron/main.js",
   "author": "One Gourmet Foods Inc.",
   "license": "UNLICENSED",
@@ -34,9 +34,10 @@
     "qs": "^6.14.1"
   },
   "build": {
-    "appId": "com.onegourmet.qsyslocal",
-    "productName": "QSys Local",
+    "appId": "com.onegourmet.qsysonline",
+    "productName": "QSys Online",
     "copyright": "Copyright © One Gourmet Foods Inc.",
+    "artifactName": "QSys Online Setup ${version}.${ext}",
     "asar": true,
     "files": [
       "electron/**/*",
@@ -56,7 +57,7 @@
       "uninstallerIcon": "server/public/assets/icons/Yakiniku-Like-logo.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "QSys Local"
+      "shortcutName": "QSys Online"
     }
   }
 }

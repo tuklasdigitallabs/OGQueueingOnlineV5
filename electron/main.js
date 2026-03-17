@@ -33,7 +33,7 @@ if (!gotSingleInstanceLock) {
   try {
     dialog.showErrorBox(
       "QSys Already Running",
-      "Another QSys instance is already running.\n\nPlease close the existing QSys window first before opening a new one."
+      "Another QSys Online instance is already running.\n\nPlease close the existing QSys Online window first before opening a new one."
     );
   } catch {}
   app.quit();
@@ -73,7 +73,7 @@ function copyDirRecursive(src, dest) {
  */
 function getBaseDir() {
   const programData = process.env.PROGRAMDATA || "C:\\ProgramData";
-  return path.join(programData, "QSysLocal");
+  return path.join(programData, "QSysOnline");
 }
 
 function getOldDevDataDir() {
@@ -99,9 +99,9 @@ function migrateDevDataIfNeeded(baseDir) {
 
     copyDirRecursive(oldDir, baseDir);
     fs.writeFileSync(marker, String(Date.now()), "utf8");
-    console.log(`[QSysLocal] Migrated dev data from: ${oldDir} -> ${baseDir}`);
+    console.log(`[QSysOnline] Migrated dev data from: ${oldDir} -> ${baseDir}`);
   } catch (e) {
-    console.error("[QSysLocal] Data migration failed:", e);
+    console.error("[QSysOnline] Data migration failed:", e);
   }
 }
 
@@ -148,7 +148,7 @@ function saveConfig(baseDir, cfg) {
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
     return true;
   } catch (e) {
-    console.error("[QSysLocal] Failed to save config:", e);
+    console.error("[QSysOnline] Failed to save config:", e);
     return false;
   }
 }
@@ -648,7 +648,7 @@ function createTray() {
     },
     { type: "separator" },
     {
-      label: "Quit QSys",
+      label: "Quit QSys Online",
       click: () => {
         isQuitting = true;
         app.quit();
@@ -656,7 +656,7 @@ function createTray() {
     },
   ]);
 
-  tray.setToolTip("QSys Local");
+  tray.setToolTip("QSys Online");
   tray.setContextMenu(menu);
 
   // Double-click: show launcher (not display)
@@ -748,7 +748,7 @@ function createSplashWindow() {
     </style></head>
     <body>
       <div class="box">
-        <div class="t">Starting QSys…</div>
+        <div class="t">Starting QSys Online…</div>
         <div class="s">Initializing local server and loading launcher.</div>
         <div class="bar"><div></div></div>
       </div>
@@ -765,22 +765,22 @@ function showBlockingStartupError(message, details) {
       buttons: ["OK"],
       defaultId: 0,
       noLink: true,
-      title: "QSys Startup Error",
+      title: "QSys Online Startup Error",
       message,
       detail: String(details || ""),
     });
   } catch {
     // Fallback for edge cases where dialog cannot be shown.
     try {
-      dialog.showErrorBox("QSys Startup Error", `${message}\n\n${String(details || "")}`);
+      dialog.showErrorBox("QSys Online Startup Error", `${message}\n\n${String(details || "")}`);
     } catch {}
   }
 }
 
 function showAlreadyRunningError(port, details) {
-  const message = "QSys is already running on this PC.";
+  const message = "QSys Online is already running on this PC.";
   const detail =
-    "Please close the existing QSys instance first before opening a new one." +
+    "Please close the existing QSys Online instance first before opening a new one." +
     (details ? `\n\n${details}` : "") +
     `\n\nDetected local QSys server: http://127.0.0.1:${port}`;
   try {
@@ -789,13 +789,13 @@ function showAlreadyRunningError(port, details) {
       buttons: ["OK"],
       defaultId: 0,
       noLink: true,
-      title: "QSys Already Running",
+      title: "QSys Online Already Running",
       message,
       detail,
     });
   } catch {
     try {
-      dialog.showErrorBox("QSys Already Running", `${message}\n\n${detail}`);
+      dialog.showErrorBox("QSys Online Already Running", `${message}\n\n${detail}`);
     } catch {}
   }
 }
@@ -862,7 +862,7 @@ app.whenReady().then(async () => {
   try {
     await waitForServer(cfg.port, 25000);
   } catch (e) {
-    console.error("[QSysLocal] Server failed to start:", e);
+    console.error("[QSysOnline] Server failed to start:", e);
 
     if (splash && !splash.isDestroyed()) {
       splash.webContents
