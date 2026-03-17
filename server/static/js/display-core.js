@@ -1181,6 +1181,18 @@ function dbgDisp(...args){
     });
   }
 
+  window.moveKiosk = function moveKiosk() {
+    if (window.kiosk?.moveMode) return window.kiosk.moveMode();
+    if (window.qsysDisplay?.move) return window.qsysDisplay.move();
+    console.warn("Move not available: no preload bridge found.");
+  };
+
+  window.fullscreenKiosk = function fullscreenKiosk() {
+    if (window.kiosk?.enterFullscreen) return window.kiosk.enterFullscreen();
+    if (window.qsysDisplay?.fullscreen) return window.qsysDisplay.fullscreen();
+    console.warn("Fullscreen not available: no preload bridge found.");
+  };
+
   // ===== Shared helpers object passed into UI =====
   const helpers = {
     isPriorityRow,

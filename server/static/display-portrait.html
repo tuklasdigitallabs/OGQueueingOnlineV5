@@ -473,8 +473,8 @@ line-height: 0.86;
       <div class="tbRight">
   <div class="dragHandle" title="Drag window"></div>
 
-  <button class="btn" id="btnMove" title="Move">MOVE</button>
-  <button class="btn" id="btnFull" title="Fullscreen">FULLSCREEN</button>
+  <button class="btn" id="btnMove" title="Move" onclick="moveKiosk()">MOVE</button>
+  <button class="btn" id="btnFull" title="Fullscreen" onclick="fullscreenKiosk()">FULLSCREEN</button>
   <button class="btn danger" id="btnClose" title="Close">CLOSE</button>
 </div>
 
@@ -564,36 +564,9 @@ line-height: 0.86;
        2) DisplayUI renderer
        3) display-core (boots everything, incl. video playlist) -->
   <script src="./app-boot.js"></script>
-  <script src="./socket.io/socket.io.js">
-  // 🔔 Recall attention: replay pulse + chime even if same ticket
-  socket.on("QUEUE_RECALL", () => {
-    try{
-      if (typeof pulseHero === "function") pulseHero();
-      if (typeof playChime === "function") playChime();
-    }catch(e){}
-  });
-
-</script>
-  <script src="./static/js/display-ui-portrait.js">
-  // 🔔 Recall attention: replay pulse + chime even if same ticket
-  socket.on("QUEUE_RECALL", () => {
-    try{
-      if (typeof pulseHero === "function") pulseHero();
-      if (typeof playChime === "function") playChime();
-    }catch(e){}
-  });
-
-</script>
-  <script src="./static/js/display-core.js">
-  // 🔔 Recall attention: replay pulse + chime even if same ticket
-  socket.on("QUEUE_RECALL", () => {
-    try{
-      if (typeof pulseHero === "function") pulseHero();
-      if (typeof playChime === "function") playChime();
-    }catch(e){}
-  });
-
-</script>
+  <script src="./socket.io/socket.io.js"></script>
+  <script src="./static/js/display-ui-portrait.js"></script>
+  <script src="./static/js/display-core.js"></script>
 
 <script>
 (function(){
