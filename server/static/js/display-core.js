@@ -810,9 +810,7 @@ function dbgDisp(...args){
             : r.status
               ? "HTTP " + r.status
               : "bad-state";
-        throw new Error(
-          reason + (text ? " â€¢ " + String(text).slice(0, 60) : ""),
-        );
+        throw new Error(reason + (text ? " - " + String(text).slice(0, 60) : ""));
       }
 
       try {
@@ -884,7 +882,7 @@ function dbgDisp(...args){
       const __rows = j.rows || [];
       ui.render(__rows, state, helpers);
       if (statusEl)
-        statusEl.textContent = "Updated â€¢ " + new Date().toLocaleTimeString();
+        statusEl.textContent = "Updated - " + new Date().toLocaleTimeString();
       return __rows;
     } catch (err) {
       // IMPORTANT: still render an empty frame so placeholders (.qEmpty) appear.
@@ -1160,6 +1158,7 @@ function dbgDisp(...args){
   function wireKioskButtons() {
     const btnMove = document.getElementById("btnMove");
     const btnFull = document.getElementById("btnFull");
+    const btnClose = document.getElementById("btnClose");
 
     btnMove?.addEventListener("click", () => {
       if (window.kiosk?.moveMode) return window.kiosk.moveMode();
@@ -1172,6 +1171,13 @@ function dbgDisp(...args){
       if (window.qsysDisplay?.fullscreen)
         return window.qsysDisplay.fullscreen();
       console.warn("Fullscreen not available: no preload bridge found.");
+    });
+
+    btnClose?.addEventListener("click", () => {
+      if (window.closeKiosk) return window.closeKiosk();
+      if (window.kiosk?.close) return window.kiosk.close();
+      if (window.qsysDisplay?.close) return window.qsysDisplay.close();
+      console.warn("Close not available: no preload bridge found.");
     });
   }
 
@@ -1229,7 +1235,7 @@ function dbgDisp(...args){
           } catch {
             if (statusEl) {
               statusEl.textContent =
-                "Video sound ON, but audio may be blocked/unsupported â€¢ " +
+                "Video sound ON, but audio may be blocked/unsupported - " +
                 new Date().toLocaleTimeString();
             }
           }
@@ -1327,17 +1333,17 @@ socket.on("heartbeat", () => {
 
     socket.on("connect", () => {
       state.lastBeat = Date.now();
-      if (statusEl) statusEl.textContent = "Connected â€¢ waiting for updates";
+      if (statusEl) statusEl.textContent = "Connected - waiting for updates";
     });
 
     socket.on("disconnect", () => {
-      if (statusEl) statusEl.textContent = "Disconnected â€¢ retryingâ€¦";
+      if (statusEl) statusEl.textContent = "Disconnected - retrying...";
     });
 
     socket.on("state:changed", async (payload) => {
     dbgDisp("state:changed", payload);
       if (payload && payload.reason === "ADMIN_MEDIA_SOURCE_UPDATE") {
-        console.log("[display] media source changed â†’ reloading");
+        console.log("[display] media source changed -> reloading");
         location.reload();
         return;
       }

@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld("kiosk", {
   lockScreen2: () => ipcRenderer.send("kiosk-lock-screen2"),
 });
 
+// Compatibility alias used by the display pages after the online refactor.
+contextBridge.exposeInMainWorld("qsysDisplay", {
+  close: () => ipcRenderer.send("kiosk-close"),
+  move: () => ipcRenderer.send("kiosk-move-mode"),
+  fullscreen: () => ipcRenderer.send("kiosk-enter-fullscreen"),
+  toggleFullscreen: () => ipcRenderer.send("kiosk-toggle-fullscreen"),
+});
+
 // NEW launcher API (used by launcher.html)
 contextBridge.exposeInMainWorld("qsys", {
   openStaff: () => ipcRenderer.send("launcher-open", "staff"),

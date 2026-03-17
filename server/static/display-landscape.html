@@ -976,6 +976,7 @@
           <button id="btnMove" class="kbtn" type="button">Move</button>
           <button id="btnFull" class="kbtn" type="button">Fullscreen</button>
           <button
+            id="btnClose"
             class="closeBtn kbtn danger"
             onclick="closeKiosk()"
             type="button"
@@ -1023,7 +1024,7 @@
               <!-- Row 2: NOW SERVING (big, centered) -->
               <div class="serveBox serveMain">
                 <div class="serveLabel serveMainLabel">Now Serving</div>
-                <div class="big calledBig serveMainValue" id="called-A">â€”</div>
+                <div class="big calledBig serveMainValue" id="called-A">-</div>
               </div>
 
               <!-- Row 3: waiting tiles -->
@@ -1042,7 +1043,7 @@
             <!-- Row 2: NOW SERVING (big, centered) -->
             <div class="serveBox serveMain">
               <div class="serveLabel serveMainLabel">Now Serving</div>
-              <div class="big calledBig serveMainValue" id="called-B">â€”</div>
+              <div class="big calledBig serveMainValue" id="called-B">-</div>
             </div>
 
             <!-- Row 3: waiting tiles -->
@@ -1061,7 +1062,7 @@
               <!-- Row 2: NOW SERVING (big, centered) -->
               <div class="serveBox serveMain">
                 <div class="serveLabel serveMainLabel">Now Serving</div>
-                <div class="big calledBig serveMainValue" id="called-C">â€”</div>
+                <div class="big calledBig serveMainValue" id="called-C">-</div>
               </div>
 
               <!-- Row 3: waiting tiles -->
@@ -1080,7 +1081,7 @@
               <!-- Row 2: NOW SERVING (big, centered) -->
               <div class="serveBox serveMain">
                 <div class="serveLabel serveMainLabel">Now Serving</div>
-                <div class="big calledBig serveMainValue" id="called-D">â€”</div>
+                <div class="big calledBig serveMainValue" id="called-D">-</div>
               </div>
 
               <!-- Row 3: waiting tiles -->
@@ -1096,7 +1097,7 @@
         </div>
     </div>
 
-    <div id="status" style="position:fixed;left:10px;bottom:10px;font-size:12px;opacity:.6;color:#fff;z-index:999999">Startingâ€¦</div>
+    <div id="status" style="position:fixed;left:10px;bottom:10px;font-size:12px;opacity:.6;color:#fff;z-index:999999">Starting...</div>
 
     <audio id="chime" src="./static/chime.mp3" preload="auto"></audio>
 
