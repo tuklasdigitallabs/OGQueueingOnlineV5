@@ -1256,7 +1256,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       </div>
                     </div>
                   </div>
-                  <div class="branchHint">Open the dropdown, type to filter, then select one or more branches.</div>
+                  <div class="branchHint" id="newUserBranchHint">Staff and supervisor users must be assigned exactly one branch. Admin roles can access all branches.</div>
                 </div>
                 <div class="two">
                   <div>
@@ -2182,6 +2182,35 @@ async function jpost(url, body) {
             createRole.value = "STAFF";
           }
         }
+        updateUserBranchPickerMode();
+      }
+
+      function roleUsesBranchAssignment(roleId) {
+        const normalized = String(roleId || "").trim().toUpperCase();
+        return normalized === "STAFF" || normalized === "SUPERVISOR";
+      }
+
+      function updateUserBranchPickerMode() {
+        const role = String($("newUserRole")?.value || "STAFF").trim().toUpperCase();
+        const usesBranchAssignment = roleUsesBranchAssignment(role);
+        const hint = $("newUserBranchHint");
+        const picker = $("newUserBranches");
+        if (hint) {
+          hint.textContent = usesBranchAssignment
+            ? "Open the dropdown, type to filter, then select exactly one branch."
+            : "This role can access all branches and does not need a branch assignment.";
+        }
+        if (picker) picker.classList.toggle("hidden", !usesBranchAssignment);
+        const current = getBranchPickerState("newUserBranches");
+        if (!usesBranchAssignment) {
+          renderUserBranchPicker("newUserBranches", [], current.search);
+          return;
+        }
+        if (current.selectedIds.length > 1) {
+          renderUserBranchPicker("newUserBranches", current.selectedIds.slice(0, 1), current.search);
+          return;
+        }
+        renderUserBranchPicker("newUserBranches", current.selectedIds, current.search);
       }
 
       async function loadAccessContext() {
@@ -2272,9 +2301,13 @@ async function jpost(url, body) {
         if (searchInput) searchInput.value = state.search;
         if (label) {
           const selectedRows = rows.filter((row) => selected.has(String(row.branchId || "").trim()));
+          const role = String($("newUserRole")?.value || "STAFF").trim().toUpperCase();
+          const modeLabel = roleUsesBranchAssignment(role) ? "Select one" : "All branches";
+          const suffix = btn?.querySelector("span:last-child");
+          if (suffix) suffix.textContent = modeLabel;
           label.textContent = selectedRows.length
             ? selectedRows.map((row) => String(row.branchCode || row.branchName || "Branch").trim()).join(", ")
-            : "Select branches...";
+            : (roleUsesBranchAssignment(role) ? "Select branch..." : "All branches");
         }
         if (!list) return;
         if (!rows.length) {
@@ -2313,15 +2346,16 @@ async function jpost(url, body) {
         const current = getBranchPickerState(containerId);
         const id = String(branchId || "").trim();
         if (!id) return;
-        const next = current.selectedIds.includes(id)
-          ? current.selectedIds.filter((item) => item !== id)
-          : [...current.selectedIds, id];
+        const role = String($("newUserRole")?.value || "STAFF").trim().toUpperCase();
+        if (!roleUsesBranchAssignment(role)) return;
+        const next = [id];
         renderUserBranchPicker(containerId, next, current.search);
+        $(containerId)?.classList.remove("open");
       }
 
       function branchLabelList(branchAccess) {
         const rows = Array.isArray(branchAccess) ? branchAccess : [];
-        if (!rows.length) return `<span class="muted2">No branches</span>`;
+        if (!rows.length) return `<span class="muted2">All branches</span>`;
         return `<div class="branchTagList">` + rows.map((row) => {
           const code = String(row.branchCode || "").trim().toUpperCase();
           const name = String(row.branchName || code || "Branch").trim();
@@ -2329,16 +2363,17 @@ async function jpost(url, body) {
         }).join("") + `</div>`;
       }
 
-      function promptUserBranchSelection(currentIds = []) {
+      function promptUserBranchSelection(currentIds = [], roleId = "STAFF") {
+        if (!roleUsesBranchAssignment(roleId)) return [];
         const rows = getUserBranchOptions();
         if (!rows.length) return [];
         const defaultCodes = rows
           .filter((row) => currentIds.includes(String(row.branchId || "").trim()))
           .map((row) => String(row.branchCode || "").trim().toUpperCase())
           .filter(Boolean)
-          .join(", ");
+          .join("");
         const message = [
-          "Enter allowed branch codes separated by commas.",
+          "Enter exactly one allowed branch code.",
           "",
           "Available:",
           ...rows.map((row) => {
@@ -2358,6 +2393,7 @@ async function jpost(url, body) {
         for (const code of requestedCodes) {
           const branchId = codeToId.get(code);
           if (branchId && !branchIds.includes(branchId)) branchIds.push(branchId);
+          if (branchIds.length) break;
         }
         return branchIds;
       }
@@ -3512,7 +3548,7 @@ async function clearGdriveOAuth() {
             tr.innerHTML = `
               <td><b>${name}</b></td>
               <td>${role}</td>
-              <td>${branchLabelList(u.branchAccess)}</td>
+              <td>${roleUsesBranchAssignment(u.roleId) ? branchLabelList(u.branchAccess) : `<span class="muted2">All branches</span>`}</td>
               <td>${active}</td>
               <td>${escapeHtml(fmtTime(last))}</td>
               <td>
@@ -3555,14 +3591,14 @@ async function clearGdriveOAuth() {
       async function createUser() {
         const name = ($("newUserName").value || "").trim();
         const role = $("newUserRole").value;
-        const branchIds = getSelectedBranchIds("newUserBranches");
+        const branchIds = roleUsesBranchAssignment(role) ? getSelectedBranchIds("newUserBranches") : [];
         const pin1 = ($("newUserPin").value || "").trim();
         const pin2 = ($("newUserPin2").value || "").trim();
         const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
 
         if (!name) return toast("Users", "Name is required.", "warn");
         if (!allowedRoles.includes(String(role || "").toUpperCase())) return toast("Users", "Invalid role.", "warn");
-        if (!branchIds.length) return toast("Users", "Select at least one branch.", "warn");
+        if (roleUsesBranchAssignment(role) && branchIds.length !== 1) return toast("Users", "Select exactly one branch.", "warn");
         if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
         if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
 
@@ -3596,12 +3632,12 @@ async function clearGdriveOAuth() {
         const role = String(roleId || "").trim().toUpperCase();
         const name = String(fullName || "").trim();
         const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
-        const selectedBranchIds = promptUserBranchSelection(Array.isArray(user.branchIds) ? user.branchIds : []);
+        const selectedBranchIds = promptUserBranchSelection(Array.isArray(user.branchIds) ? user.branchIds : [], role);
         if (selectedBranchIds === null) return;
 
         if (!name) return toast("Users", "Name cannot be empty.", "warn");
         if (!allowedRoles.includes(role)) return toast("Users", "Invalid role.", "warn");
-        if (!selectedBranchIds.length) return toast("Users", "Select at least one branch.", "warn");
+        if (roleUsesBranchAssignment(role) && selectedBranchIds.length !== 1) return toast("Users", "Select exactly one branch.", "warn");
 
         if (!confirm(`Save changes?\n\n${user.fullName} -> ${name}\n${user.roleId} -> ${role}`)) return;
 
@@ -5262,6 +5298,7 @@ function printSummary(){
         btn.addEventListener("click", () => setActive(btn.dataset.page));
       });
       $("btnLogout")?.addEventListener("click", logoutAdmin);
+      $("newUserRole")?.addEventListener("change", updateUserBranchPickerMode);
       $("btnReloadBranches")?.addEventListener("click", loadBranchesManager);
       $("btnSaveBranchRecord")?.addEventListener("click", saveBranchRecord);
       $("btnResetBranchForm")?.addEventListener("click", resetBranchForm);

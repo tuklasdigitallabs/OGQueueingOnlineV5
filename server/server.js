@@ -1444,9 +1444,18 @@ app.get("/static/js/:file", (req, res) => {
       return fallback ? [fallback] : [];
     }
   }
+  function roleHasGlobalBranchAccess(roleId) {
+    const normalized = String(roleId || "").trim().toUpperCase();
+    return normalized === "ADMIN" || normalized === "SUPER_ADMIN";
+  }
+  function listAccessibleBranchesForUser(userId, roleId = "") {
+    if (roleHasGlobalBranchAccess(roleId)) return listActiveBranches();
+    return listUserBranchAccess(userId);
+  }
   function ensureSessionBranchContext(user) {
     if (!user || !user.userId) return user || null;
-    const branches = listUserBranchAccess(user.userId);
+    const roleId = String(user.roleId || "").trim().toUpperCase();
+    const branches = listAccessibleBranchesForUser(user.userId, roleId);
     const allowedBranchIds = branches.map((row) => String(row.branchId || "").trim()).filter(Boolean);
     let selectedBranchId = String(user.selectedBranchId || "").trim();
     if (!selectedBranchId || !allowedBranchIds.includes(selectedBranchId)) {
@@ -1466,7 +1475,7 @@ app.get("/static/js/:file", (req, res) => {
   function getSelectedBranchIdForUser(req, user) {
     const sessSelected = String(user?.selectedBranchId || "").trim();
     if (sessSelected) return sessSelected;
-    const branches = listUserBranchAccess(user?.userId);
+    const branches = listAccessibleBranchesForUser(user?.userId, user?.roleId);
     if (branches.length === 1) return String(branches[0].branchId || "").trim();
     const defaultRow = branches.find((row) => Number(row.isDefault || 0) === 1) || branches[0];
     return String(defaultRow?.branchId || "").trim();
@@ -1852,7 +1861,8 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     });
   }
 
-  function resolveRequestedLoginBranchId(req, userId) {
+  function resolveRequestedLoginBranchId(req, userId, roleId = "") {
+    const normalizedRoleId = String(roleId || "").trim().toUpperCase();
     const requestedCode = String(
       req?.body?.branchCode ||
       req?.query?.branchCode ||
@@ -1862,7 +1872,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     if (!requestedCode || !userId) return "";
     const branch = getBranchByCode(requestedCode);
     if (!branch?.branchId) return "";
-    const allowed = listUserBranchAccess(userId).some((row) => String(row.branchId || "") === String(branch.branchId || ""));
+    const allowed = listAccessibleBranchesForUser(userId, normalizedRoleId).some((row) => String(row.branchId || "") === String(branch.branchId || ""));
     return allowed ? String(branch.branchId || "").trim() : "";
   }
 
@@ -1924,14 +1934,14 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
-      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId);
+      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId, role);
       const sessUser = ensureSessionBranchContext({
         userId: u.userId,
         fullName: u.fullName,
         roleId: role,
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
-      const allowedBranches = listUserBranchAccess(u.userId);
+      const allowedBranches = listAccessibleBranchesForUser(u.userId, role);
       if (!allowedBranches.length) {
         return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
       }
@@ -1972,16 +1982,16 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
-      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId);
+      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId, role);
       const sessUser = ensureSessionBranchContext({
         userId: u.userId,
         fullName: u.fullName,
         roleId: role,
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
-      const allowedBranches = listUserBranchAccess(u.userId);
+      const allowedBranches = listAccessibleBranchesForUser(u.userId, role);
       if (!allowedBranches.length) {
-        return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+        return res.status(403).json({ ok: false, error: "No active branches are available." });
       }
       await finalizeLoginSession(req, "admin", sessUser);
 
@@ -2059,7 +2069,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         scope: (role === "ADMIN" ? "admin" : "staff"),
         user: sessUser,
         branch: getBranchById(sessUser.selectedBranchId),
-        allowedBranches: listUserBranchAccess(u.userId),
+        allowedBranches: listAccessibleBranchesForUser(u.userId, role),
       });
     } catch (e) {
       console.error("[auth/login]", e);
@@ -2071,7 +2081,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   app.get("/api/staff/auth/me", requireAuth, (req, res) => {
     const u = ensureSessionBranchContext(getSessionUser(req));
     if (u) setSessionUser(req, "staff", u);
-    const allowedBranches = listUserBranchAccess(u?.userId);
+    const allowedBranches = listAccessibleBranchesForUser(u?.userId, u?.roleId);
     if (!allowedBranches.length) {
       return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
     }
@@ -2083,9 +2093,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   app.get("/api/admin/auth/me", requireAuth, (req, res) => {
     const u = ensureSessionBranchContext(getSessionUser(req));
     if (u) setSessionUser(req, "admin", u);
-    const allowedBranches = listUserBranchAccess(u?.userId);
+    const allowedBranches = listAccessibleBranchesForUser(u?.userId, u?.roleId);
     if (!allowedBranches.length) {
-      return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+      return res.status(403).json({ ok: false, error: "No active branches are available." });
     }
     const perms = getUserPerms(getRoleId(u));
     const branch = getRequestBranch(req);
@@ -2111,7 +2121,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   app.get("/api/auth/me", requireAuth, (req, res) => {
     const u = ensureSessionBranchContext(getSessionUser(req));
     const perms = getUserPerms(getRoleId(u));
-    res.json({ ok: true, user: u, permissions: perms, branch: getRequestBranch(req), allowedBranches: listUserBranchAccess(u?.userId) });
+    res.json({ ok: true, user: u, permissions: perms, branch: getRequestBranch(req), allowedBranches: listAccessibleBranchesForUser(u?.userId, u?.roleId) });
   });
 
   // Logout (separated)
@@ -2166,7 +2176,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     return res.json({
       ok: true,
       selectedBranchId: String(u?.selectedBranchId || ""),
-      branches: listUserBranchAccess(u?.userId),
+      branches: listAccessibleBranchesForUser(u?.userId, u?.roleId),
     });
   });
 
@@ -2187,7 +2197,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     return res.json({
       ok: true,
       selectedBranchId: String(u?.selectedBranchId || ""),
-      branches: listUserBranchAccess(u?.userId),
+      branches: listAccessibleBranchesForUser(u?.userId, u?.roleId),
     });
   });
 
@@ -4055,7 +4065,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   /* ---------- Admin: Users (PIN) ---------- */
 
-  function normalizeRequestedUserBranchIds(input, fallbackBranchId) {
+  function normalizeRequestedUserBranchIds(input, fallbackBranchId, roleScope = "") {
     const values = Array.isArray(input) ? input : [];
     const valid = new Set(listActiveBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
     const unique = [];
@@ -4064,6 +4074,11 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (!branchId || !valid.has(branchId) || unique.includes(branchId)) continue;
       unique.push(branchId);
     }
+    const normalizedRole = String(roleScope || "").trim().toUpperCase();
+    if (roleHasGlobalBranchAccess(normalizedRole)) return [];
+    const singleBranchOnly = normalizedRole === "STAFF" || normalizedRole === "SUPERVISOR";
+    if (singleBranchOnly && unique.length) return [unique[0]];
+    if (singleBranchOnly) return [];
     if (unique.length) return unique;
     const fallback = String(fallbackBranchId || "").trim();
     return fallback ? [fallback] : [String(getOrBootstrapDefaultBranchId(db) || "").trim()].filter(Boolean);
@@ -4073,7 +4088,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     const id = String(userId || "").trim();
     if (!id) return [];
     const scope = String(roleScope || "STAFF").trim().toUpperCase() || "STAFF";
-    const nextBranchIds = normalizeRequestedUserBranchIds(branchIds, null);
+    const nextBranchIds = normalizeRequestedUserBranchIds(branchIds, null, scope);
     dbRef.prepare(`DELETE FROM user_branch_access WHERE userId=?`).run(id);
     for (const branchId of nextBranchIds) {
       upsertUserBranchAccess(dbRef, { userId: id, branchId, roleScope: scope });
@@ -4120,7 +4135,10 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const pinHash = bcrypt.hashSync(pin, 10);
       const now = Date.now();
       const fallbackBranchId = String(getRequestBranch(req)?.branchId || getOrBootstrapDefaultBranchId(db) || "").trim();
-      const branchIds = normalizeRequestedUserBranchIds(req.body.branchIds, fallbackBranchId);
+      const branchIds = normalizeRequestedUserBranchIds(req.body.branchIds, fallbackBranchId, roleId);
+      if (["STAFF", "SUPERVISOR"].includes(roleId) && branchIds.length !== 1) {
+        return res.status(400).json({ ok: false, error: "Staff and supervisor users must be assigned exactly one branch." });
+      }
 
       db.prepare(
         `INSERT INTO users(userId, fullName, pinHash, roleId, isActive, createdAt, updatedAt)
@@ -4161,14 +4179,22 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (roleId && ["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId)) {
         db.prepare(`UPDATE users SET roleId=?, updatedAt=? WHERE userId=?`).run(roleId, now, userId);
         db.prepare(`UPDATE user_branch_access SET roleScope=? WHERE userId=?`).run(roleId, userId);
+        if (roleHasGlobalBranchAccess(roleId) && !hasBranchIds) {
+          replaceUserBranchAccess(db, { userId, branchIds: [], roleScope: roleId });
+        }
       }
       if (hasBranchIds) {
+        const effectiveRoleId = roleId && ["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId)
+          ? roleId
+          : String(db.prepare(`SELECT roleId FROM users WHERE userId=? LIMIT 1`).get(userId)?.roleId || "STAFF").trim().toUpperCase();
+        const normalizedBranchIds = normalizeRequestedUserBranchIds(req.body.branchIds, null, effectiveRoleId);
+        if (["STAFF", "SUPERVISOR"].includes(effectiveRoleId) && normalizedBranchIds.length !== 1) {
+          return res.status(400).json({ ok: false, error: "Staff and supervisor users must be assigned exactly one branch." });
+        }
         replaceUserBranchAccess(db, {
           userId,
           branchIds: req.body.branchIds,
-          roleScope: roleId && ["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId)
-            ? roleId
-            : String(db.prepare(`SELECT roleId FROM users WHERE userId=? LIMIT 1`).get(userId)?.roleId || "STAFF").trim().toUpperCase(),
+          roleScope: effectiveRoleId,
         });
       }
       if (typeof isActive === "boolean" || isActive === 0 || isActive === 1) {
@@ -4177,7 +4203,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_USER_UPDATE",
-        JSON.stringify({ actor: actorFromReq(req), userId, fullName, roleId, isActive, branchIds: hasBranchIds ? normalizeRequestedUserBranchIds(req.body.branchIds, null) : undefined }),
+        JSON.stringify({ actor: actorFromReq(req), userId, fullName, roleId, isActive, branchIds: hasBranchIds ? normalizeRequestedUserBranchIds(req.body.branchIds, null, roleId || String(db.prepare(`SELECT roleId FROM users WHERE userId=? LIMIT 1`).get(userId)?.roleId || "STAFF").trim().toUpperCase()) : undefined }),
         now
       );
 
