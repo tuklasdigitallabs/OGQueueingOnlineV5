@@ -174,10 +174,10 @@
     }
     function currentBranchCode() {
       const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
-      return byQuery || getPathBranchCode() || "";
+      return byQuery || "";
     }
-    function buildAdminEntryUrl() {
-      const code = currentBranchCode();
+    function buildAdminEntryUrl(branchCode = "") {
+      const code = String(branchCode || currentBranchCode() || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin`) : window.appUrl("/admin");
     }
 
@@ -218,7 +218,7 @@
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
         // Server already enforces ADMIN role on /api/admin/auth/login
 
-        location.href = buildAdminEntryUrl();
+        location.href = buildAdminEntryUrl(j.branch?.branchCode);
       } catch {
         $e.textContent = "Server error";
       }

@@ -2095,8 +2095,7 @@ async function jpost(url, body) {
       }
 
       function adminLoginUrl() {
-        const code = currentAdminBranchCode();
-        return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin-login`) : window.appUrl("/admin-login");
+        return window.appUrl("/admin-login");
       }
 
       function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {

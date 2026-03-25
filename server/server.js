@@ -2423,9 +2423,7 @@ function buildStaffEntryPath(branchCodeInput = "") {
 }
 
 function buildAdminLoginPath(branchCodeInput = "") {
-  const code = String(branchCodeInput || "").trim().toUpperCase();
-  if (!code) return pathWithBase("/admin-login");
-  return pathWithBase(`/b/${encodeURIComponent(code)}/admin-login`);
+  return pathWithBase("/admin-login");
 }
 
 function buildAdminEntryPath(branchCodeInput = "") {
