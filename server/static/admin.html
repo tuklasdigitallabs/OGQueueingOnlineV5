@@ -121,6 +121,48 @@ margin:0;
     height:100vh;
     overflow:auto;
     padding: 18px 18px 30px;
+    position: relative;
+  }
+
+  .contentLoading{
+    position:absolute;
+    inset:18px 18px 30px;
+    border-radius: 22px;
+    background: rgba(250,246,238,.78);
+    backdrop-filter: blur(6px);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index: 40;
+  }
+  .contentLoading.show{ display:flex; }
+  .contentLoadingCard{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    padding: 18px 22px;
+    border-radius: 18px;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.92);
+    box-shadow: var(--shadow);
+    min-width: 220px;
+  }
+  .contentSpinner{
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 3px solid rgba(225,6,0,.18);
+    border-top-color: var(--brand-red);
+    animation: adminSpin .8s linear infinite;
+  }
+  .contentLoadingText{
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  @keyframes adminSpin {
+    to { transform: rotate(360deg); }
   }
 
   /* Topbar styled like a Staff card header */
@@ -785,6 +827,12 @@ tr.is-collapsed + tr.subrow + tr.subrow{
       </aside>
 
       <main class="content" id="content">
+        <div class="contentLoading" id="contentLoading" aria-hidden="true">
+          <div class="contentLoadingCard">
+            <div class="contentSpinner" aria-hidden="true"></div>
+            <div class="contentLoadingText" id="contentLoadingText">Switching branch...</div>
+          </div>
+        </div>
         <div class="topbar">
 
           <button class="hamburger" id="btnHamburger" type="button" aria-label="Open menu" title="Menu">
@@ -2445,7 +2493,30 @@ async function jpost(url, body) {
         }
       }
 
+      function setContentLoading(loading, text = "Loading...") {
+        const overlay = $("contentLoading");
+        const label = $("contentLoadingText");
+        if (label) label.textContent = text;
+        if (!overlay) return;
+        overlay.classList.toggle("show", !!loading);
+        overlay.setAttribute("aria-hidden", loading ? "false" : "true");
+      }
+
+      async function runWithContentLoading(text, task) {
+        setContentLoading(true, text);
+        try {
+          return await task();
+        } finally {
+          setContentLoading(false);
+        }
+      }
+
       async function refreshCurrentPage() {
+        if (CURRENT_PAGE === "upload") {
+          await Promise.all([loadBasic(), loadUploadStatus()]);
+          updateUploadScopePreview();
+          return;
+        }
         await loadBasic();
         if (CURRENT_PAGE === "setup") {
           if (SETUP_ACTIVE_PANE === "qr") await loadQrSetup();
@@ -2457,11 +2528,6 @@ async function jpost(url, body) {
         if (CURRENT_PAGE === "permissions") return loadPerms();
         if (CURRENT_PAGE === "audit") return loadAudit();
         if (CURRENT_PAGE === "reports") return initReports();
-        if (CURRENT_PAGE === "upload") {
-          await loadUploadStatus();
-          updateUploadScopePreview();
-          return;
-        }
         if (CURRENT_PAGE === "system") return loadSystemInfo();
       }
 
@@ -5363,8 +5429,14 @@ function printSummary(){
           }
           CURRENT_USER = j.user || CURRENT_USER;
           renderAdminBranchSwitcher();
+          syncAdminUrlState();
+          await runWithContentLoading(
+            CURRENT_PAGE === "upload" ? "Loading upload data for the selected branch..." : "Switching branch...",
+            async () => {
+              await refreshCurrentPage();
+            }
+          );
           toast("Branch", `Switched to ${j.branch?.branchName || j.branch?.branchCode || "branch"}.`, "ok");
-          window.location.href = adminEntryUrl(j.branch?.branchCode, CURRENT_PAGE);
         } catch {
           if ($("adminBranchSwitch")) $("adminBranchSwitch").value = prev;
           toast("Branch", "Failed to switch branch.", "err");
