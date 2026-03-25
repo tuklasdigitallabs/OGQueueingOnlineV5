@@ -3145,13 +3145,25 @@ function requireDisplayAuth(req, res, next) {
     const list = getPairedDisplayDevices();
     const device = list.find((d) => !d.revokedAt && String(d.tokenHash || "") === tokenHash);
     if (device) {
-      const currentBranchCode = String(getBranchCode() || "").trim();
       const pairedBranchCode = String(device.branchCode || "").trim();
-      if (pairedBranchCode && currentBranchCode && pairedBranchCode !== currentBranchCode) {
+      const requestedBranchCode = String(
+        req?.params?.branchCode || req?.query?.branchCode || ""
+      ).trim().toUpperCase();
+      if (pairedBranchCode && requestedBranchCode && pairedBranchCode !== requestedBranchCode) {
         return res.status(401).json({
           ok: false,
           error: "Display token belongs to a different branch. Re-pair this screen.",
         });
+      }
+      if (pairedBranchCode) {
+        const pairedBranch = getBranchByCode(pairedBranchCode);
+        if (!pairedBranch) {
+          return res.status(401).json({
+            ok: false,
+            error: "Display token is linked to an unknown branch. Re-pair this screen.",
+          });
+        }
+        req.qsysBranch = pairedBranch;
       }
       req.displayToken = token;
       req.displayDevice = device;
@@ -3202,18 +3214,32 @@ app.post("/api/admin/display/pair-code", requirePerm("SETTINGS_MANAGE"), express
   try {
     const now = Date.now();
     const code = String(Math.floor(100000 + Math.random() * 900000));
+    const branch = getRequestBranch(req);
     const list = [{
       code,
       createdAt: now,
       createdBy: actorFromReq(req),
+      branchCode: String(branch?.branchCode || "").trim().toUpperCase(),
+      branchName: String(branch?.branchName || "").trim(),
     }];
     saveDisplayPairCodes(list);
     setAppSetting(
       DISPLAY_LAST_PAIR_CODE_KEY,
-      JSON.stringify({ code, createdAt: now }),
+      JSON.stringify({
+        code,
+        createdAt: now,
+        branchCode: String(branch?.branchCode || "").trim().toUpperCase(),
+        branchName: String(branch?.branchName || "").trim(),
+      }),
     );
 
-    return res.json({ ok: true, code, createdAt: now });
+    return res.json({
+      ok: true,
+      code,
+      createdAt: now,
+      branchCode: String(branch?.branchCode || "").trim().toUpperCase(),
+      branchName: String(branch?.branchName || "").trim(),
+    });
   } catch (e) {
     console.error("[admin/display/pair-code]", e);
     return res.status(500).json({ ok: false, error: "Failed to create pair code" });
@@ -3234,19 +3260,34 @@ app.post("/api/display/pair/complete", rateLimitDisplayPair, express.json(), (re
     if (idx < 0) {
       return res.status(400).json({ ok: false, error: "Pairing code invalid" });
     }
+    const pairEntry = codes[idx] || {};
+    const requestedBranchCode = String(req.query?.branchCode || req.body?.branchCode || "").trim().toUpperCase();
+    const pairedBranchCodeFromCode = String(pairEntry.branchCode || "").trim().toUpperCase();
+    if (requestedBranchCode && pairedBranchCodeFromCode && requestedBranchCode !== pairedBranchCodeFromCode) {
+      return res.status(400).json({
+        ok: false,
+        error: `Pairing code belongs to branch ${pairedBranchCodeFromCode}.`,
+      });
+    }
     codes.splice(idx, 1);
     saveDisplayPairCodes(codes);
     const nextCode = codes.length ? codes[codes.length - 1] : null;
     setAppSetting(
       DISPLAY_LAST_PAIR_CODE_KEY,
-      nextCode ? JSON.stringify({ code: String(nextCode.code || ""), createdAt: Number(nextCode.createdAt || Date.now()) }) : "",
+      nextCode ? JSON.stringify({
+        code: String(nextCode.code || ""),
+        createdAt: Number(nextCode.createdAt || Date.now()),
+        branchCode: String(nextCode.branchCode || "").trim().toUpperCase(),
+        branchName: String(nextCode.branchName || "").trim(),
+      }) : "",
     );
 
     const token = randomBytes(32).toString("hex");
     const tokenHash = hashDisplayToken(token);
     const deviceId = randomUUID();
-    const branchCode = String(getBranchCode() || "").trim();
-    const branchName = String(getBranchName() || "").trim();
+    const branchCode = pairedBranchCodeFromCode || String(getRequestBranchCode(req) || "").trim().toUpperCase();
+    const branchRow = getBranchByCode(branchCode);
+    const branchName = String(pairEntry.branchName || branchRow?.branchName || "").trim();
 
     const devices = getPairedDisplayDevices();
     devices.push({
@@ -3298,6 +3339,8 @@ app.get("/api/admin/display/devices", requirePerm("SETTINGS_MANAGE"), (_req, res
         lastPairCode = {
           code: String(tmp.code || ""),
           createdAt: Number(tmp.createdAt || 0),
+          branchCode: String(tmp.branchCode || "").trim().toUpperCase(),
+          branchName: String(tmp.branchName || "").trim(),
         };
       }
     } catch {}

@@ -24,7 +24,14 @@ function dbgDisp(...args){
   try {
     const isInteractiveTarget = (target) => {
       try {
-        return !!(target && typeof target.closest === "function" && target.closest("[data-display-interactive]"));
+        return !!(
+          target &&
+          typeof target.closest === "function" &&
+          (
+            target.closest("[data-display-interactive]") ||
+            target.closest("button, input, select, textarea, label, a, summary, [role='button']")
+          )
+        );
       } catch {
         return false;
       }
@@ -230,17 +237,60 @@ function dbgDisp(...args){
     return "";
   }
 
+  function normalizeDisplayServerBase(input) {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+    try {
+      const u = new URL(raw, window.location.origin);
+      u.hash = "";
+      u.search = "";
+      const pathname = u.pathname.replace(/\/+$/, "");
+      return `${u.origin}${pathname}`;
+    } catch {
+      return "";
+    }
+  }
+
+  function getDisplayServerBase() {
+    try {
+      const qs = new URLSearchParams(window.location.search || "");
+      const fromQuery = normalizeDisplayServerBase(qs.get("serverUrl") || qs.get("displayServerUrl"));
+      if (fromQuery) return fromQuery;
+    } catch {}
+    try {
+      if (typeof window.appAbsoluteUrl === "function") {
+        const localBase = normalizeDisplayServerBase(window.appAbsoluteUrl("/"));
+        if (localBase) return localBase;
+      }
+    } catch {}
+    return normalizeDisplayServerBase(window.location.origin) || window.location.origin;
+  }
+
+  function absoluteDisplayServerUrl(input) {
+    const raw = String(input || "");
+    if (!raw) return getDisplayServerBase();
+    if (/^(?:[a-z]+:)?\/\//i.test(raw) || raw.startsWith("data:") || raw.startsWith("blob:")) {
+      return raw;
+    }
+    const base = getDisplayServerBase().replace(/\/+$/, "");
+    const normalized = raw.startsWith("/") ? raw : `/${raw}`;
+    return `${base}${normalized}`;
+  }
+
   function withDisplayBranch(url) {
     const raw = String(url || "");
     const branchCode = getDisplayBranchCode();
-    if (!branchCode || !raw.startsWith("/api/")) return raw;
+    if (!raw.startsWith("/api/")) return absoluteDisplayServerUrl(raw);
     try {
-      const u = new URL(raw, window.location.origin);
-      if (!u.searchParams.get("branchCode")) u.searchParams.set("branchCode", branchCode);
-      return u.pathname + u.search;
+      const u = new URL(raw, "http://qsys.local");
+      if (branchCode && !u.searchParams.get("branchCode")) {
+        u.searchParams.set("branchCode", branchCode);
+      }
+      return absoluteDisplayServerUrl(u.pathname + u.search);
     } catch {
+      if (!branchCode) return absoluteDisplayServerUrl(raw);
       const sep = raw.includes("?") ? "&" : "?";
-      return `${raw}${sep}branchCode=${encodeURIComponent(branchCode)}`;
+      return absoluteDisplayServerUrl(`${raw}${sep}branchCode=${encodeURIComponent(branchCode)}`);
     }
   }
 
@@ -920,7 +970,7 @@ function dbgDisp(...args){
         // Filter out Dash init fragments if present
         state.playlist = j.files
           .filter((p) => !/dashinit/i.test(p))
-          .map((p) => window.appUrl(p));
+          .map((p) => absoluteDisplayServerUrl(p));
       } else {
         state.playlist = [
           "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
@@ -1318,8 +1368,9 @@ function dbgDisp(...args){
 
     // Socket
     const branchCode = getDisplayBranchCode();
-    const socket = io({
-      path: window.appUrl("/socket.io"),
+    const socketBase = new URL(getDisplayServerBase());
+    const socket = io(socketBase.origin, {
+      path: `${socketBase.pathname.replace(/\/+$/, "") || ""}/socket.io`,
       query: branchCode ? { branchCode } : undefined,
       transports: ["websocket", "polling"],
     });

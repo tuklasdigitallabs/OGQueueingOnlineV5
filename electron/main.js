@@ -169,6 +169,19 @@ function normalizeBranchCode(branchCode) {
   return String(branchCode || "").trim().toUpperCase() || "DEV";
 }
 
+function buildLocalDisplayShellUrl(cfg) {
+  const mode = normalizeDisplayMode(cfg?.displayMode);
+  const branchCode = normalizeBranchCode(cfg?.branchCode);
+  const serverUrl = normalizeServerUrl(cfg?.serverUrl, cfg?.port);
+  const suffix = mode === "portrait" ? "display-portrait.html" : "display-landscape.html";
+  const params = new URLSearchParams({
+    branchCode,
+    serverUrl,
+    electronShell: "1",
+  });
+  return `http://127.0.0.1:${cfg?.port}/${suffix}?${params.toString()}`;
+}
+
 async function fetchJsonMaybe(url) {
   const res = await fetch(url, { cache: "no-store" });
   const text = await res.text();
@@ -182,11 +195,7 @@ async function fetchJsonMaybe(url) {
 function resolveKioskUrl(cfg) {
   const forced = String(cfg?.kioskUrlForce || "").trim();
   if (forced) return forced;
-  const mode = normalizeDisplayMode(cfg?.displayMode);
-  const branchCode = normalizeBranchCode(cfg?.branchCode);
-  const base = normalizeServerUrl(cfg?.serverUrl, cfg?.port);
-  const suffix = mode === "portrait" ? "display-portrait.html" : "display-landscape.html";
-  return `${base}/b/${encodeURIComponent(branchCode)}/${suffix}`;
+  return buildLocalDisplayShellUrl(cfg);
 }
 
 let win = null; // kiosk display window

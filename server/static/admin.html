@@ -2623,7 +2623,14 @@ function downloadQrNow() {
           return;
         }
         codeEl.textContent = `Code: ${String(info.code)}`;
-        expEl.textContent = "Active until used or revoked";
+        const branchCode = String(info.branchCode || "").trim();
+        const branchName = String(info.branchName || "").trim();
+        const branchLabel = branchCode
+          ? (branchName ? `${branchName} (${branchCode})` : branchCode)
+          : "";
+        expEl.textContent = branchLabel
+          ? `For branch: ${branchLabel}. Active until used or revoked`
+          : "Active until used or revoked";
       }
 
       async function loadDisplayPairingStatus() {

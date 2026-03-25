@@ -248,10 +248,12 @@
           </div>
 
           <form id="f" autocomplete="on">
-            <div class="field" id="branchField" style="display:none;">
+            <div class="field" id="branchField">
               <label for="branchCode">Branch</label>
-              <select id="branchCode"></select>
-              <div class="help">Choose the branch you are registering with.</div>
+              <select id="branchCode">
+                <option value="">Loading branches...</option>
+              </select>
+              <div class="help" id="branchHelp">Choose the branch you are registering with.</div>
             </div>
 
             <div class="field">
@@ -300,6 +302,7 @@
       const prioEl = document.getElementById("priorityType");
       const branchFieldEl = document.getElementById("branchField");
       const branchCodeEl = document.getElementById("branchCode");
+      const branchHelpEl = document.getElementById("branchHelp");
       const guestSubEl = document.getElementById("guestSub");
       const guestBranchBadgeTextEl = document.getElementById("guestBranchBadgeText");
       const result = document.getElementById("result");
@@ -309,6 +312,7 @@
       const btnSubmit = document.getElementById("btnSubmit");
       let availableBranches = [];
       let selectedBranchCode = "";
+      const pathBranchCode = getPathBranchCode();
 
       function showErr(msg) {
         err.style.display = "block";
@@ -356,7 +360,7 @@
       function currentBranchCode() {
         const bySelect = String(branchCodeEl?.value || "").trim().toUpperCase();
         const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
-        return bySelect || byQuery || getPathBranchCode() || selectedBranchCode || "";
+        return bySelect || byQuery || pathBranchCode || selectedBranchCode || "";
       }
 
       function renderBranchMeta() {
@@ -375,11 +379,10 @@
         try {
           const r = await fetch(window.appUrl("/api/public/branches"));
           const j = await r.json();
-          if (!r.ok || !j?.ok) return;
+          if (!r.ok || !j?.ok) throw new Error(j?.error || "Failed to load branches");
           availableBranches = Array.isArray(j.branches) ? j.branches : [];
           if (branchFieldEl && branchCodeEl) {
-            if (availableBranches.length > 1) {
-              branchFieldEl.style.display = "flex";
+            if (availableBranches.length) {
               branchCodeEl.innerHTML = availableBranches.map((row) => {
                 const code = String(row.branchCode || "").trim().toUpperCase();
                 const name = String(row.branchName || code || "Branch");
@@ -392,14 +395,33 @@
                 const fallback = availableBranches.find((row) => row.isDefault) || availableBranches[0];
                 branchCodeEl.value = String(fallback?.branchCode || "").trim().toUpperCase();
               }
+              if (pathBranchCode) {
+                branchCodeEl.value = pathBranchCode;
+                branchCodeEl.disabled = true;
+                if (branchHelpEl) {
+                  branchHelpEl.textContent = "This guest link is already locked to a specific branch.";
+                }
+              } else {
+                branchCodeEl.disabled = false;
+                if (branchHelpEl) {
+                  branchHelpEl.textContent = "Choose the branch you are registering with.";
+                }
+              }
             } else {
-              branchFieldEl.style.display = "none";
-              const only = availableBranches[0];
-              if (only) branchCodeEl.value = String(only.branchCode || "").trim().toUpperCase();
+              branchCodeEl.innerHTML = `<option value="">No branches available</option>`;
+              branchCodeEl.disabled = true;
+              if (branchHelpEl) branchHelpEl.textContent = "No active branches are available right now.";
             }
           }
           renderBranchMeta();
-        } catch {}
+        } catch {
+          if (branchCodeEl) {
+            branchCodeEl.innerHTML = `<option value="">Unable to load branches</option>`;
+            branchCodeEl.disabled = true;
+          }
+          if (branchHelpEl) branchHelpEl.textContent = "Unable to load branch options right now.";
+          renderBranchMeta();
+        }
       }
 
       async function submitGuestRegistration(e) {
@@ -420,6 +442,11 @@
 
         try {
           const branchCode = currentBranchCode();
+          if (!branchCode) {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Get Number";
+            return showErr("Please select a branch first.");
+          }
           const targetUrl = branchCode
             ? window.appUrl("/api/queue/create?branchCode=" + encodeURIComponent(branchCode))
             : window.appUrl("/api/queue/create");

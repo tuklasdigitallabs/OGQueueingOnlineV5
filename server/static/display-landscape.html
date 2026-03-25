@@ -961,7 +961,7 @@
          waiting tiles out of view, so the queue cards need explicit row sizing. */
       .cell {
         display: grid !important;
-        grid-template-rows: auto minmax(0, 1fr) auto !important;
+        grid-template-rows: auto minmax(0, 1fr) minmax(96px, var(--tile)) !important;
         gap: var(--rhythm);
         align-items: stretch;
       }
@@ -982,27 +982,20 @@
 
       .serveMainValue {
         transform: none !important;
-        font-size: clamp(92px, 10.5vmin, 176px) !important;
+        font-size: clamp(76px, 8.6vmin, 148px) !important;
         line-height: 0.9;
         letter-spacing: 0.02em;
       }
 
       .serveMainValue.dash {
-        color: transparent !important;
-      }
-
-      .serveMainValue.dash::before {
-        content: "-";
-        color: rgba(255, 255, 255, 0.22);
-        font-size: clamp(84px, 9.2vmin, 150px);
-        font-weight: 900;
-        line-height: 1;
+        color: rgba(255, 255, 255, 0.24) !important;
       }
 
       .queueList {
         margin-top: 0 !important;
         grid-auto-rows: minmax(72px, var(--tile)) !important;
         align-content: stretch !important;
+        min-height: 96px;
       }
 
       .queueList .qItem,
@@ -1029,8 +1022,8 @@
   </head>
 
   <body>
-    <div class="topOverlay">
-      <div class="leftTools">
+    <div class="topOverlay" data-display-interactive>
+      <div class="leftTools" data-display-interactive>
         <button class="settingsBtn" onclick="toggleSettings()" type="button">Settings</button>
       </div>
 
@@ -1039,8 +1032,8 @@
         Yakiniku Like SM Mall of Asia
       </div>
 
-      <div class="rightTools">
-        <div class="kioskRightBar">
+      <div class="rightTools" data-display-interactive>
+        <div class="kioskRightBar" data-display-interactive>
           <div class="kioskDrag"></div>
           <button id="btnMove" class="kbtn" type="button" onclick="moveKiosk()">Move</button>
           <button id="btnFull" class="kbtn" type="button" onclick="fullscreenKiosk()">Fullscreen</button>
@@ -1056,7 +1049,7 @@
       </div>
     </div>
 
-    <div class="settingsPanel" id="settingsPanel">
+    <div class="settingsPanel" id="settingsPanel" data-display-interactive>
       <div class="settingsTitle">Display Settings</div>
       <label class="toggleRow">
         <span>Video Sound</span>

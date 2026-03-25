@@ -49,6 +49,15 @@
     return String(mode || "").toLowerCase() === "portrait" ? "portrait" : "landscape";
   }
 
+  function absoluteAppUrl(input) {
+    if (typeof window.appAbsoluteUrl === "function") return window.appAbsoluteUrl(input);
+    try {
+      return new URL(String(input || "/"), window.location.origin).toString();
+    } catch {
+      return String(input || "/");
+    }
+  }
+
   function buildResolvedDisplayUrl(config) {
     const branchCode = normalizeBranchCode(config?.branchCode);
     const serverUrl = normalizeServerUrl(config?.serverUrl);
@@ -456,7 +465,7 @@
   }
 
   async function boot() {
-    el.baseUrl.textContent = window.appAbsoluteUrl("/");
+    if (el.baseUrl) el.baseUrl.textContent = absoluteAppUrl("/");
 
     await runStartupLoading();
     const actionsBound = bindActions();
