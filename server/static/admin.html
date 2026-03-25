@@ -809,7 +809,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
     <div class="drawerOverlay" id="drawerOverlay" aria-hidden="true"></div>
     <div class="layout">
       <aside class="sidebar" id="sidebar">
-        <div class="brand">QSys Local - Admin</div>
+        <div class="brand">Qsys Online - Admin</div>
         <div class="sub" id="sideMeta">Loading...</div>
 
         <div class="nav">
@@ -2186,9 +2186,15 @@ async function jpost(url, body) {
         CURRENT_USER = me.user || null;
         ALLOWED_BRANCHES = Array.isArray(me.allowedBranches) ? me.allowedBranches : [];
         USER_PERMS = new Set(Array.isArray(me.permissions) ? me.permissions.map((p) => String(p)) : []);
+        if (me.branch) {
+          BRANCH_CACHE = me.branch;
+          META_BRANCH_LABEL = String(me.branch.branchName || me.branch.branchCode || "-").trim() || "-";
+        }
         const features = await jget("/api/admin/feature-flags");
         FEATURE_FLAGS = features?.ok && features.features ? features.features : {};
         renderAdminBranchSwitcher();
+        syncAdminUrlState();
+        renderMetaWithTime();
         applyNavPermissions();
         applyInternalAdminVisibility();
       }
@@ -2612,7 +2618,13 @@ async function jpost(url, body) {
           const biz = await jget("/api/admin/business-date");
           if (biz.ok) {
             LAST_BIZ = biz.currentBusinessDate || null;
-            META_BRANCH_LABEL = String(biz.branchCode || "-");
+            META_BRANCH_LABEL = String(
+              BRANCH_CACHE?.branchName ||
+              biz.branchName ||
+              BRANCH_CACHE?.branchCode ||
+              biz.branchCode ||
+              "-"
+            ).trim() || "-";
             META_BUSINESS_DATE_LABEL = String(biz.currentBusinessDate || "");
             $("pillBizDate").textContent = "Business Date: " + biz.currentBusinessDate;
             renderMetaWithTime();
@@ -2632,12 +2644,8 @@ async function jpost(url, body) {
           const b = await jget("/api/admin/branch");
           if (b.ok && b.branch) {
             BRANCH_CACHE = b.branch;
-            // add branch name to sidebar meta line 1 if available
-            const bn = String(b.branch.branchName || "").trim();
-            if (bn) {
-              META_BRANCH_LABEL = bn;
-              renderMetaWithTime();
-            }
+            META_BRANCH_LABEL = String(b.branch.branchName || b.branch.branchCode || "-").trim() || "-";
+            renderMetaWithTime();
           }
         } catch {}
 
