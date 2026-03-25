@@ -842,7 +842,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
 
           <div class="crumb">
             <h1 id="pageTitle">LIVE OPS OVERVIEW</h1>
-            <div class="meta" id="topMeta">-</div>
           </div>
           <div class="actions">
             <select id="adminBranchSwitch" class="topSelect" style="display:none;" title="Switch branch"></select>
@@ -878,10 +877,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               <div class="row" style="justify-content: space-between;">
                 <div>
                   <h3 style="margin-bottom:6px;">Per Group</h3>                  
-                </div>
-                <div class="row">
-                  <span class="pill ok" id="pillOnline">Network: -</span>
-                  <span class="pill" id="pillBizDate">Business Date: -</span>
                 </div>
               </div>
 
@@ -2379,10 +2374,6 @@ async function jpost(url, body) {
       function renderMetaWithTime() {
         if (!META_BUSINESS_DATE_LABEL) return;
         const t = nowTimeText();
-        if ($("topMeta")) {
-          $("topMeta").textContent =
-            `Branch: ${META_BRANCH_LABEL || "-"} - Business Date: ${META_BUSINESS_DATE_LABEL} - Time: ${t}`;
-        }
         if ($("sideMeta")) {
           $("sideMeta").textContent =
             `Branch: ${META_BRANCH_LABEL || "-"}\nBusiness Date: ${META_BUSINESS_DATE_LABEL}\nTime: ${t}`;
@@ -2461,11 +2452,6 @@ async function jpost(url, body) {
       // ---------- dashboard renderer ----------
       function applyOverview(o) {
         if (!o) return;
-
-        $("pillOnline").textContent = "Network: Local";
-        $("pillOnline").classList.add("ok");
-
-        if (o.businessDate) $("pillBizDate").textContent = "Business Date: " + o.businessDate;
 
         const labels = {
           A: "A (1 Pax)",
@@ -2626,7 +2612,6 @@ async function jpost(url, body) {
               "-"
             ).trim() || "-";
             META_BUSINESS_DATE_LABEL = String(biz.currentBusinessDate || "");
-            $("pillBizDate").textContent = "Business Date: " + biz.currentBusinessDate;
             renderMetaWithTime();
             $("repFrom").value = biz.currentBusinessDate;
         if ($("sumFrom")) $("sumFrom").value = $("repFrom").value;
@@ -2635,7 +2620,6 @@ async function jpost(url, body) {
             $("repTo").value = biz.currentBusinessDate;
           }
         } catch (e) {
-          $("topMeta").textContent = "Failed to load business date";
           toast("Admin", "Cannot reach /api/admin/business-date. Open this page via the server (not file://).", "err");
         }
 
