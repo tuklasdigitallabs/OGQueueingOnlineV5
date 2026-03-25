@@ -434,6 +434,7 @@ function createKioskWindow(port, kioskUrl) {
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.js"),
       autoplayPolicy: "no-user-gesture-required",
+      webSecurity: false,
     },
   });
 

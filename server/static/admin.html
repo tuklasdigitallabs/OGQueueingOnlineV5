@@ -436,6 +436,47 @@ margin:0;
 
   .muted{ color: var(--muted); }
   .muted2{ color: var(--muted2); }
+  .branchChecklist{
+    display:grid;
+    gap:8px;
+    max-height: 190px;
+    overflow:auto;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255,255,255,.58);
+  }
+  .branchChecklist label{
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    font-size: 13px;
+    color: rgba(60,40,20,.86);
+  }
+  .branchChecklist input[type="checkbox"]{
+    margin-top: 2px;
+  }
+  .branchHint{
+    font-size: 11px;
+    color: var(--muted2);
+    margin-top: 6px;
+  }
+  .branchTagList{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .branchTag{
+    display:inline-flex;
+    align-items:center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(60,40,20,.05);
+    font-size: 11px;
+    font-weight: 800;
+    color: rgba(60,40,20,.84);
+  }
 
   /* Tables - make it feel like Staff list rows */
   table{ width:100%; border-collapse: collapse; }
@@ -1021,13 +1062,14 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <tr>
                       <th>Name</th>
                       <th>Role</th>
+                      <th>Branches</th>
                       <th>Active</th>
                       <th>Last Login</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="usersTable">
-                    <tr><td colspan="5" class="muted">Load users...</td></tr>
+                    <tr><td colspan="6" class="muted">Load users...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1048,6 +1090,13 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <option value="SUPERVISOR">SUPERVISOR</option>
                     <option value="ADMIN">ADMIN</option>
                   </select>
+                </div>
+                <div>
+                  <label class="muted2">Branch Access</label>
+                  <div id="newUserBranches" class="branchChecklist">
+                    <div class="muted2">Loading branches...</div>
+                  </div>
+                  <div class="branchHint">Select one or more branches this user can access.</div>
                 </div>
                 <div class="two">
                   <div>
@@ -1858,6 +1907,7 @@ async function jpost(url, body) {
       let SYS_INFO_CACHE = null;
       let CURRENT_USER = null;
       let ALLOWED_BRANCHES = [];
+      let USER_BRANCH_OPTIONS = [];
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
       const QS = new URLSearchParams(window.location.search);
@@ -2004,6 +2054,95 @@ async function jpost(url, body) {
         }).join("");
         const selected = String(CURRENT_USER?.selectedBranchId || "").trim();
         if (selected) sel.value = selected;
+      }
+
+      function escapeAttr(v) {
+        return String(v ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function getUserBranchOptions() {
+        const rows = Array.isArray(USER_BRANCH_OPTIONS) && USER_BRANCH_OPTIONS.length
+          ? USER_BRANCH_OPTIONS
+          : ALLOWED_BRANCHES;
+        return Array.isArray(rows) ? rows : [];
+      }
+
+      function renderUserBranchChecklist(containerId, selectedIds = []) {
+        const el = $(containerId);
+        if (!el) return;
+        const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map((v) => String(v || "").trim()).filter(Boolean));
+        const rows = getUserBranchOptions();
+        if (!rows.length) {
+          el.innerHTML = `<div class="muted2">No active branches available.</div>`;
+          return;
+        }
+        el.innerHTML = rows.map((row) => {
+          const branchId = String(row.branchId || "").trim();
+          const branchCode = String(row.branchCode || "").trim().toUpperCase();
+          const branchName = String(row.branchName || branchCode || "Branch").trim();
+          const checked = selected.has(branchId) ? "checked" : "";
+          return `
+            <label>
+              <input type="checkbox" data-branch-id="${escapeAttr(branchId)}" ${checked} />
+              <span><b>${escapeHtml(branchName)}</b><br><span class="muted2">${escapeHtml(branchCode || branchId)}</span></span>
+            </label>
+          `;
+        }).join("");
+      }
+
+      function getCheckedBranchIds(containerId) {
+        const el = $(containerId);
+        if (!el) return [];
+        return Array.from(el.querySelectorAll('input[type="checkbox"][data-branch-id]:checked'))
+          .map((node) => String(node.getAttribute("data-branch-id") || "").trim())
+          .filter(Boolean);
+      }
+
+      function branchLabelList(branchAccess) {
+        const rows = Array.isArray(branchAccess) ? branchAccess : [];
+        if (!rows.length) return `<span class="muted2">No branches</span>`;
+        return `<div class="branchTagList">` + rows.map((row) => {
+          const code = String(row.branchCode || "").trim().toUpperCase();
+          const name = String(row.branchName || code || "Branch").trim();
+          return `<span class="branchTag" title="${escapeAttr(name)}">${escapeHtml(code || name)}</span>`;
+        }).join("") + `</div>`;
+      }
+
+      function promptUserBranchSelection(currentIds = []) {
+        const rows = getUserBranchOptions();
+        if (!rows.length) return [];
+        const defaultCodes = rows
+          .filter((row) => currentIds.includes(String(row.branchId || "").trim()))
+          .map((row) => String(row.branchCode || "").trim().toUpperCase())
+          .filter(Boolean)
+          .join(", ");
+        const message = [
+          "Enter allowed branch codes separated by commas.",
+          "",
+          "Available:",
+          ...rows.map((row) => {
+            const code = String(row.branchCode || "").trim().toUpperCase();
+            const name = String(row.branchName || code || "Branch").trim();
+            return `- ${code}: ${name}`;
+          }),
+        ].join("\n");
+        const raw = prompt(message, defaultCodes);
+        if (raw === null) return null;
+        const requestedCodes = String(raw || "")
+          .split(",")
+          .map((part) => String(part || "").trim().toUpperCase())
+          .filter(Boolean);
+        const codeToId = new Map(rows.map((row) => [String(row.branchCode || "").trim().toUpperCase(), String(row.branchId || "").trim()]));
+        const branchIds = [];
+        for (const code of requestedCodes) {
+          const branchId = codeToId.get(code);
+          if (branchId && !branchIds.includes(branchId)) branchIds.push(branchId);
+        }
+        return branchIds;
       }
 
       function nowTimeText() {
@@ -3039,13 +3178,15 @@ async function clearGdriveOAuth() {
         try {
           const j = await jget("/api/admin/users");
           if (!j.ok) throw new Error(j.error || "users");
+          USER_BRANCH_OPTIONS = Array.isArray(j.branches) ? j.branches : getUserBranchOptions();
+          renderUserBranchChecklist("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
 
           const tb = $("usersTable");
           tb.innerHTML = "";
           const users = j.users || [];
 
           if (!users.length) {
-            tb.innerHTML = `<tr><td colspan="5" class="muted">No users found.</td></tr>`;
+            tb.innerHTML = `<tr><td colspan="6" class="muted">No users found.</td></tr>`;
             return;
           }
 
@@ -3062,6 +3203,7 @@ async function clearGdriveOAuth() {
             tr.innerHTML = `
               <td><b>${name}</b></td>
               <td>${role}</td>
+              <td>${branchLabelList(u.branchAccess)}</td>
               <td>${active}</td>
               <td>${escapeHtml(fmtTime(last))}</td>
               <td>
@@ -3076,7 +3218,7 @@ async function clearGdriveOAuth() {
           }
 
           if (!tb.children.length) {
-            tb.innerHTML = `<tr><td colspan="5" class="muted">No users available in this mode.</td></tr>`;
+            tb.innerHTML = `<tr><td colspan="6" class="muted">No users available in this mode.</td></tr>`;
             return;
           }
 
@@ -3097,32 +3239,35 @@ async function clearGdriveOAuth() {
         } catch (e) {
           toast("Users", "Failed to load users.", "err");
           const tb = $("usersTable");
-          tb.innerHTML = `<tr><td colspan="5" class="muted">Failed to load.</td></tr>`;
+          tb.innerHTML = `<tr><td colspan="6" class="muted">Failed to load.</td></tr>`;
         }
       }
 
       async function createUser() {
         const name = ($("newUserName").value || "").trim();
         const role = $("newUserRole").value;
+        const branchIds = getCheckedBranchIds("newUserBranches");
         const pin1 = ($("newUserPin").value || "").trim();
         const pin2 = ($("newUserPin2").value || "").trim();
         const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
 
         if (!name) return toast("Users", "Name is required.", "warn");
         if (!allowedRoles.includes(String(role || "").toUpperCase())) return toast("Users", "Invalid role.", "warn");
+        if (!branchIds.length) return toast("Users", "Select at least one branch.", "warn");
         if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
         if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
 
         if (!confirm(`Create user?\n\nName: ${name}\nRole: ${role}`)) return;
 
         try {
-          const j = await jpost("/api/admin/users/create", { fullName: name, roleId: role, pin: pin1 });
+          const j = await jpost("/api/admin/users/create", { fullName: name, roleId: role, pin: pin1, branchIds });
           if (!j.ok) return toast("Users", j.error || "Create failed", "err");
 
           toast("Users", "User created.", "ok");
           $("newUserName").value = "";
           $("newUserPin").value = "";
           $("newUserPin2").value = "";
+          renderUserBranchChecklist("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
           await loadUsers();
         } catch {
           toast("Users", "Request failed.", "err");
@@ -3142,14 +3287,17 @@ async function clearGdriveOAuth() {
         const role = String(roleId || "").trim().toUpperCase();
         const name = String(fullName || "").trim();
         const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
+        const selectedBranchIds = promptUserBranchSelection(Array.isArray(user.branchIds) ? user.branchIds : []);
+        if (selectedBranchIds === null) return;
 
         if (!name) return toast("Users", "Name cannot be empty.", "warn");
         if (!allowedRoles.includes(role)) return toast("Users", "Invalid role.", "warn");
+        if (!selectedBranchIds.length) return toast("Users", "Select at least one branch.", "warn");
 
         if (!confirm(`Save changes?\n\n${user.fullName} -> ${name}\n${user.roleId} -> ${role}`)) return;
 
         try {
-          const j = await jpost("/api/admin/users/update", { userId: user.userId, fullName: name, roleId: role });
+          const j = await jpost("/api/admin/users/update", { userId: user.userId, fullName: name, roleId: role, branchIds: selectedBranchIds });
           if (!j.ok) return toast("Users", j.error || "Update failed", "err");
           toast("Users", "Updated.", "ok");
           await loadUsers();

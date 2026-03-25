@@ -1855,7 +1855,11 @@ function getQueuedMs(item) {
         query: branchCode ? { branchCode } : undefined,
         transports: ["websocket", "polling"],
       });
-      rtSocket.on("state:changed", () => loadState());
+      rtSocket.on("state:changed", (payload) => {
+        const eventBranchCode = String(payload?.branchCode || "").trim().toUpperCase();
+        if (eventBranchCode && branchCode && eventBranchCode !== branchCode) return;
+        loadState();
+      });
     }catch{}
 
     (async function boot(){

@@ -374,6 +374,9 @@ function emitChanged(a, b, c, d) {
 
   if (!extra || typeof extra !== "object" || Array.isArray(extra)) extra = {};
 
+  const branchCode = String(extra.branchCode || "").trim().toUpperCase();
+  if (branchCode) extra.branchCode = branchCode;
+
   // Socket.IO broadcast (Display + Staff realtime) – best effort, never crash
   try {
     const io = appRef ? appRef.get("io") : null;
@@ -387,8 +390,16 @@ function emitChanged(a, b, c, d) {
     const broadcast = appRef ? appRef.get("broadcast") : null;
     const computeOverview = appRef ? appRef.get("computeOverview") : null;
     if (broadcast && computeOverview) {
-      broadcast("changed", Object.assign({ reason }, extra));
-      broadcast("overview", computeOverview());
+      broadcast("changed", (client) => {
+        const clientBranchCode = String(client?.branchCode || "").trim().toUpperCase();
+        if (branchCode && clientBranchCode && clientBranchCode !== branchCode) return null;
+        return Object.assign({ reason }, extra);
+      });
+      broadcast("overview", (client) => {
+        const clientBranchCode = String(client?.branchCode || branchCode || "").trim().toUpperCase();
+        if (branchCode && clientBranchCode && clientBranchCode !== branchCode) return null;
+        return computeOverview(clientBranchCode || branchCode || getBranchCode());
+      });
     }
   } catch {}
 }
@@ -1776,6 +1787,33 @@ function requireSuperAdminPage(req, res, next) {
   next();
 }
 
+function getCanonicalBranchCodeForScope(req, scope) {
+  const u = ensureSessionBranchContext(getSessionUser(req));
+  if (!u?.userId) return "";
+  if (scope === "admin") setSessionUser(req, "admin", u);
+  if (scope === "staff") setSessionUser(req, "staff", u);
+  const selected = getBranchById(String(u.selectedBranchId || "").trim());
+  return String(selected?.branchCode || "").trim().toUpperCase();
+}
+
+function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
+  const routeCode = String(req?.params?.branchCode || "").trim().toUpperCase();
+  const selectedCode = getCanonicalBranchCodeForScope(req, scope);
+  if (!selectedCode || selectedCode === routeCode) return false;
+  if (pageType === "login") {
+    const nextPath = scope === "admin"
+      ? buildAdminLoginPath(selectedCode)
+      : buildStaffLoginPath(selectedCode);
+    res.redirect(nextPath);
+    return true;
+  }
+  const nextPath = scope === "admin"
+    ? buildAdminEntryPath(selectedCode)
+    : buildStaffEntryPath(selectedCode);
+  res.redirect(nextPath);
+  return true;
+}
+
   function finalizeLoginSession(req, scope, sessUser) {
     return new Promise((resolve, reject) => {
       const nextUser = ensureSessionBranchContext(sessUser);
@@ -1881,9 +1919,13 @@ function requireSuperAdminPage(req, res, next) {
         roleId: role,
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
+      const allowedBranches = listUserBranchAccess(u.userId);
+      if (!allowedBranches.length) {
+        return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+      }
       await finalizeLoginSession(req, "staff", sessUser);
 
-      return res.json({ ok: true, scope: "staff", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches: listUserBranchAccess(u.userId) });
+      return res.json({ ok: true, scope: "staff", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches });
     } catch (e) {
       console.error("[staff/auth/login]", e);
       return res.status(500).json({ ok: false, error: "Server error" });
@@ -1925,9 +1967,13 @@ function requireSuperAdminPage(req, res, next) {
         roleId: role,
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
+      const allowedBranches = listUserBranchAccess(u.userId);
+      if (!allowedBranches.length) {
+        return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+      }
       await finalizeLoginSession(req, "admin", sessUser);
 
-      return res.json({ ok: true, scope: "admin", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches: listUserBranchAccess(u.userId) });
+      return res.json({ ok: true, scope: "admin", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches });
     } catch (e) {
       console.error("[admin/auth/login]", e);
       return res.status(500).json({ ok: false, error: "Server error" });
@@ -2013,17 +2059,25 @@ function requireSuperAdminPage(req, res, next) {
   app.get("/api/staff/auth/me", requireAuth, (req, res) => {
     const u = ensureSessionBranchContext(getSessionUser(req));
     if (u) setSessionUser(req, "staff", u);
+    const allowedBranches = listUserBranchAccess(u?.userId);
+    if (!allowedBranches.length) {
+      return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+    }
     const perms = getUserPerms(getRoleId(u));
     const branch = getRequestBranch(req);
-    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches: listUserBranchAccess(u?.userId) });
+    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches });
   });
 
   app.get("/api/admin/auth/me", requireAuth, (req, res) => {
     const u = ensureSessionBranchContext(getSessionUser(req));
     if (u) setSessionUser(req, "admin", u);
+    const allowedBranches = listUserBranchAccess(u?.userId);
+    if (!allowedBranches.length) {
+      return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+    }
     const perms = getUserPerms(getRoleId(u));
     const branch = getRequestBranch(req);
-    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches: listUserBranchAccess(u?.userId) });
+    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches });
   });
 
   app.get("/api/admin/feature-flags", requireAuth, (_req, res) => {
@@ -2186,7 +2240,7 @@ function requireSuperAdminPage(req, res, next) {
   /* ===================== END SECURITY ADDON ===================== */
 
   // --- Realtime (SSE) clients ---
-  const sseClients = new Set();
+  const sseClients = new Map();
 
   function sseSend(res, event, data) {
     res.write(`event: ${event}\n`);
@@ -2211,7 +2265,7 @@ function requireSuperAdminPage(req, res, next) {
       sseSend(res, "overview", computeAdminTodayStats(db, getRequestBranchCode(req), bd));
     } catch {}
 
-    sseClients.add(res);
+    sseClients.set(res, { branchCode: getRequestBranchCode(req) });
 
     // keep-alive ping to prevent idle disconnects
     const ping = setInterval(() => {
@@ -2227,18 +2281,20 @@ function requireSuperAdminPage(req, res, next) {
   });
 
   function broadcast(event, payload) {
-    for (const res of sseClients) {
+    for (const [res, client] of sseClients.entries()) {
       try {
-        sseSend(res, event, payload);
+        const body = typeof payload === "function" ? payload(client) : payload;
+        if (body === null || body === undefined) continue;
+        sseSend(res, event, body);
       } catch {}
     }
   }
 
   // expose broadcaster + overview calculator to helpers
   app.set("broadcast", broadcast);
-  app.set("computeOverview", () => {
+  app.set("computeOverview", (branchCode) => {
     const bd = ensureBusinessDate(db);
-    return computeAdminTodayStats(db, getBranchCode(), bd);
+    return computeAdminTodayStats(db, branchCode || getBranchCode(), bd);
   });
 
   /* ---------- pages ---------- */
@@ -2480,12 +2536,14 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
     if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
     return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "display-portrait.html")));
   });
-app.get("/staff", requireStaffPage, (_, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")))
-);
-app.get("/b/:branchCode/staff", requireStaffPage, (_req, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")))
-);
+app.get("/staff", requireStaffPage, (req, res) => {
+  if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
+});
+app.get("/b/:branchCode/staff", requireStaffPage, (req, res) => {
+  if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
+});
 
 /* ---------- Admin: QR (PNG for preview / print / download) ---------- */
 app.get("/api/admin/qrcode.png", requireAuth, (req, res) => {
@@ -2526,19 +2584,23 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
   );
  
   // ✅ Admin page requires login (so permission-gated actions like Media Folder work)
-   app.get("/admin", requireAdminPage, (_, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")))
-);
- app.get("/b/:branchCode/admin", requireAdminPage, (_req, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")))
-);
+ app.get("/admin", requireAdminPage, (req, res) => {
+  if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")));
+});
+ app.get("/b/:branchCode/admin", requireAdminPage, (req, res) => {
+  if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")));
+});
 
-app.get("/admin-login", (_req, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")))
-);
+app.get("/admin-login", (req, res) => {
+  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
+});
 app.get("/b/:branchCode/admin-login", (req, res) => {
   const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
   if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
 
@@ -2563,12 +2625,14 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 );
 
 
-  app.get("/staff-login", (_req, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")))
-);
+  app.get("/staff-login", (req, res) => {
+  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
+});
 app.get("/b/:branchCode/staff-login", (req, res) => {
   const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
   if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
+  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
 });
 
@@ -2629,13 +2693,12 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
     try {
       const cur = ensureBusinessDate(db);
       const st = refreshActivationState();
-      const visibleCode = getVisibleBranchCode();
       const branch = getRequestBranch(req);
       res.json({
         ok: true,
         activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
-        branchCode: visibleCode || getRequestBranchCode(req),
-        branchName: visibleCode ? getRequestBranchName(req) : getRequestBranchName(req),
+        branchCode: getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
         timezone: getRequestBranchTimezone(req),
         branchId: String(branch?.branchId || ""),
         currentBusinessDate: cur,
@@ -2669,14 +2732,13 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
       const installId = String(st.installId || getDbSetting("install.id") || "").trim();
       const expiresAt = Number(st.licenseExpiresAt || 0) || null;
       const daysRemaining = expiresAt ? Math.floor((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)) : null;
-      const visibleCode = getVisibleBranchCode();
       const branch = getRequestBranch(req);
       return res.json({
         ok: true,
         status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
         installId,
-        branchCode: visibleCode,
-        branchName: visibleCode ? getRequestBranchName(req) : "",
+        branchCode: getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
         branchId: String(branch?.branchId || ""),
         activatedAt: st.activatedAt || null,
         activatedBy: st.activatedBy || null,
@@ -2941,10 +3003,13 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
       const branchName = String(req.body.branchName || "").trim();
       if (!branchName) return res.status(400).json({ ok: false, error: "branchName is required." });
 
-      const cfg = getBranchConfigSafe();
-      const currentCode = String(cfg.branchCode || branchCode).trim() || branchCode;
+      const branch = getRequestBranch(req);
+      if (!branch?.branchId) {
+        return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+      }
+      const currentCode = String(branch.branchCode || "").trim().toUpperCase();
 
-      const requestedCode = String(req.body.branchCode || "").trim();
+      const requestedCode = String(req.body.branchCode || "").trim().toUpperCase();
       const wantsCodeChange = requestedCode && requestedCode !== currentCode;
 
       // NOTE: you had isAdminRequest(req) referenced before but not defined in your paste.
@@ -2974,35 +3039,47 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
       }
 
       const nextCode = wantsCodeChange ? requestedCode : currentCode;
-      const timezone = String(req.body.timezone || cfg.timezone || "Asia/Manila").trim() || "Asia/Manila";
+      const timezone = String(req.body.timezone || branch.timezone || "Asia/Manila").trim() || "Asia/Manila";
 
       const now = Date.now();
-      const existing = db.prepare(`SELECT id FROM branch_config WHERE id=1`).get();
-      if (!existing) {
-        db.prepare(
-          `INSERT INTO branch_config(id, branchCode, branchName, timezone, createdAt, updatedAt)
-         VALUES(1, ?, ?, ?, ?, ?)`
-        ).run(nextCode, branchName, timezone, now, now);
-      } else {
-        const r = db
-          .prepare(`UPDATE branch_config SET branchCode=?, branchName=?, timezone=?, updatedAt=? WHERE id=1`)
-          .run(nextCode, branchName, timezone, now);
+      const duplicate = db.prepare(
+        `SELECT branchId FROM branches WHERE upper(branchCode)=? AND branchId<>? LIMIT 1`
+      ).get(nextCode, branch.branchId);
+      if (duplicate?.branchId) {
+        return res.status(409).json({ ok: false, error: "Branch code is already in use." });
+      }
 
-        if (!r || r.changes === 0) {
-          return res.status(500).json({
-            ok: false,
-            error: "Branch config update failed (0 rows changed). Database row id=1 may be missing/corrupted.",
-          });
+      const updated = db.prepare(
+        `UPDATE branches
+         SET branchCode=?, branchName=?, timezone=?, updatedAt=?
+         WHERE branchId=?`
+      ).run(nextCode, branchName, timezone, now, branch.branchId);
+      if (!updated || updated.changes === 0) {
+        return res.status(500).json({ ok: false, error: "Branch update failed." });
+      }
+
+      if (Number(branch.isDefault || 0) === 1 || currentCode === String(getBranchCode() || "").trim().toUpperCase()) {
+        const existing = db.prepare(`SELECT id FROM branch_config WHERE id=1`).get();
+        if (!existing) {
+          db.prepare(
+            `INSERT INTO branch_config(id, branchCode, branchName, timezone, createdAt, updatedAt)
+             VALUES(1, ?, ?, ?, ?, ?)`
+          ).run(nextCode, branchName, timezone, now, now);
+        } else {
+          db.prepare(
+            `UPDATE branch_config SET branchCode=?, branchName=?, timezone=?, updatedAt=? WHERE id=1`
+          ).run(nextCode, branchName, timezone, now);
         }
-
       }
 
       bootstrapDefaultOrganizationAndBranch(db);
+      req.qsysBranch = getBranchById(branch.branchId) || getBranchByCode(nextCode) || req.qsysBranch;
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_BRANCH_UPDATE",
         JSON.stringify({
           actor: actorFromReq(req),
+          branchId: branch.branchId,
           prevBranchCode: currentCode,
           branchCode: nextCode,
           branchName,
@@ -3014,7 +3091,7 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
 
       emitChanged(app, db, "ADMIN_BRANCH_UPDATE", { branchCode: nextCode });
 
-      res.json({ ok: true, branchCode: nextCode, branchName, timezone });
+      res.json({ ok: true, branch: getRequestBranch(req) || getBranchByCode(nextCode) || null, branchCode: nextCode, branchName, timezone });
     } catch (e) {
       console.error("[admin/branch:post]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -3139,6 +3216,10 @@ function touchDisplayDevice(deviceId, patch) {
 }
 
 function requireDisplayAuth(req, res, next) {
+  const requestedBranchCode = String(
+    req?.params?.branchCode || req?.query?.branchCode || ""
+  ).trim().toUpperCase();
+
   const token = extractDisplayToken(req);
   if (token) {
     const tokenHash = hashDisplayToken(token);
@@ -3146,9 +3227,6 @@ function requireDisplayAuth(req, res, next) {
     const device = list.find((d) => !d.revokedAt && String(d.tokenHash || "") === tokenHash);
     if (device) {
       const pairedBranchCode = String(device.branchCode || "").trim();
-      const requestedBranchCode = String(
-        req?.params?.branchCode || req?.query?.branchCode || ""
-      ).trim().toUpperCase();
       if (pairedBranchCode && requestedBranchCode && pairedBranchCode !== requestedBranchCode) {
         return res.status(401).json({
           ok: false,
@@ -3178,6 +3256,17 @@ function requireDisplayAuth(req, res, next) {
   if (expected) {
     const got = String(req.headers["x-display-key"] || "").trim();
     if (got && got === expected) return next();
+  }
+
+  // Branch-selected display mode:
+  // for the Electron display agent we now trust the selected branch code
+  // and allow read-only display access without pairing.
+  if (req.method === "GET" && requestedBranchCode) {
+    const branch = getBranchByCode(requestedBranchCode);
+    if (branch) {
+      req.qsysBranch = branch;
+      return next();
+    }
   }
 
   return res.status(401).json({ ok: false, error: "Display not authorized" });
@@ -3874,6 +3963,32 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   /* ---------- Admin: Users (PIN) ---------- */
 
+  function normalizeRequestedUserBranchIds(input, fallbackBranchId) {
+    const values = Array.isArray(input) ? input : [];
+    const valid = new Set(listActiveBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
+    const unique = [];
+    for (const raw of values) {
+      const branchId = String(raw || "").trim();
+      if (!branchId || !valid.has(branchId) || unique.includes(branchId)) continue;
+      unique.push(branchId);
+    }
+    if (unique.length) return unique;
+    const fallback = String(fallbackBranchId || "").trim();
+    return fallback ? [fallback] : [String(getOrBootstrapDefaultBranchId(db) || "").trim()].filter(Boolean);
+  }
+
+  function replaceUserBranchAccess(dbRef, { userId, branchIds, roleScope }) {
+    const id = String(userId || "").trim();
+    if (!id) return [];
+    const scope = String(roleScope || "STAFF").trim().toUpperCase() || "STAFF";
+    const nextBranchIds = normalizeRequestedUserBranchIds(branchIds, null);
+    dbRef.prepare(`DELETE FROM user_branch_access WHERE userId=?`).run(id);
+    for (const branchId of nextBranchIds) {
+      upsertUserBranchAccess(dbRef, { userId: id, branchId, roleScope: scope });
+    }
+    return nextBranchIds;
+  }
+
   app.get("/api/admin/users", requirePerm("USERS_MANAGE"), (_, res) => {
     try {
       const rows = db
@@ -3882,8 +3997,16 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
          FROM users
          ORDER BY createdAt DESC`
         )
-        .all();
-      res.json({ ok: true, users: rows });
+        .all()
+        .map((row) => {
+          const branchAccess = listUserBranchAccess(row.userId);
+          return {
+            ...row,
+            branchIds: branchAccess.map((item) => String(item.branchId || "").trim()).filter(Boolean),
+            branchAccess,
+          };
+        });
+      res.json({ ok: true, users: rows, branches: listActiveBranches() });
     } catch (e) {
       console.error("[admin/users:get]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -3904,24 +4027,22 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const userId = randomUUID();
       const pinHash = bcrypt.hashSync(pin, 10);
       const now = Date.now();
+      const fallbackBranchId = String(getRequestBranch(req)?.branchId || getOrBootstrapDefaultBranchId(db) || "").trim();
+      const branchIds = normalizeRequestedUserBranchIds(req.body.branchIds, fallbackBranchId);
 
       db.prepare(
         `INSERT INTO users(userId, fullName, pinHash, roleId, isActive, createdAt, updatedAt)
          VALUES(?,?,?,?,1,?,?)`
       ).run(userId, fullName, pinHash, roleId, now, now);
-      upsertUserBranchAccess(db, {
-        userId,
-        branchId: getOrBootstrapDefaultBranchId(db),
-        roleScope: roleId,
-      });
+      replaceUserBranchAccess(db, { userId, branchIds, roleScope: roleId });
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_USER_CREATE",
-        JSON.stringify({ actor: actorFromReq(req), userId, fullName, roleId }),
+        JSON.stringify({ actor: actorFromReq(req), userId, fullName, roleId, branchIds }),
         now
       );
 
-      res.json({ ok: true, userId });
+      res.json({ ok: true, userId, branchIds });
     } catch (e) {
       console.error("[admin/users:create]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -3934,6 +4055,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const fullName = String(req.body.fullName || "").trim();
       const roleId = String(req.body.roleId || "").toUpperCase().trim();
       const isActive = req.body.isActive;
+      const hasBranchIds = Array.isArray(req.body.branchIds);
 
       if (!userId) return res.status(400).json({ ok: false, error: "Missing userId." });
 
@@ -3948,13 +4070,22 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
         db.prepare(`UPDATE users SET roleId=?, updatedAt=? WHERE userId=?`).run(roleId, now, userId);
         db.prepare(`UPDATE user_branch_access SET roleScope=? WHERE userId=?`).run(roleId, userId);
       }
+      if (hasBranchIds) {
+        replaceUserBranchAccess(db, {
+          userId,
+          branchIds: req.body.branchIds,
+          roleScope: roleId && ["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId)
+            ? roleId
+            : String(db.prepare(`SELECT roleId FROM users WHERE userId=? LIMIT 1`).get(userId)?.roleId || "STAFF").trim().toUpperCase(),
+        });
+      }
       if (typeof isActive === "boolean" || isActive === 0 || isActive === 1) {
         db.prepare(`UPDATE users SET isActive=?, updatedAt=? WHERE userId=?`).run(isActive ? 1 : 0, now, userId);
       }
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_USER_UPDATE",
-        JSON.stringify({ actor: actorFromReq(req), userId, fullName, roleId, isActive }),
+        JSON.stringify({ actor: actorFromReq(req), userId, fullName, roleId, isActive, branchIds: hasBranchIds ? normalizeRequestedUserBranchIds(req.body.branchIds, null) : undefined }),
         now
       );
 
@@ -4466,10 +4597,11 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const lastAudit = db.prepare(`SELECT action, createdAt FROM audit_logs ORDER BY createdAt DESC LIMIT 1`).get() || null;
       const lastRestore = getLastRestoreState();
       const branch = getRequestBranch(req);
+      const branchCode = getRequestBranchCode(req);
       return res.json({
         ok: true,
         branchId: String(branch?.branchId || ""),
-        branchCode: getVisibleBranchCode() || getRequestBranchCode(req),
+        branchCode,
         branchName: getRequestBranchName(req),
         activationStatus: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
         licenseExpiresAt: Number(st.licenseExpiresAt || 0) || null,
@@ -4492,7 +4624,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.renewal_reminders", "licensing.audit_history", "licensing.branch_transfer", "licensing.token_revocation", "licensing.one_time_tokens"), (_req, res) => {
+  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.renewal_reminders", "licensing.audit_history", "licensing.branch_transfer", "licensing.token_revocation", "licensing.one_time_tokens"), (req, res) => {
     try {
       const st = refreshActivationState();
       const reminder = buildLicenseReminder(st);
@@ -4510,8 +4642,8 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
         features,
         status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
         installId: String(st.installId || getDbSetting("install.id") || "").trim(),
-        branchCode: getVisibleBranchCode(),
-        branchName: getBranchName(),
+        branchCode: getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
         activatedAt: Number(st.activatedAt || 0) || null,
         activatedBy: String(st.activatedBy || ""),
         activationLicenseId: String(st.activationLicenseId || ""),
@@ -4540,10 +4672,11 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const payload = decodeActivationPayloadUnsafe(token);
       const tokenHash = hashLicenseToken(token);
       const now = Date.now();
+      const branchCode = getRequestBranchCode(req);
       revokeActivationTokenHash({
         tokenHash,
         installId: String(payload.installId || getDbSetting("install.id") || "").trim(),
-        branchCode: String(payload.branchCode || getVisibleBranchCode() || "").trim().toUpperCase(),
+        branchCode: String(payload.branchCode || branchCode || "").trim().toUpperCase(),
         licenseId: String(payload.licenseId || "").trim(),
         reason,
         revokedBy: actor,
@@ -4554,7 +4687,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
         JSON.stringify({
           tokenHash,
           installId: String(payload.installId || getDbSetting("install.id") || "").trim(),
-          branchCode: String(payload.branchCode || getVisibleBranchCode() || "").trim().toUpperCase(),
+          branchCode: String(payload.branchCode || branchCode || "").trim().toUpperCase(),
           licenseId: String(payload.licenseId || "").trim(),
           reason,
           revokedBy: actor,
@@ -4580,7 +4713,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       }
 
       const previousInstallId = String(st.installId || getDbSetting("install.id") || "").trim();
-      const previousBranchCode = String(getVisibleBranchCode() || st.activationBranchCode || "").trim().toUpperCase();
+      const previousBranchCode = String(getRequestBranchCode(req) || st.activationBranchCode || "").trim().toUpperCase();
       const previousLicenseId = String(st.activationLicenseId || "").trim();
       const nextInstallId = randomUUID();
       const now = Date.now();
@@ -4695,8 +4828,8 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       const st = refreshActivationState();
       const payload = {
         generatedAt: now,
-        branchCode: getVisibleBranchCode(),
-        branchName: getBranchName(),
+        branchCode: getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
         currentBusinessDate: ensureBusinessDate(db),
         activation: {
           status: String(st.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
@@ -7929,7 +8062,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
         Date.now()
       );
 
-      emitChanged(app, db, "QUEUE_CREATE");
+      emitChanged(app, db, "QUEUE_CREATE", { branchCode: bc, groupCode });
       res.json({
         ok: true,
         id,
@@ -8013,7 +8146,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     `
       ).run("QUEUE_CLEAR_CALLED", JSON.stringify({ actor: actorFromReq(req), branchId: branch?.branchId || null, branchCode: bc, ...called, businessDate }), now);
 
-      emitChanged(app, db, "QUEUE_CLEAR_CALLED");
+      emitChanged(app, db, "QUEUE_CLEAR_CALLED", { branchCode: bc, groupCode });
       res.json({ ok: true, cleared: called, undo: { available: true, action: "QUEUE_CLEAR_CALLED", expiresAt: undoExpiresAt } });
     } catch (e) {
       console.error("[staff/clear-called]", e);
@@ -8151,7 +8284,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       const called = tx();
       announceDisplayTicket(called);
-      emitChanged(app, db, "QUEUE_CALL", { groupCode });
+      emitChanged(app, db, "QUEUE_CALL", { branchCode: bc, groupCode });
       return res.json({ ok: true, called });
     } catch (e) {
       if (e && typeof e.http === "number") {
@@ -8227,11 +8360,11 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       announceDisplayTicket(called);
       try {
         const io = req.app.get("io");
-        if (io) io.emit("display:recall", { id: called.id, groupCode: called.groupCode, code, at: now });
+        if (io) io.emit("display:recall", { id: called.id, branchCode: bc, groupCode: called.groupCode, code, at: now });
       } catch {}
 
       // Also notify other clients that something changed (overview/SSE etc.)
-      emitChanged(req.app, db, "QUEUE_CALL_AGAIN", { groupCode, id: called.id });
+      emitChanged(req.app, db, "QUEUE_CALL_AGAIN", { branchCode: bc, groupCode, id: called.id });
 
       return res.json({ ok: true, called: { ...called, next_calls: nextCalls }, time: t });
     } catch (e) {
@@ -8403,7 +8536,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       const called = tx();
       announceDisplayTicket(called);
-      emitChanged(app, db, "QUEUE_CALL", { groupCode });
+      emitChanged(app, db, "QUEUE_CALL", { branchCode: bc, groupCode });
       return res.json({ ok: true, called });
     } catch (e) {
       if (e && typeof e.http === "number") {
@@ -8509,7 +8642,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
           skippedAt: seated.skippedAt ?? null,
         },
       });
-      emitChanged(app, db, "QUEUE_SEAT", { groupCode });
+      emitChanged(app, db, "QUEUE_SEAT", { branchCode: bc, groupCode });
       return res.json({ ok: true, seated, undo: { available: true, action: "QUEUE_SEAT", expiresAt: undoExpiresAt } });
     } catch (e) {
       if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message });
@@ -8627,7 +8760,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
           skippedAt: skipped.skippedAt ?? null,
         },
       });
-      emitChanged(app, db, "QUEUE_SKIP", { groupCode });
+      emitChanged(app, db, "QUEUE_SKIP", { branchCode: bc, groupCode });
       return res.json({ ok: true, skipped, undo: { available: true, action: "QUEUE_SKIP", expiresAt: undoExpiresAt } });
     } catch (e) {
       if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message });
@@ -8747,7 +8880,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       })();
 
       clearStaffUndo(req);
-      emitChanged(app, db, "QUEUE_UNDO", { groupCode });
+      emitChanged(app, db, "QUEUE_UNDO", { branchCode: bc, groupCode });
       return res.json({
         ok: true,
         undoneAction: undo.action,
@@ -8851,6 +8984,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       })();
 
       emitChanged(app, db, "QUEUE_REOPEN_COMPLETED", {
+        branchCode,
         id: reopened.id,
         groupCode: reopened.groupCode,
         previousStatus: reopened.previousStatus,

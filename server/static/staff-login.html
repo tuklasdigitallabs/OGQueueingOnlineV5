@@ -192,8 +192,8 @@
       const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
       return byQuery || getPathBranchCode() || "";
     }
-    function buildStaffEntryUrl() {
-      const code = currentBranchCode();
+    function buildStaffEntryUrl(branchCodeArg) {
+      const code = String(branchCodeArg || currentBranchCode() || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
     }
 
@@ -210,6 +210,13 @@
         $dot.classList.add("bad");
       }
     }
+
+    (function showBranchHint(){
+      const code = currentBranchCode();
+      if (!code) return;
+      const sub = document.querySelector(".sub");
+      if (sub) sub.textContent = `Enter your username and PIN for ${code}`;
+    })();
 
     // Numeric keypad optimization: strip non-digits as user types
     $p.addEventListener("input", () => {
@@ -235,7 +242,12 @@
         });
         const j = await r.json();
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
-        location.href = buildStaffEntryUrl();
+        const nextCode = String(
+          j?.branch?.branchCode ||
+          (Array.isArray(j?.allowedBranches) && j.allowedBranches[0]?.branchCode) ||
+          code
+        ).trim().toUpperCase();
+        location.href = buildStaffEntryUrl(nextCode);
       } catch {
         $e.textContent = "Server error";
       }

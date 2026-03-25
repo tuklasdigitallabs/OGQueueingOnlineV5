@@ -1379,6 +1379,8 @@ function dbgDisp(...args){
 
   // Imperative recall: replay attention even if the CALLED ticket did not change
 socket.on("display:recall", async (payload) => {
+  const eventBranchCode = String(payload?.branchCode || "").trim().toUpperCase();
+  if (eventBranchCode && branchCode && eventBranchCode !== branchCode) return;
   const code = (payload && payload.code) ? payload.code : __lastAnnouncedCode;
   try { await announceCode(code, { force: true }); } catch {}
   try { window.DisplayUI?.forceHeroPulse?.(); } catch {}
@@ -1411,6 +1413,8 @@ socket.on("heartbeat", () => {
 
     socket.on("state:changed", async (payload) => {
     dbgDisp("state:changed", payload);
+      const eventBranchCode = String(payload?.branchCode || "").trim().toUpperCase();
+      if (eventBranchCode && branchCode && eventBranchCode !== branchCode) return;
       if (payload && payload.reason === "ADMIN_MEDIA_SOURCE_UPDATE") {
         console.log("[display] media source changed -> reloading");
         location.reload();
