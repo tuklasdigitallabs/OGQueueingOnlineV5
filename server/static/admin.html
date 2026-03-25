@@ -820,7 +820,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
           <button data-page="permissions">Permissions</button>
           <button data-page="reports">Reports</button>
           <button data-page="audit">Audit Logs</button>
-          <button data-page="upload">Upload / Sync</button>
           <button data-page="system">System</button>
           <button class="danger" id="btnLogout">Logout</button>
         </div>
@@ -1599,7 +1598,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
             <div class="card" style="grid-column: span 12;">
               <h3 id="repOutTitle">Report Output</h3>
 
-              <!-- Executive output -->
               <div id="sumOut" style="display:none;">
                 <div class="row" style="gap:12px; flex-wrap:wrap; margin-top:6px;">
                   <div class="pill"><b>Pax Overall:</b> <span id="sumPaxOverall">0</span></div>
@@ -1703,49 +1701,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     </tbody>
                   </table>
                 </div>
-
-                <div id="execOutWrap">
-
-                <div style="margin-top:12px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Waitlist Count (WAITING)</h4>
-                  <table>
-                    <thead><tr><th>Group</th><th>1</th><th>2-3</th><th>4-5</th><th>6+</th><th>Total</th></tr></thead>
-                    <tbody id="tblWaitlist"></tbody>
-                  </table>
-                </div>
-
-                <div style="margin-top:14px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Seated Count (SEATED)</h4>
-                  <table>
-                    <thead><tr><th>Group</th><th>1</th><th>2-3</th><th>4-5</th><th>6+</th><th>Total</th></tr></thead>
-                    <tbody id="tblSeated"></tbody>
-                  </table>
-                </div>
-
-                <div style="margin-top:14px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Average Waiting Time</h4>
-                  <table>
-                    <thead><tr><th>Group</th><th>Avg Wait (mins)</th><th>Sample Size (n)</th><th>Reference</th></tr></thead>
-                    <tbody id="tblAvgWait"></tbody>
-                  </table>
-                </div>
-
-                <div style="margin-top:14px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Pax Totals (excluding SKIPPED)</h4>
-                  <table>
-                    <thead><tr><th>Group</th><th>Total Pax</th></tr></thead>
-                    <tbody id="tblPax"></tbody>
-                  </table>
-                </div>
-
-                <div style="margin-top:14px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Priority Registrations (excluding SKIPPED)</h4>
-                  <table>
-                    <thead><tr><th>Group</th><th>Priority Count</th></tr></thead>
-                    <tbody id="tblPri"></tbody>
-                  </table>
-                </div>
-              </div>
               </div>
 
               <!-- CSV-only output -->
@@ -1785,57 +1740,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <tr><td colspan="4" class="muted">No data loaded</td></tr>
                   </tbody>
                 </table>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- UPLOAD -->
-        <section id="page-upload" class="hidden">
-          <div class="grid">
-            <div class="card" style="grid-column: span 12;">
-              <h3>Upload / Sync</h3>
-              <div class="muted">
-                When internet is available, upload local data to cloud.
-              </div>
-              <div class="row" style="margin-top:12px;">
-                <button class="btn primary" id="btnUploadNow">Upload Now</button>
-                <span class="muted2" id="uploadStatus">Status: -</span>
-              </div>
-              <div style="margin-top:10px;">
-                <div class="muted2">Upload Date Scope</div>
-                <div class="row" style="margin-top:6px; gap:8px; flex-wrap:wrap;" id="uploadScopePresets">
-                  <button class="btn" type="button" data-upload-preset="today">Today</button>
-                  <button class="btn" type="button" data-upload-preset="yesterday">Yesterday</button>
-                  <button class="btn" type="button" data-upload-preset="last7">Last 7 Days</button>
-                  <button class="btn" type="button" data-upload-preset="mtd">Month-to-date</button>
-                </div>
-                <div class="help" id="uploadScopePreview" style="margin-top:6px;">Scope: Uses current Reports scope.</div>
-              </div>
-              <div style="margin-top:10px;">
-                <div class="muted2">Reports To Upload</div>
-                <div class="row" style="margin-top:6px; gap:12px; flex-wrap:wrap;">
-                  <label><input type="checkbox" id="uploadRptTickets" checked /> Raw Tickets (CSV)</label>
-                  <label><input type="checkbox" id="uploadRptDailyCsv" checked /> Daily Summary (CSV)</label>
-                  <label><input type="checkbox" id="uploadRptDailyHtml" checked /> Daily Summary (Formatted HTML)</label>
-                  <label><input type="checkbox" id="uploadRptCustomCsv" checked /> Custom Summary (CSV)</label>
-                </div>
-              </div>
-              <div class="seedLoader" id="uploadLoader">
-                <span class="seedSpinner" aria-hidden="true"></span>
-                <span id="uploadLoaderText">Uploading... 0%</span>
-              </div>
-              <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
-                <div class="row" style="justify-content:space-between;">
-                  <div><b>Google Drive Sync Status</b></div>
-                </div>
-                <div class="help" id="uploadCfgReady" style="margin-top:8px;">Ready: -</div>
-                <div class="help" id="uploadCfgFolder">Folder ID: -</div>
-                <div class="help" id="uploadCfgCreds">Service Account Source: -</div>
-                <div class="help" id="uploadCfgFile">Service Account File: -</div>
-                <div class="help" id="uploadLastAt">Last Sync: -</div>
-                <div class="help" id="uploadLastResult">Last Result: -</div>
-                <div class="help" id="uploadLastFiles">Uploaded File IDs: -</div>
               </div>
             </div>
           </div>
@@ -2091,10 +1995,6 @@ async function jpost(url, body) {
         if (target === "permissions") loadPerms();
         if (target === "audit") loadAudit();
         if (target === "reports") initReports();
-        if (target === "upload") {
-          loadUploadStatus();
-          updateUploadScopePreview();
-        }
         if (target === "system") loadSystemInfo();
 
         renderAdminBranchSwitcher();
@@ -2110,7 +2010,6 @@ async function jpost(url, body) {
       let REPORT_INSIGHTS_CACHE = null;
       let REPORT_SCHEDULE_CACHE = null;
       let REPORT_ACTIVE_PRESET = "";
-      let UPLOAD_ACTIVE_PRESET = "";
       let SETUP_ACTIVE_PANE = "branch";
       let CURRENT_PAGE = "dashboard";
       let META_BRANCH_LABEL = "-";
@@ -2147,7 +2046,7 @@ async function jpost(url, body) {
       }
 
       function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {
-        return ["dashboard", "setup", "reports", "audit", "upload"].includes(String(page || "").trim().toLowerCase());
+        return ["dashboard", "setup", "reports", "audit"].includes(String(page || "").trim().toLowerCase());
       }
 
       function adminEntryUrl(branchCode, page = CURRENT_PAGE) {
@@ -2175,7 +2074,6 @@ async function jpost(url, body) {
         permissions: "PERMISSIONS_MANAGE",
         reports: "REPORT_EXPORT_CSV",
         audit: "AUDIT_VIEW",
-        upload: ["DATA_UPLOAD", "REPORT_EXPORT_CSV"],
         system: "SETTINGS_MANAGE",
       };
       const PAGE_FEATURES = {
@@ -2512,11 +2410,6 @@ async function jpost(url, body) {
       }
 
       async function refreshCurrentPage() {
-        if (CURRENT_PAGE === "upload") {
-          await Promise.all([loadBasic(), loadUploadStatus()]);
-          updateUploadScopePreview();
-          return;
-        }
         await loadBasic();
         if (CURRENT_PAGE === "setup") {
           if (SETUP_ACTIVE_PANE === "qr") await loadQrSetup();
@@ -3288,7 +3181,6 @@ async function testGdriveSync() {
     const fid = String(j.uploaded?.id || "").trim();
     $("gdriveSetupStatus").textContent = `Status: Test succeeded${fid ? ` (file id: ${fid})` : ""}.`;
     toast("Google Drive", "Connection test succeeded.", "ok");
-    loadUploadStatus();
   } catch (e) {
     const msg = String(e?.message || "Request failed.");
     $("gdriveSetupStatus").textContent = `Status: Test failed (${msg}).`;
@@ -4469,18 +4361,15 @@ async function clearGdriveOAuth() {
         const keepPreset = !!(opts && opts.keepPreset);
         if (!keepPreset) {
           REPORT_ACTIVE_PRESET = "";
-          UPLOAD_ACTIVE_PRESET = "";
         }
         REPORT_HAS_OUTPUT = false;
         setReportsStale(true);
         updateReportsMode();
-        updateUploadScopePreview();
       }
 
       function applyReportPreset(kind){
         const today = manilaTodayYMD();
         const k = String(kind || "").trim().toLowerCase();
-        UPLOAD_ACTIVE_PRESET = "";
         if (k === "today") {
           if ($("repScope")) $("repScope").value = "single";
           if ($("repDateSingle")) $("repDateSingle").value = today;
@@ -4510,32 +4399,6 @@ async function clearGdriveOAuth() {
         return "scope";
       }
 
-      function applyUploadPreset(kind){
-        const k = String(kind || "").trim().toLowerCase();
-        if (!k) return;
-        UPLOAD_ACTIVE_PRESET = k;
-        applyReportPreset(k);
-        updateUploadScopePreview();
-      }
-
-      function updateUploadScopePreview(){
-        const el = $("uploadScopePreview");
-        if (!el) return;
-        const scopeInfo = computeScopeRange();
-        const preview = (scopeInfo.from && scopeInfo.to) ? `${scopeInfo.from} -> ${scopeInfo.to}` : "-";
-        const label = computeScopeLabel(scopeInfo, UPLOAD_ACTIVE_PRESET || REPORT_ACTIVE_PRESET);
-        el.textContent = `Scope: ${preview} (${label})`;
-      }
-
-      function getSelectedUploadReportKeys(){
-        const keys = [];
-        if ($("uploadRptTickets")?.checked) keys.push("tickets");
-        if ($("uploadRptDailyCsv")?.checked) keys.push("daily_summary_csv");
-        if ($("uploadRptDailyHtml")?.checked) keys.push("daily_summary_html");
-        if ($("uploadRptCustomCsv")?.checked) keys.push("custom_summary");
-        return keys;
-      }
-
       // Initializes default report scope values when entering Reports tab.
       function initReports(){
         const d = String(LAST_BIZ || "").trim();
@@ -4551,7 +4414,6 @@ async function clearGdriveOAuth() {
         REPORT_HAS_OUTPUT = false;
         setReportsStale(true);
         updateReportsMode();
-        updateUploadScopePreview();
         loadReportInsights();
         loadReportSchedule();
       }
@@ -4756,136 +4618,6 @@ async function clearGdriveOAuth() {
         if (type === "daily_summary") return loadDailySummaryPreview();
         return toast("Reports", "This report exports to CSV only. Use Export CSV.", "warn");
       }
-
-
-// ---------- Report Summary (on-screen legacy helpers) ----------
-      function pad2(n){ return String(n).padStart(2,"0"); }
-      function bucketsRow(obj){
-        const b = obj || {};
-        const v1 = b["1"]||0, v2=b["2-3"]||0, v3=b["4-5"]||0, v4=b["6+"]||0;
-        return { v1, v2, v3, v4, total: v1+v2+v3+v4 };
-      }
-      function renderBucketsTable(tbodyId, byGroupByBucket){
-        const body = $(tbodyId);
-        const groups = Object.keys(byGroupByBucket || {}).sort();
-        const wanted = ["A","B","C","D","P"];
-        const ordered = [];
-        wanted.forEach(g=>{ if(groups.includes(g)) ordered.push(g); });
-        groups.forEach(g=>{ if(!ordered.includes(g)) ordered.push(g); });
-
-        if(!ordered.length){
-          body.innerHTML = `<tr><td colspan="6" class="muted">No data</td></tr>`;
-          return;
-        }
-
-        body.innerHTML = ordered.map(g=>{
-          const r = bucketsRow(byGroupByBucket[g]||{});
-          return `<tr>
-            <td><b>${g}</b></td>
-            <td>${r.v1}</td>
-            <td>${r.v2}</td>
-            <td>${r.v3}</td>
-            <td>${r.v4}</td>
-            <td><b>${r.total}</b></td>
-          </tr>`;
-        }).join("");
-      }
-
-      function renderAvgWaitTable(tbodyId, avgByGroup, refText){
-        const body = $(tbodyId);
-        const keys = Object.keys(avgByGroup || {}).sort();
-        const wanted = ["A","B","C","D","P"];
-        const ordered = [];
-        wanted.forEach(g=>{ if(keys.includes(g)) ordered.push(g); });
-        keys.forEach(g=>{ if(!ordered.includes(g)) ordered.push(g); });
-
-        if(!ordered.length){
-          body.innerHTML = `<tr><td colspan="4" class="muted">No data</td></tr>`;
-          return;
-        }
-        body.innerHTML = ordered.map(g=>{
-          const o = avgByGroup[g] || {};
-          const mins = (o.mins===null || o.mins===undefined) ? "-" : o.mins;
-          const n = o.n ?? 0;
-          return `<tr>
-            <td><b>${g}</b></td>
-            <td>${mins}</td>
-            <td>${n}</td>
-            <td>${refText}</td>
-          </tr>`;
-        }).join("");
-      }
-
-      function renderSimpleKeyValTable(tbodyId, obj, label){
-        const body = $(tbodyId);
-        const keys = Object.keys(obj || {}).sort();
-        const wanted = ["A","B","C","D","P"];
-        const ordered = [];
-        wanted.forEach(g=>{ if(keys.includes(g)) ordered.push(g); });
-        keys.forEach(g=>{ if(!ordered.includes(g)) ordered.push(g); });
-
-        if(!ordered.length){
-          body.innerHTML = `<tr><td colspan="2" class="muted">No data</td></tr>`;
-          return;
-        }
-        body.innerHTML = ordered.map(g=>`<tr><td><b>${g}</b></td><td>${obj[g]}</td></tr>`).join("");
-      }
-
-      async function generateSummary(){
-        const scopeInfo = computeScopeRange();
-        const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
-        if(!from || !to) return toast("Reports", "Select a valid date scope.", "warn");
-        const waitRef = getWaitRef();
-
-        // Optional time window hint (server may ignore if not supported)
-        const timeHint = (scopeInfo.scope === "last_hours") ? `&sinceHours=${encodeURIComponent(scopeInfo.hours)}&sinceMs=${encodeURIComponent(scopeInfo.sinceMs)}` : "";
-// status hidden
-
-        try{
-          const j = await jget(`/api/admin/reports/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&waitRef=${encodeURIComponent(waitRef)}${timeHint}`);
-          if(!j.ok){
-            // sumMeta hidden
-
-            return toast("Reports", j.error || "Failed", "err");
-          }
-
-          const refText = `${j.waitRef.type}:${j.waitRef.value}`;
-          // sumMeta hidden
-
-          $("sumOut").style.display = "";
-          $("sumPaxOverall").textContent = j.pax?.overall ?? 0;
-          $("sumPriOverall").textContent = j.priority?.total ?? 0;
-
-          renderBucketsTable("tblWaitlist", j.waitlist?.byGroupByBucket || {});
-          renderBucketsTable("tblSeated", j.seated?.byGroupByBucket || {});
-          renderAvgWaitTable("tblAvgWait", j.avgWait?.byGroup || {}, refText);
-          renderSimpleKeyValTable("tblPax", j.pax?.byGroup || {});
-          renderSimpleKeyValTable("tblPri", j.priority?.byGroup || {});
-
-          REPORT_HAS_OUTPUT = true;
-          setReportsStale(false);
-          updateReportsMode();
-          toast("Reports", "Summary updated.", "ok");
-        } catch(e){
-          // sumMeta hidden
-
-          toast("Reports", "Failed to load summary.", "err");
-        }
-      }
-
-      function exportSummaryCsv(){
-        const from = ( ($("sumFrom")?.value) || ($("repFrom")?.value) || "" ).trim();
-        const to = ( ($("sumTo")?.value) || ($("repTo")?.value) || "" ).trim();
-        if(!from || !to) return toast("Reports", "Enter from/to dates.", "warn");
-        const waitRef = getWaitRef();
-        const scopeInfo = computeScopeRange();
-        const scopeLabel = computeScopeLabel(scopeInfo, REPORT_ACTIVE_PRESET);
-        const url = `/api/admin/reports/summary.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&waitRef=${encodeURIComponent(waitRef)}&scopeLabel=${encodeURIComponent(scopeLabel)}`;
-        downloadViaUrl(url);
-        toast("Reports", "Downloading Summary CSV...", "ok");
-      }
-
-      
 async function loadCustomSummary(){
   const scopeInfo = computeScopeRange();
   const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
@@ -5213,174 +4945,6 @@ function renderDailySummaryPage(){
         w.focus();
         w.print();
       }
-function printSummary(){
-        const meta = ($("repMeta")?.textContent || "");
-        const html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<title>QSys Report Summary</title>
-<style>
-  body{ font-family: Arial, sans-serif; padding:18px; }
-  h2{ margin:0 0 6px; }
-  .meta{ color:#444; margin-bottom:14px; }
-  table{ width:100%; border-collapse:collapse; margin:10px 0 18px; }
-  th,td{ border:1px solid #ccc; padding:6px 8px; text-align:left; }
-  th{ background:#f3f3f3; }
-</style>
-</head>
-<body>
-  <h2>QSys Report Summary</h2>
-  <div class="meta">${meta}</div>
-
-  <h3>Waitlist Count (WAITING)</h3>
-  ${document.querySelector("#tblWaitlist")?.closest("table")?.outerHTML || ""}
-
-  <h3>Seated Count (SEATED)</h3>
-  ${document.querySelector("#tblSeated")?.closest("table")?.outerHTML || ""}
-
-  <h3>Average Waiting Time</h3>
-  ${document.querySelector("#tblAvgWait")?.closest("table")?.outerHTML || ""}
-
-  <h3>Pax Totals</h3>
-  ${document.querySelector("#tblPax")?.closest("table")?.outerHTML || ""}
-
-  <h3>Priority Registrations</h3>
-  ${document.querySelector("#tblPri")?.closest("table")?.outerHTML || ""}
-</body>
-</html>`;
-        const w = window.open("", "_blank");
-        if(!w) return toast("Reports", "Pop-up blocked (allow pop-ups).", "warn");
-        w.document.open();
-        w.document.write(html);
-        w.document.close();
-        w.focus();
-        w.print();
-      }
-
-
-
-      async function uploadNow() {
-        const btn = $("btnUploadNow");
-        const loader = $("uploadLoader");
-        const loaderText = $("uploadLoaderText");
-        let pct = 0;
-        let pctTimer = null;
-        try {
-          const scopeInfo = computeScopeRange();
-          const waitRef = getWaitRef();
-          const reportKeys = getSelectedUploadReportKeys();
-          if (!reportKeys.length) return toast("Upload", "Select at least one report to upload.", "warn");
-          const scopeLabel = computeScopeLabel(scopeInfo, UPLOAD_ACTIVE_PRESET || REPORT_ACTIVE_PRESET);
-          const payload = {
-            from: scopeInfo.from,
-            to: scopeInfo.to,
-            waitRef,
-            scopeLabel,
-            reportKeys,
-          };
-          if (scopeInfo.scope === "last_hours") {
-            payload.sinceHours = scopeInfo.hours;
-            payload.sinceMs = scopeInfo.sinceMs;
-          }
-          if (btn) btn.disabled = true;
-          if (loader && loaderText) {
-            loader.classList.add("show");
-            loaderText.textContent = "Uploading... 0%";
-            pctTimer = setInterval(() => {
-              // Simulated progress while waiting for sync response.
-              pct = Math.min(95, pct + (pct < 60 ? 8 : 3));
-              loaderText.textContent = `Uploading... ${pct}%`;
-            }, 500);
-          }
-          $("uploadStatus").textContent = "Status: Uploading...";
-          const j = await jpost("/api/admin/upload", payload);
-          if (!j.ok) {
-            $("uploadStatus").textContent = "Status: Failed";
-            return toast("Upload", j.error || "Failed", "err");
-          }
-          if (loaderText) loaderText.textContent = "Uploading... 100%";
-          $("uploadStatus").textContent = "Status: Success";
-          toast("Upload", "Upload completed.", "ok");
-        } catch (e) {
-          $("uploadStatus").textContent = "Status: Failed";
-          toast("Upload", e?.message || "Upload failed.", "err");
-        } finally {
-          if (pctTimer) clearInterval(pctTimer);
-          if (loader) loader.classList.remove("show");
-          if (btn) btn.disabled = false;
-          loadUploadStatus();
-        }
-      }
-
-      async function loadUploadStatus() {
-        const setText = (id, txt) => { if ($(id)) $(id).textContent = txt; };
-        setText("uploadCfgReady", "Ready: Loading...");
-        setText("uploadCfgFolder", "Folder ID: Loading...");
-        setText("uploadCfgCreds", "Service Account Source: Loading...");
-        setText("uploadCfgFile", "Service Account File: Loading...");
-        setText("uploadLastAt", "Last Sync: Loading...");
-        setText("uploadLastResult", "Last Result: Loading...");
-        setText("uploadLastFiles", "Uploaded File IDs: Loading...");
-
-        try {
-          const j = await jget("/api/admin/upload/status");
-          if (!j?.ok) {
-            setText("uploadCfgReady", `Ready: Error (${j?.error || "Failed"})`);
-            setText("uploadCfgFolder", "Folder ID: -");
-            setText("uploadCfgCreds", "Service Account Source: -");
-            setText("uploadCfgFile", "Service Account File: -");
-            setText("uploadLastAt", "Last Sync: -");
-            setText("uploadLastResult", "Last Result: -");
-            setText("uploadLastFiles", "Uploaded File IDs: -");
-            return;
-          }
-
-          const c = j.config || {};
-          const mode = String(c.authMode || "service_account");
-          setText("uploadCfgReady", `Ready: ${c.ready ? "YES" : "NO"} (mode: ${mode})`);
-          setText("uploadCfgFolder", `Folder ID: ${c.folderIdSet ? String(c.folderId || "-") : "Missing"}`);
-          if (mode === "oauth") {
-            const o = c.oauth || {};
-            const readyBits = `clientId=${o.clientIdSet ? "Y" : "N"}, secret=${o.clientSecretSet ? "Y" : "N"}, refreshToken=${o.refreshTokenSet ? "Y" : "N"}`;
-            setText("uploadCfgCreds", `OAuth: ${readyBits}`);
-            setText("uploadCfgFile", `OAuth Redirect URI: ${String(o.redirectUri || "-")}`);
-          } else {
-            setText("uploadCfgCreds", `Service Account Source: ${String(c.serviceAccountSource || "missing")}`);
-            if (String(c.serviceAccountSource || "").includes("_file")) {
-              const p = String(c.serviceAccountFile || "-");
-              const exists = c.serviceAccountFileExists ? "exists" : "missing";
-              setText("uploadCfgFile", `Service Account File: ${p} (${exists})`);
-            } else {
-              setText("uploadCfgFile", "Service Account File: -");
-            }
-          }
-
-          const last = c.lastSync || null;
-          if (!last) {
-            setText("uploadLastAt", "Last Sync: Never");
-            setText("uploadLastResult", "Last Result: -");
-            setText("uploadLastFiles", "Uploaded File IDs: -");
-            return;
-          }
-
-          setText("uploadLastAt", `Last Sync: ${fmtTime(last.at)}`);
-          setText("uploadLastResult", `Last Result: ${last.ok ? "Success" : `Failed (${String(last.error || "Unknown error")})`}`);
-          const files = Array.isArray(last.uploaded) ? last.uploaded : [];
-          const ids = files.map(f => String(f?.id || "")).filter(Boolean);
-          setText("uploadLastFiles", `Uploaded File IDs: ${ids.length ? ids.join(", ") : "-"}`);
-        } catch (e) {
-          setText("uploadCfgReady", `Ready: Error (${String(e?.message || "Failed")})`);
-          setText("uploadCfgFolder", "Folder ID: -");
-          setText("uploadCfgCreds", "Service Account Source: -");
-          setText("uploadCfgFile", "Service Account File: -");
-          setText("uploadLastAt", "Last Sync: -");
-          setText("uploadLastResult", "Last Result: -");
-          setText("uploadLastFiles", "Uploaded File IDs: -");
-        }
-      }
-
       // ---------- wiring ----------
       document.querySelectorAll(".nav button[data-page]").forEach(btn => {
         btn.addEventListener("click", () => setActive(btn.dataset.page));
@@ -5431,7 +4995,7 @@ function printSummary(){
           renderAdminBranchSwitcher();
           syncAdminUrlState();
           await runWithContentLoading(
-            CURRENT_PAGE === "upload" ? "Loading upload data for the selected branch..." : "Switching branch...",
+            "Switching branch...",
             async () => {
               await refreshCurrentPage();
             }
@@ -5456,9 +5020,6 @@ function printSummary(){
       });
       document.querySelectorAll("[data-rep-preset]").forEach(btn => {
         btn.addEventListener("click", () => applyReportPreset(btn.getAttribute("data-rep-preset")));
-      });
-      document.querySelectorAll("[data-upload-preset]").forEach(btn => {
-        btn.addEventListener("click", () => applyUploadPreset(btn.getAttribute("data-upload-preset")));
       });
 
       ["repType","repScope","repDateSingle","repFrom","repTo","repRollValue","sumWaitRefType","sumWaitRefValue"].forEach(id=>{
@@ -5495,9 +5056,6 @@ function printSummary(){
       });
 
 
-      $("btnSumCsv")?.addEventListener("click", exportSummaryCsv);
-      $("btnSumPrint")?.addEventListener("click", printSummary);
-$("btnUploadNow").addEventListener("click", uploadNow);
       $("btnBackup")?.addEventListener("click", backupDb);
       $("btnBackupExport")?.addEventListener("click", exportBackupDb);
       $("btnOpenBackupFolder")?.addEventListener("click", openBackupFolder);
