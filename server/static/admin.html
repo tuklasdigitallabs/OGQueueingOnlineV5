@@ -2421,6 +2421,14 @@ async function jpost(url, body) {
         if (CURRENT_PAGE === "system") return loadSystemInfo();
       }
 
+      function pageLoadingLabel(page) {
+        const normalized = String(page || "dashboard").trim().toLowerCase();
+        if (normalized === "reports") return "Loading reports for the selected branch...";
+        if (normalized === "audit") return "Loading audit logs for the selected branch...";
+        if (normalized === "setup") return "Loading setup for the selected branch...";
+        return "Switching branch...";
+      }
+
       async function logoutAdmin() {
         const ok = confirm("Are you sure you want to logout?");
         if (!ok) return;
@@ -4975,6 +4983,7 @@ function renderDailySummaryPage(){
       $("adminBranchSwitch")?.addEventListener("change", async (ev) => {
         const branchId = String(ev.target?.value || "").trim();
         const prev = String(CURRENT_USER?.selectedBranchId || "").trim();
+        const targetPage = CURRENT_PAGE;
         if (!branchId || branchId === prev) return;
         try {
           const j = await jpost("/api/admin/select-branch", { branchId });
@@ -4987,9 +4996,10 @@ function renderDailySummaryPage(){
           renderAdminBranchSwitcher();
           syncAdminUrlState();
           await runWithContentLoading(
-            "Switching branch...",
+            pageLoadingLabel(targetPage),
             async () => {
-              await refreshCurrentPage();
+              await loadBasic();
+              setActive(targetPage);
             }
           );
           toast("Branch", `Switched to ${j.branch?.branchName || j.branch?.branchCode || "branch"}.`, "ok");
@@ -5162,6 +5172,8 @@ function renderDailySummaryPage(){
           }
         } catch (e) {
           console.error("[admin/boot]", e);
+        } finally {
+          setContentLoading(false);
         }
       })();
       setInterval(() => {
