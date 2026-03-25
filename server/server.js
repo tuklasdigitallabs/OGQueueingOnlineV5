@@ -2640,7 +2640,7 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   app.get("/display", (req, res) => {
   setPrivateSurfaceNoIndex(res);
   try {
-    const orientation = String(getAppSetting("display.orientation") || "landscape");
+    const orientation = String(getResolvedDisplaySettings(getRequestBranch(req))["display.orientation"] || "landscape");
     if (orientation === "portrait") {
       return res.redirect(302, pathWithBase("/display-portrait.html"));
     }
@@ -2665,7 +2665,7 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
     const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
     if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
     try {
-      const orientation = String(getAppSetting("display.orientation") || "landscape");
+      const orientation = String(getResolvedDisplaySettings(getRequestBranch(req))["display.orientation"] || "landscape");
       return res.redirect(302, buildDisplayEntryPath(branchCode, orientation));
     } catch {
       return res.redirect(302, buildDisplayEntryPath(branchCode, "landscape"));
@@ -3253,6 +3253,72 @@ function getAppSetting(key) {
   }
 }
 
+function getBranchSetting(branchId, key) {
+  const bid = String(branchId || "").trim();
+  const normalizedKey = String(key || "").trim();
+  if (!bid || !normalizedKey) return "";
+  try {
+    const row = db.prepare(`SELECT value FROM branch_settings WHERE branchId=? AND key=? LIMIT 1`).get(bid, normalizedKey);
+    return row ? String(row.value || "") : "";
+  } catch {
+    return "";
+  }
+}
+
+function setBranchSetting(branchId, key, value) {
+  const bid = String(branchId || "").trim();
+  const normalizedKey = String(key || "").trim();
+  if (!bid || !normalizedKey) return;
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO branch_settings(branchId, key, value, updatedAt)
+     VALUES(?,?,?,?)
+     ON CONFLICT(branchId, key) DO UPDATE SET value=excluded.value, updatedAt=excluded.updatedAt`
+  ).run(bid, normalizedKey, String(value || ""), now);
+}
+
+function getResolvedDisplaySettings(branch) {
+  const branchId = String(branch?.branchId || "").trim();
+  const showVideoRaw = branchId
+    ? getBranchSetting(branchId, "display.showVideo") || getAppSetting("display.showVideo")
+    : getAppSetting("display.showVideo");
+  const orientationRaw = branchId
+    ? getBranchSetting(branchId, "display.orientation") || getAppSetting("display.orientation")
+    : getAppSetting("display.orientation");
+  const mediaSourceDirRaw = branchId
+    ? getBranchSetting(branchId, "media.sourceDir") || getAppSetting("media.sourceDir")
+    : getAppSetting("media.sourceDir");
+
+  return {
+    "display.showVideo": String(showVideoRaw || "false").trim().toLowerCase() === "true" ? "true" : "false",
+    "display.orientation": String(orientationRaw || "landscape").trim().toLowerCase() === "portrait" ? "portrait" : "landscape",
+    "media.sourceDir": String(mediaSourceDirRaw || "").trim(),
+  };
+}
+
+function saveBranchDisplaySettings(branch, updates = {}) {
+  const branchId = String(branch?.branchId || "").trim();
+  if (!branchId) return false;
+  if (Object.prototype.hasOwnProperty.call(updates, "display.showVideo")) {
+    setBranchSetting(
+      branchId,
+      "display.showVideo",
+      String(updates["display.showVideo"]).trim().toLowerCase() === "true" ? "true" : "false"
+    );
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, "display.orientation")) {
+    setBranchSetting(
+      branchId,
+      "display.orientation",
+      String(updates["display.orientation"]).trim().toLowerCase() === "portrait" ? "portrait" : "landscape"
+    );
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, "media.sourceDir")) {
+    setBranchSetting(branchId, "media.sourceDir", String(updates["media.sourceDir"] || "").trim());
+  }
+  return true;
+}
+
 const DISPLAY_PAIR_CODES_KEY = "display.pairCodes";
 const DISPLAY_PAIRED_DEVICES_KEY = "display.pairedDevices";
 const DISPLAY_LAST_PAIR_CODE_KEY = "display.lastPairCode";
@@ -3419,15 +3485,11 @@ function requireDisplayAuth(req, res, next) {
 
 app.get("/api/display/settings", requireDisplayAuth, (req, res) => {
   try {
-    const showVideo = String(getAppSetting("display.showVideo") || "false");
-    const orientation = String(getAppSetting("display.orientation") || "landscape");
+    const settings = getResolvedDisplaySettings(getRequestBranch(req));
 
     res.json({
       ok: true,
-      settings: {
-        "display.showVideo": showVideo,
-        "display.orientation": orientation,
-      },
+      settings,
     });
   } catch (e) {
     console.error("[display/settings]", e);
@@ -3684,6 +3746,68 @@ app.post("/api/super-admin/features", requireSuperAdminApi, express.json(), (req
     }
   });
 
+  app.get("/api/admin/display-config", requirePerm("SETTINGS_MANAGE"), (req, res) => {
+    try {
+      const branch = getRequestBranch(req);
+      if (!branch?.branchId) return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+    } catch (e) {
+      console.error("[admin/display-config:get]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/admin/display-config", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
+    try {
+      const branch = getRequestBranch(req);
+      if (!branch?.branchId) return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+      const payload = req.body && typeof req.body === "object" ? req.body : {};
+      saveBranchDisplaySettings(branch, payload);
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "ADMIN_DISPLAY_CONFIG_UPDATE",
+        JSON.stringify({ actor: actorFromReq(req), branchCode: String(branch.branchCode || ""), keys: Object.keys(payload || {}) }),
+        Date.now()
+      );
+      emitChanged(app, db, "ADMIN_DISPLAY_CONFIG_UPDATE", { branchCode: String(branch.branchCode || "") });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+    } catch (e) {
+      console.error("[admin/display-config:post]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.get("/api/public/display-config", (req, res) => {
+    try {
+      const branchCode = String(req.query?.branchCode || "").trim().toUpperCase();
+      const branch = branchCode ? getBranchByCode(branchCode) : getRequestBranch(req);
+      if (!branch?.branchId) return res.status(404).json({ ok: false, error: "Branch not found." });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+    } catch (e) {
+      console.error("[public/display-config:get]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/public/display-config", express.json(), (req, res) => {
+    try {
+      const branchCode = String(req.body?.branchCode || req.query?.branchCode || "").trim().toUpperCase();
+      const branch = branchCode ? getBranchByCode(branchCode) : null;
+      if (!branch?.branchId) return res.status(404).json({ ok: false, error: "Branch not found." });
+      const payload = req.body && typeof req.body === "object" ? req.body : {};
+      saveBranchDisplaySettings(branch, payload);
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "PUBLIC_DISPLAY_CONFIG_UPDATE",
+        JSON.stringify({ actor: actorFromReq(req), branchCode, keys: Object.keys(payload || {}) }),
+        Date.now()
+      );
+      emitChanged(app, db, "PUBLIC_DISPLAY_CONFIG_UPDATE", { branchCode });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+    } catch (e) {
+      console.error("[public/display-config:post]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
 /* ---------- Admin: Media Source Folder ---------- */
 // Uses Electron native folder picker (preferred).
 // If Electron isn't available (running as plain node), it will return an error.
@@ -3749,13 +3873,16 @@ const win = (() => {
       return res.status(400).json({ ok: false, error: "Selected folder is not accessible." });
     }
 
-    setAppSetting("media.sourceDir", folder);
+    const branch = getRequestBranch(req);
+    if (!saveBranchDisplaySettings(branch, { "media.sourceDir": folder })) {
+      return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+    }
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
       "ADMIN_MEDIA_SOURCE_UPDATE",
-      JSON.stringify({ actor: actorFromReq(req), folder }),
+      JSON.stringify({ actor: actorFromReq(req), branchCode: getRequestBranchCode(req), folder }),
       Date.now()
     );
-    emitChanged(app, db, "ADMIN_MEDIA_SOURCE_UPDATE", { folder });
+    emitChanged(app, db, "ADMIN_MEDIA_SOURCE_UPDATE", { branchCode: getRequestBranchCode(req), folder });
 
     return res.json({ ok: true, folder });
   } catch (e) {
@@ -3767,13 +3894,16 @@ const win = (() => {
 app.post("/api/admin/media/source/clear", requirePerm("SETTINGS_MANAGE"), (req, res) => {
   try {
     const now = Date.now();
-    setAppSetting("media.sourceDir", "");
+    const branch = getRequestBranch(req);
+    if (!saveBranchDisplaySettings(branch, { "media.sourceDir": "" })) {
+      return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+    }
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
       "ADMIN_MEDIA_SOURCE_UPDATE",
-      JSON.stringify({ actor: actorFromReq(req), folder: "" }),
+      JSON.stringify({ actor: actorFromReq(req), branchCode: getRequestBranchCode(req), folder: "" }),
       now
     );
-    emitChanged(app, db, "ADMIN_MEDIA_SOURCE_UPDATE", { folder: "" });
+    emitChanged(app, db, "ADMIN_MEDIA_SOURCE_UPDATE", { branchCode: getRequestBranchCode(req), folder: "" });
     return res.json({ ok: true });
   } catch (e) {
     console.error("[admin/media/source/clear]", e);
@@ -9195,7 +9325,7 @@ function listVideoFilesIn(dirAbs) {
 
 app.get("/media/custom/:name", requireDisplayAuth, (req, res) => {
   try {
-    const base = String(getAppSetting("media.sourceDir") || "").trim();
+    const base = String(getResolvedDisplaySettings(getRequestBranch(req))["media.sourceDir"] || "").trim();
     if (!base) return res.status(404).end();
 
     const name = String(req.params.name || "");
@@ -9226,7 +9356,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
     const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
 
     // 1) Try custom folder
-    const sourceDir = String(getAppSetting("media.sourceDir") || "").trim();
+    const sourceDir = String(getResolvedDisplaySettings(getRequestBranch(req))["media.sourceDir"] || "").trim();
     if (sourceDir) {
       try {
         if (fs.existsSync(sourceDir) && fs.statSync(sourceDir).isDirectory()) {

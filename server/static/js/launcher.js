@@ -14,7 +14,9 @@
     localTime: $("localTime"),
     serverUrlValue: $("serverUrlValue"),
     branchCodeInput: $("branchCodeInput"),
+    displayShowVideoInput: $("displayShowVideoInput"),
     displayModeInput: $("displayModeInput"),
+    mediaSourceValue: $("mediaSourceValue"),
     displayTargetInput: $("displayTargetInput"),
     resolvedDisplayUrl: $("resolvedDisplayUrl"),
     agentConfigStatus: $("agentConfigStatus"),
@@ -35,6 +37,7 @@
     launcherConfig: null,
     displayTargets: [],
     availableBranches: [],
+    displaySettings: null,
   };
 
   function normalizeServerUrl(serverUrl) {
@@ -85,6 +88,7 @@
     return {
       serverUrl: HARD_CODED_SERVER_URL,
       branchCode: normalizeBranchCode(el.branchCodeInput?.value),
+      displayShowVideo: String(el.displayShowVideoInput?.value || "false") === "true" ? "true" : "false",
       displayMode: normalizeDisplayMode(el.displayModeInput?.value),
       targetDisplayId: getSelectedDisplayTargetId(),
     };
@@ -139,6 +143,22 @@
     el.resolvedDisplayUrl.textContent = buildResolvedDisplayUrl(config);
   }
 
+  function renderDisplaySettings(settings) {
+    state.displaySettings = settings || null;
+    if (el.displayShowVideoInput) {
+      el.displayShowVideoInput.value = String(settings?.["display.showVideo"] ?? "false");
+    }
+    if (el.displayModeInput) {
+      el.displayModeInput.value = normalizeDisplayMode(settings?.["display.orientation"] || state.launcherConfig?.displayMode);
+    }
+    if (el.mediaSourceValue) {
+      const mediaSource = String(settings?.["media.sourceDir"] || "").trim();
+      el.mediaSourceValue.textContent = mediaSource || "Bundled videos (default)";
+      el.mediaSourceValue.title = mediaSource || "Bundled videos (default)";
+    }
+    renderResolvedDisplayUrl();
+  }
+
   function renderLauncherConfig(config) {
     state.launcherConfig = config || null;
     if (el.serverUrlValue) el.serverUrlValue.textContent = HARD_CODED_SERVER_URL;
@@ -146,6 +166,11 @@
     if (el.displayModeInput) el.displayModeInput.value = normalizeDisplayMode(config?.displayMode);
     renderDisplayTargets(config?.targetDisplayId ?? null);
     renderResolvedDisplayUrl();
+    renderDisplaySettings(state.displaySettings || {
+      "display.showVideo": String(config?.displayShowVideo ?? "false"),
+      "display.orientation": normalizeDisplayMode(config?.displayMode),
+      "media.sourceDir": "",
+    });
     if (el.baseUrl) {
       el.baseUrl.textContent = HARD_CODED_SERVER_URL;
     }
@@ -336,6 +361,35 @@
     renderLauncherConfig(res.config || {});
   }
 
+  async function loadRemoteDisplaySettings(branchCode, syncLocalConfig) {
+    const normalizedBranchCode = normalizeBranchCode(branchCode);
+    if (!normalizedBranchCode) {
+      renderDisplaySettings(null);
+      return null;
+    }
+    const res = await fetch(`${HARD_CODED_SERVER_URL}/api/public/display-config?branchCode=${encodeURIComponent(normalizedBranchCode)}`, {
+      cache: "no-store",
+    });
+    const j = await safeJson(res);
+    if (!res.ok || !j?.ok) throw new Error(j?.error || "Unable to load branch display settings");
+    renderDisplaySettings(j.settings || null);
+
+    if (syncLocalConfig && window.qsys?.saveLauncherConfig) {
+      const localPayload = {
+        ...(state.launcherConfig || currentConfigFromForm()),
+        serverUrl: HARD_CODED_SERVER_URL,
+        branchCode: normalizedBranchCode,
+        displayMode: normalizeDisplayMode(j.settings?.["display.orientation"]),
+        targetDisplayId: getSelectedDisplayTargetId(),
+      };
+      const saved = await window.qsys.saveLauncherConfig(localPayload);
+      if (saved?.ok) {
+        state.launcherConfig = saved.config || localPayload;
+      }
+    }
+    return j.settings || null;
+  }
+
   async function saveLauncherConfig() {
     if (!window.qsys?.saveLauncherConfig) return;
     const payload = currentConfigFromForm();
@@ -344,12 +398,27 @@
       return;
     }
     setAgentStatus("Saving display setup...", false);
+    const remoteRes = await fetch(`${HARD_CODED_SERVER_URL}/api/public/display-config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        branchCode: payload.branchCode,
+        "display.showVideo": payload.displayShowVideo,
+        "display.orientation": payload.displayMode,
+      }),
+    });
+    const remoteJson = await safeJson(remoteRes);
+    if (!remoteRes.ok || !remoteJson?.ok) {
+      setAgentStatus(remoteJson?.error || "Failed to save branch display settings.", true);
+      return;
+    }
     const res = await window.qsys.saveLauncherConfig(payload);
     if (!res?.ok) {
-      setAgentStatus(res?.error || "Failed to save display setup.", true);
+      setAgentStatus(res?.error || "Failed to save local display setup.", true);
       return;
     }
     renderLauncherConfig(res.config || payload);
+    renderDisplaySettings(remoteJson.settings || null);
     setAgentStatus("Display setup saved for this PC.", false);
     const ok = await pingHealth();
     if (ok) await fetchBranchInfoBestEffort();
@@ -380,6 +449,7 @@
         setAgentStatus("Reloading display setup...", false);
         await loadLauncherConfig();
         await loadDisplayTargets();
+        await loadRemoteDisplaySettings(state.launcherConfig?.branchCode || el.branchCodeInput?.value, true);
         setAgentStatus("Display setup reloaded.", false);
       } catch (err) {
         setAgentStatus(err?.message || "Failed to reload display setup.", true);
@@ -387,7 +457,16 @@
     });
 
     el.serverUrlInput?.addEventListener("input", renderResolvedDisplayUrl);
+    el.branchCodeInput?.addEventListener("change", async () => {
+      renderResolvedDisplayUrl();
+      try {
+        await loadRemoteDisplaySettings(el.branchCodeInput?.value, true);
+      } catch (err) {
+        setAgentStatus(err?.message || "Failed to load branch display settings.", true);
+      }
+    });
     el.branchCodeInput?.addEventListener("change", renderResolvedDisplayUrl);
+    el.displayShowVideoInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.displayModeInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.displayTargetInput?.addEventListener("change", renderResolvedDisplayUrl);
     return true;
@@ -478,6 +557,7 @@
     try {
       await loadLauncherConfig();
       await loadDisplayTargets();
+      await loadRemoteDisplaySettings(state.launcherConfig?.branchCode || el.branchCodeInput?.value, true);
       setAgentStatus("Configure the online branch display URL and the monitor to use on this PC.", false);
     } catch (err) {
       setAgentStatus(err?.message || "Failed to load display setup.", true);

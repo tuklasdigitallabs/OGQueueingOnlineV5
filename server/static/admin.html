@@ -963,13 +963,13 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               <div class="setup-pane hidden" id="setup-pane-display">
                 <div class="two" style="margin-top:10px;">
                   <div>
-                    <label>Display Mode (Kiosk)</label>
+                    <label>Display Experience</label>
                     <select id="displayShowVideo">
                       <option value="false">Queue Only (No Video)</option>
                       <option value="true">Video Mode</option>
                     </select>
                     <div class="muted2" style="margin-top:6px;">
-                      Video Mode shows the video section and hides the 6-grid queue layout.
+                      Saved per branch and shared with the Electron launcher.
                     </div>
                   </div>
 
@@ -980,21 +980,8 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <option value="portrait">Portrait</option>
                     </select>
                     <div class="muted2" style="margin-top:6px;">
-                      Affects the queue grid layout (Queue Only mode).
+                      Saved per branch and shared with the Electron launcher.
                     </div>
-                  </div>
-                </div>
-
-                <div style="margin-top:10px; border-top:1px solid var(--line); padding-top:10px;">
-                  <label>Display Pairing (One-time Code)</label>
-                  <div class="row" style="margin-top:8px; gap:10px; align-items:center;">
-                    <button class="btn" id="btnGenerateDisplayPairCode">Generate Pair Code</button>
-                    <button class="btn danger" id="btnRevokeAllDisplayPairing">Revoke Pairing</button>
-                    <span id="displayPairCodeValue" class="pill">No active code</span>
-                    <span id="displayPairCodeExpiry" class="muted2"></span>
-                  </div>
-                  <div class="help" style="margin-top:6px;">
-                    Open <b>/display</b> on the TV screen, enter this one-time code, then it stays paired.
                   </div>
                 </div>
 
@@ -1008,8 +995,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                   </div>
 
                   <div class="muted2" style="margin-top:6px;">
-                    If empty, the display uses bundled videos under <b>/static/media</b>.
-                    If set, the display plays videos from the selected folder.
+                    Saved per branch and shared with the Electron launcher. If empty, the display uses bundled videos under <b>/static/media</b>.
                   </div>
                 </div>
               </div>
@@ -2129,8 +2115,6 @@ async function jpost(url, body) {
         if (authBtn) authBtn.style.display = canUseInternal("integrations") ? "" : "none";
         const branchUnlock = $("btnUnlockBranchCode");
         if (branchUnlock) branchUnlock.style.display = canUseInternal("branch") ? "" : "none";
-        const revokeDisplay = $("btnRevokeAllDisplayPairing");
-        if (revokeDisplay) revokeDisplay.style.display = canUseInternal("devices") ? "" : "none";
         const createRole = $("newUserRole");
         if (createRole) {
           Array.from(createRole.options || []).forEach((opt) => {
@@ -2953,12 +2937,9 @@ function downloadQrNow() {
         try {
           const s = await jget("/api/admin/settings");
           if (s.ok) SETTINGS_CACHE = s.settings || {};
-          $("mediaSourceDir").value = SETTINGS_CACHE?.["media.sourceDir"] || "";
           $("maxPax").value = SETTINGS_CACHE?.maxPax ?? 1000;
           $("autoCloseDay").value = String(SETTINGS_CACHE?.autoCloseDay ?? "true");
           $("allowOverride").value = String(SETTINGS_CACHE?.allowOverride ?? "true");
-          $("displayShowVideo").value = String(SETTINGS_CACHE?.["display.showVideo"] ?? "true");
-          $("displayOrientation").value = String(SETTINGS_CACHE?.["display.orientation"] ?? "portrait");
           $("gdriveFolderId").value = SETTINGS_CACHE?.["gdrive.folderId"] || "";
           $("gdriveAuthMode").value = SETTINGS_CACHE?.["gdrive.authMode"] || "oauth";
           $("gdriveOauthClientId").value = SETTINGS_CACHE?.["gdrive.oauthClientId"] || "";
@@ -2975,71 +2956,24 @@ function downloadQrNow() {
           $("gdriveSetupStatus").textContent = "Status: Ready to test.";
           updateGdriveAuthModeUi();
           loadSetupUploadSummary();
-          loadDisplayPairingStatus();
-
 
         } catch (e) {
           // still usable
           toast("Setup", "Failed to load app settings (using defaults).", "warn");
         }
+        try {
+          const d = await jget("/api/admin/display-config");
+          if (d?.ok) {
+            $("mediaSourceDir").value = d.settings?.["media.sourceDir"] || "";
+            $("displayShowVideo").value = String(d.settings?.["display.showVideo"] ?? "false");
+            $("displayOrientation").value = String(d.settings?.["display.orientation"] ?? "landscape");
+          }
+        } catch {
+          toast("Setup", "Failed to load branch display settings.", "warn");
+        }
         if (SETUP_ACTIVE_PANE === "qr") loadQrSetup();
         refreshQrPreview();
 
-      }
-
-      function renderDisplayPairCode(info) {
-        const codeEl = $("displayPairCodeValue");
-        const expEl = $("displayPairCodeExpiry");
-        if (!codeEl || !expEl) return;
-        if (!info || !info.code) {
-          codeEl.textContent = "No active code";
-          expEl.textContent = "";
-          return;
-        }
-        codeEl.textContent = `Code: ${String(info.code)}`;
-        const branchCode = String(info.branchCode || "").trim();
-        const branchName = String(info.branchName || "").trim();
-        const branchLabel = branchCode
-          ? (branchName ? `${branchName} (${branchCode})` : branchCode)
-          : "";
-        expEl.textContent = branchLabel
-          ? `For branch: ${branchLabel}. Active until used or revoked`
-          : "Active until used or revoked";
-      }
-
-      async function loadDisplayPairingStatus() {
-        try {
-          const j = await jget("/api/admin/display/devices");
-          if (!j.ok) return;
-          renderDisplayPairCode(j.lastPairCode || null);
-        } catch {}
-      }
-
-      async function generateDisplayPairCode() {
-        try {
-          const j = await jpost("/api/admin/display/pair-code", {});
-          if (!j.ok) return toast("Display Pairing", j.error || "Failed to generate code.", "err");
-          renderDisplayPairCode({ code: j.code, createdAt: j.createdAt });
-          toast("Display Pairing", `Pair code ${j.code} generated.`, "ok");
-        } catch {
-          toast("Display Pairing", "Request failed.", "err");
-        }
-      }
-
-      async function revokeAllDisplayPairing() {
-        const ok = confirm(
-          "Revoke all paired display screens now?\n\nAll TV/display sessions will be disconnected and must pair again.",
-        );
-        if (!ok) return;
-        try {
-          const j = await jpost("/api/admin/display/devices/revoke-all", {});
-          if (!j.ok) return toast("Display Pairing", j.error || "Failed to revoke pairing.", "err");
-          renderDisplayPairCode(null);
-          toast("Display Pairing", `Revoked ${Number(j.revoked || 0)} paired screen(s).`, "ok");
-          loadDisplayPairingStatus();
-        } catch {
-          toast("Display Pairing", "Request failed.", "err");
-        }
       }
 
       function updateGdriveAuthModeUi() {
@@ -3336,12 +3270,17 @@ async function clearGdriveOAuth() {
         const oauthRefreshTokenSafe = getOauthRefreshTokenRaw();
 
         try {
+          const jDisplay = await jpost("/api/admin/display-config", {
+            "display.showVideo": String($("displayShowVideo").value) === "true" ? "true" : "false",
+            "display.orientation": String($("displayOrientation").value) === "portrait" ? "portrait" : "landscape",
+            "media.sourceDir": String($("mediaSourceDir").value || "").trim(),
+          });
+          if (!jDisplay.ok) return toast("Setup", jDisplay.error || "Failed saving display settings.", "err");
+
           const j2 = await jpost("/api/admin/settings", {
             maxPax: String(Number.isFinite(maxPax) ? maxPax : 50),
             autoCloseDay: String(autoCloseDay),
             allowOverride: String(allowOverride),
-            "display.showVideo": String($("displayShowVideo").value) === "true" ? "true" : "false",
-            "display.orientation": String($("displayOrientation").value) === "portrait" ? "portrait" : "landscape",
             "gdrive.authMode": String($("gdriveAuthMode").value || "oauth"),
             "gdrive.folderId": String($("gdriveFolderId").value || "").trim(),
             "gdrive.oauthClientId": String($("gdriveOauthClientId").value || "").trim(),
@@ -5073,8 +5012,6 @@ function renderDailySummaryPage(){
 
       $("btnSaveSetup").addEventListener("click", saveSetup);
       $("btnUnlockBranchCode").addEventListener("click", unlockAndChangeBranchCode);
-      $("btnGenerateDisplayPairCode")?.addEventListener("click", generateDisplayPairCode);
-      $("btnRevokeAllDisplayPairing")?.addEventListener("click", revokeAllDisplayPairing);
       document.querySelectorAll("[data-setup-pane]").forEach(btn => {
         btn.addEventListener("click", () => setActiveSetupPane(btn.getAttribute("data-setup-pane")));
       });
