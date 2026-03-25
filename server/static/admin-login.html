@@ -119,6 +119,11 @@
     }
     button:hover{ opacity: .95; }
     button:active{ transform: translateY(1px); }
+    button:disabled{
+      opacity:.7;
+      cursor: wait;
+      transform:none;
+    }
     .err{
       margin-top: 14px;
       font-size: 13.5px;
@@ -164,6 +169,9 @@
     const $p = document.getElementById("pin");
     const $e = document.getElementById("err");
     const $dot = document.querySelector(".dot");
+    const $btn = document.getElementById("btn");
+    const BTN_IDLE = "Login";
+    const BTN_BUSY = "Signing In...";
     function getPathBranchCode() {
       try {
         const parts = String(window.location.pathname || "").split("/").filter(Boolean);
@@ -200,27 +208,50 @@
       if (cleaned !== $p.value) $p.value = cleaned;
     });
 
+    function setSubmitting(submitting) {
+      if ($btn) {
+        $btn.disabled = !!submitting;
+        $btn.textContent = submitting ? BTN_BUSY : BTN_IDLE;
+      }
+      if ($n) $n.disabled = !!submitting;
+      if ($p) $p.disabled = !!submitting;
+    }
+
     [$n, $p].forEach(el => el.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") document.getElementById("btn").click();
+      if (ev.key === "Enter") $btn.click();
     }));
 
-    document.getElementById("btn").addEventListener("click", async () => {
+    $btn.addEventListener("click", async () => {
       $e.textContent = "";
+      const fullName = String($n.value || "").trim();
+      const pin = String($p.value || "").trim();
+      if (!fullName || !pin) {
+        $e.textContent = "Enter username and PIN.";
+        return;
+      }
+      setSubmitting(true);
       try {
         const code = currentBranchCode();
         const target = code ? window.appUrl(`/api/admin/auth/login?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/admin/auth/login");
         const r = await fetch(target, {
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ fullName: $n.value, pin: $p.value, ...(code ? { branchCode: code } : {}) })
+          body: JSON.stringify({ fullName, pin, ...(code ? { branchCode: code } : {}) })
         });
-        const j = await r.json();
+        let j = null;
+        try {
+          j = await r.json();
+        } catch {
+          j = { ok: false, error: "Unexpected server response." };
+        }
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
         // Server already enforces ADMIN role on /api/admin/auth/login
 
         location.href = buildAdminEntryUrl(j.branch?.branchCode);
       } catch {
         $e.textContent = "Server error";
+      } finally {
+        setSubmitting(false);
       }
     });
 

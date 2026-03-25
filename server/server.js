@@ -1629,6 +1629,27 @@ app.get("/static/js/:file", (req, res) => {
     else if (scope === "staff") delete req.session.staffUser;
     else delete req.session.user;
   }
+  function clearSessionCookie(res) {
+    try {
+      if (!res || typeof res.clearCookie !== "function") return;
+      res.clearCookie("qsys.sid", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
+        path: "/",
+      });
+    } catch {}
+  }
+  function destroySessionAndRespond(req, res) {
+    if (!req?.session || typeof req.session.destroy !== "function") {
+      clearSessionCookie(res);
+      return res.json({ ok: true });
+    }
+    return req.session.destroy(() => {
+      clearSessionCookie(res);
+      res.json({ ok: true });
+    });
+  }
   function updateSessionSelectedBranch(req, scope, branchId) {
     if (!req?.session) return null;
     const nextBranchId = String(branchId || "").trim();
@@ -2133,24 +2154,24 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // Logout (separated)
   app.post("/api/staff/auth/logout", (req, res) => {
     try { clearSessionUser(req, "staff"); } catch {}
-    res.json({ ok: true });
+    return destroySessionAndRespond(req, res);
   });
 
   app.post("/api/admin/auth/logout", (req, res) => {
     try { clearSessionUser(req, "admin"); } catch {}
-    res.json({ ok: true });
+    return destroySessionAndRespond(req, res);
   });
 
   app.post("/api/super-admin/auth/logout", (req, res) => {
     try { clearSessionUser(req, "admin"); } catch {}
     try { clearSessionUser(req, "staff"); } catch {}
-    res.json({ ok: true });
+    return destroySessionAndRespond(req, res);
   });
 
   // Legacy logout: destroys everything (kept for older pages)
   app.post("/api/auth/logout", (req, res) => {
     try {
-      req.session.destroy(() => res.json({ ok: true }));
+      return destroySessionAndRespond(req, res);
     } catch (e) {
       res.status(500).json({ ok: false, error: "Server error" });
     }
