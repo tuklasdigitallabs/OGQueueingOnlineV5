@@ -13,6 +13,7 @@ const fs = require("fs");
 const { Server } = require("socket.io");
 const { randomUUID, createSign, createVerify, randomBytes, createHash } = require("crypto");
 const bcrypt = require("bcryptjs");
+const multer = require("multer");
 const { openDb } = require("./db");
 const session = require("express-session");
 const os = require("os");
@@ -832,6 +833,23 @@ function ensureMultiBranchFoundationSchema(db) {
       updatedAt INTEGER NOT NULL,
       PRIMARY KEY (branchId, key)
     );
+
+    CREATE TABLE IF NOT EXISTS media_assets (
+      id TEXT PRIMARY KEY,
+      scopeType TEXT NOT NULL,
+      branchId TEXT,
+      branchCode TEXT,
+      fileName TEXT NOT NULL,
+      storedName TEXT NOT NULL,
+      relativePath TEXT NOT NULL,
+      mimeType TEXT,
+      sizeBytes INTEGER NOT NULL DEFAULT 0,
+      isActive INTEGER NOT NULL DEFAULT 1,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_media_assets_scopeType ON media_assets(scopeType);
+    CREATE INDEX IF NOT EXISTS idx_media_assets_branchId ON media_assets(branchId);
   `);
 }
 
@@ -1249,6 +1267,14 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
 
   app.use(express.json({ limit: "256kb" }));
   app.use(express.urlencoded({ extended: true, limit: "256kb" }));
+
+  const mediaUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      files: 20,
+      fileSize: 1024 * 1024 * 300,
+    },
+  });
 
   app.use((req, res, next) => {
     if (!isActivationEnforced()) return next();
@@ -9323,6 +9349,240 @@ function listVideoFilesIn(dirAbs) {
   }
 }
 
+function getManagedMediaRoot(baseDir) {
+  return path.join(baseDir, "media-library");
+}
+
+function ensureManagedMediaDir(dirAbs) {
+  try {
+    fs.mkdirSync(dirAbs, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getGeneralMediaDir(baseDir) {
+  return path.join(getManagedMediaRoot(baseDir), "general");
+}
+
+function getBranchMediaDir(baseDir, branchCode) {
+  return path.join(getManagedMediaRoot(baseDir), "branches", String(branchCode || "").trim().toUpperCase());
+}
+
+function sanitizeMediaFileName(name) {
+  const raw = String(name || "").trim();
+  const base = path.basename(raw).replace(/[^\w.\- ]+/g, "_").replace(/\s+/g, " ").trim();
+  return base || `media-${Date.now()}.bin`;
+}
+
+function listManagedMediaAssets(scopeType, branch) {
+  const normalizedScope = String(scopeType || "").trim().toUpperCase();
+  if (normalizedScope === "BRANCH") {
+    const branchId = String(branch?.branchId || "").trim();
+    if (!branchId) return [];
+    return db.prepare(
+      `SELECT id, scopeType, branchId, branchCode, fileName, storedName, relativePath, mimeType, sizeBytes, isActive, createdAt, updatedAt
+       FROM media_assets
+       WHERE scopeType='BRANCH' AND branchId=? AND isActive=1
+       ORDER BY createdAt ASC, fileName ASC`
+    ).all(branchId);
+  }
+  return db.prepare(
+    `SELECT id, scopeType, branchId, branchCode, fileName, storedName, relativePath, mimeType, sizeBytes, isActive, createdAt, updatedAt
+     FROM media_assets
+     WHERE scopeType='GENERAL' AND isActive=1
+     ORDER BY createdAt ASC, fileName ASC`
+  ).all();
+}
+
+function getManagedMediaAssetById(id) {
+  return db.prepare(
+    `SELECT id, scopeType, branchId, branchCode, fileName, storedName, relativePath, mimeType, sizeBytes, isActive, createdAt, updatedAt
+     FROM media_assets
+     WHERE id=? LIMIT 1`
+  ).get(String(id || "").trim());
+}
+
+function normalizeMediaScope(raw) {
+  return String(raw || "").trim().toUpperCase() === "BRANCH" ? "BRANCH" : "GENERAL";
+}
+
+function getMediaScopeContext(req) {
+  const scopeType = normalizeMediaScope(req.query?.scope || req.body?.scopeType || req.body?.scope);
+  const branch = scopeType === "BRANCH" ? getRequestBranch(req) : null;
+  return { scopeType, branch };
+}
+
+app.get("/api/admin/media/assets", requirePerm("SETTINGS_MANAGE"), (req, res) => {
+  try {
+    const { scopeType, branch } = getMediaScopeContext(req);
+    if (scopeType === "BRANCH" && !branch?.branchId) {
+      return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+    }
+    const dir = scopeType === "BRANCH"
+      ? getBranchMediaDir(baseDir, branch?.branchCode)
+      : getGeneralMediaDir(baseDir);
+    return res.json({
+      ok: true,
+      scopeType,
+      branch: branch || null,
+      folderPath: dir,
+      exists: fs.existsSync(dir),
+      files: listManagedMediaAssets(scopeType, branch),
+    });
+  } catch (e) {
+    console.error("[admin/media/assets:get]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/admin/media/folder", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
+  try {
+    const { scopeType, branch } = getMediaScopeContext(req);
+    if (scopeType === "BRANCH" && !branch?.branchId) {
+      return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+    }
+    const dir = scopeType === "BRANCH"
+      ? getBranchMediaDir(baseDir, branch?.branchCode)
+      : getGeneralMediaDir(baseDir);
+    if (!ensureManagedMediaDir(dir)) {
+      return res.status(500).json({ ok: false, error: "Failed to create media folder." });
+    }
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "ADMIN_MEDIA_FOLDER_CREATE",
+      JSON.stringify({ actor: actorFromReq(req), scopeType, branchCode: String(branch?.branchCode || "") }),
+      Date.now()
+    );
+    return res.json({ ok: true, scopeType, branch: branch || null, folderPath: dir });
+  } catch (e) {
+    console.error("[admin/media/folder:post]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.array("files", 20), (req, res) => {
+  try {
+    const { scopeType, branch } = getMediaScopeContext(req);
+    if (scopeType === "BRANCH" && !branch?.branchId) {
+      return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+    }
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (!files.length) return res.status(400).json({ ok: false, error: "No files uploaded." });
+
+    const dir = scopeType === "BRANCH"
+      ? getBranchMediaDir(baseDir, branch?.branchCode)
+      : getGeneralMediaDir(baseDir);
+    if (!ensureManagedMediaDir(dir)) {
+      return res.status(500).json({ ok: false, error: "Failed to prepare media folder." });
+    }
+
+    const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
+    const now = Date.now();
+    const inserted = [];
+    const insertStmt = db.prepare(
+      `INSERT INTO media_assets(id, scopeType, branchId, branchCode, fileName, storedName, relativePath, mimeType, sizeBytes, isActive, createdAt, updatedAt)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`
+    );
+
+    for (const file of files) {
+      const originalName = sanitizeMediaFileName(file.originalname || file.fieldname || "video.bin");
+      if (!exts.test(originalName)) continue;
+      const storedName = `${Date.now()}-${randomUUID()}-${originalName}`;
+      const absPath = path.join(dir, storedName);
+      fs.writeFileSync(absPath, file.buffer);
+      const relativePath = path.relative(getManagedMediaRoot(baseDir), absPath).replace(/\\/g, "/");
+      const id = randomUUID();
+      insertStmt.run(
+        id,
+        scopeType,
+        scopeType === "BRANCH" ? String(branch?.branchId || "") : null,
+        scopeType === "BRANCH" ? String(branch?.branchCode || "") : null,
+        originalName,
+        storedName,
+        relativePath,
+        String(file.mimetype || ""),
+        Number(file.size || 0),
+        1,
+        now,
+        now
+      );
+      inserted.push(getManagedMediaAssetById(id));
+    }
+
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "ADMIN_MEDIA_UPLOAD",
+      JSON.stringify({
+        actor: actorFromReq(req),
+        scopeType,
+        branchCode: String(branch?.branchCode || ""),
+        fileCount: inserted.length,
+      }),
+      now
+    );
+    emitChanged(app, db, "ADMIN_MEDIA_UPLOAD", { branchCode: String(branch?.branchCode || "") });
+    return res.json({ ok: true, scopeType, branch: branch || null, files: inserted });
+  } catch (e) {
+    console.error("[admin/media/upload]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/admin/media/delete", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
+  try {
+    const id = String(req.body?.id || "").trim();
+    if (!id) return res.status(400).json({ ok: false, error: "Media id is required." });
+    const row = getManagedMediaAssetById(id);
+    if (!row?.id) return res.status(404).json({ ok: false, error: "Media file not found." });
+    const absPath = path.join(getManagedMediaRoot(baseDir), String(row.relativePath || ""));
+    try {
+      if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
+    } catch {}
+    db.prepare(`DELETE FROM media_assets WHERE id=?`).run(id);
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "ADMIN_MEDIA_DELETE",
+      JSON.stringify({ actor: actorFromReq(req), id, scopeType: row.scopeType, branchCode: row.branchCode || "" }),
+      Date.now()
+    );
+    emitChanged(app, db, "ADMIN_MEDIA_DELETE", { branchCode: String(row.branchCode || "") });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[admin/media/delete]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.get("/api/admin/media/file/:id", requirePerm("SETTINGS_MANAGE"), (req, res) => {
+  try {
+    const row = getManagedMediaAssetById(req.params.id);
+    if (!row?.id) return res.status(404).end();
+    const absPath = path.join(getManagedMediaRoot(baseDir), String(row.relativePath || ""));
+    if (!fs.existsSync(absPath)) return res.status(404).end();
+    return res.sendFile(absPath);
+  } catch (e) {
+    console.error("[admin/media/file]", e);
+    return res.status(500).end();
+  }
+});
+
+app.get("/media/library/:id/:name", requireDisplayAuth, (req, res) => {
+  try {
+    const row = getManagedMediaAssetById(req.params.id);
+    if (!row?.id || Number(row.isActive || 0) !== 1) return res.status(404).end();
+    const branch = getRequestBranch(req);
+    const branchId = String(branch?.branchId || "").trim();
+    if (String(row.scopeType || "") === "BRANCH" && String(row.branchId || "").trim() !== branchId) {
+      return res.status(403).end();
+    }
+    const absPath = path.join(getManagedMediaRoot(baseDir), String(row.relativePath || ""));
+    if (!fs.existsSync(absPath)) return res.status(404).end();
+    return res.sendFile(absPath);
+  } catch (e) {
+    console.error("[media/library]", e);
+    return res.status(500).end();
+  }
+});
+
 app.get("/media/custom/:name", requireDisplayAuth, (req, res) => {
   try {
     const base = String(getResolvedDisplaySettings(getRequestBranch(req))["media.sourceDir"] || "").trim();
@@ -9354,6 +9614,25 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
 
   try {
     const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
+    const branch = getRequestBranch(req);
+    const generalAssets = listManagedMediaAssets("GENERAL", null).map((row) => ({
+      url: `/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`,
+      scopeType: "GENERAL",
+    }));
+    const branchAssets = listManagedMediaAssets("BRANCH", branch).map((row) => ({
+      url: `/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`,
+      scopeType: "BRANCH",
+    }));
+    const mergedManaged = [...generalAssets, ...branchAssets].map((row) => row.url);
+    if (mergedManaged.length) {
+      return res.json({
+        ok: true,
+        files: mergedManaged,
+        source: "managed",
+        generalCount: generalAssets.length,
+        branchCount: branchAssets.length,
+      });
+    }
 
     // 1) Try custom folder
     const sourceDir = String(getResolvedDisplaySettings(getRequestBranch(req))["media.sourceDir"] || "").trim();

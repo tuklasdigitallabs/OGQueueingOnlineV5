@@ -815,6 +815,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         <div class="nav">
           <button class="active" data-page="dashboard">Dashboard</button>
           <button data-page="setup">Setup</button>
+          <button data-page="media">Media</button>
           <button data-page="branches">Branches</button>
           <button data-page="users">Users</button>
           <button data-page="permissions">Permissions</button>
@@ -984,20 +985,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     </div>
                   </div>
                 </div>
-
-                <div style="margin-top:10px;">
-                  <label>Media Source Folder (Videos)</label>
-                  <input id="mediaSourceDir" disabled placeholder="Bundled videos (default)" />
-
-                  <div class="row" style="margin-top:8px; gap:10px;">
-                    <button class="btn" id="btnPickMediaFolder">Choose Folder...</button>
-                    <button class="btn" id="btnClearMediaFolder">Use Bundled</button>
-                  </div>
-
-                  <div class="muted2" style="margin-top:6px;">
-                    Saved per branch and shared with the Electron launcher. If empty, the display uses bundled videos under <b>/static/media</b>.
-                  </div>
-                </div>
               </div>
 
               <div class="setup-pane hidden" id="setup-pane-auth">
@@ -1151,6 +1138,77 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               </div>
 
               <!-- QR Preview + Actions -->
+            </div>
+          </div>
+        </section>
+
+        <!-- MEDIA -->
+        <section id="page-media" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 6;">
+              <div class="row" style="justify-content: space-between; align-items:center;">
+                <div>
+                  <h3 style="margin:0;">General Media</h3>
+                  <div class="muted2">Shown on all branch displays first.</div>
+                </div>
+                <button class="btn small" id="btnReloadGeneralMedia">Reload</button>
+              </div>
+
+              <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+                <button class="btn" id="btnCreateGeneralMediaFolder">Create Folder</button>
+                <input id="generalMediaFiles" type="file" multiple accept="video/*,.mp4,.webm,.ogg,.m4v,.mov" />
+                <button class="btn primary" id="btnUploadGeneralMedia">Upload</button>
+              </div>
+              <div class="muted2" id="generalMediaMeta" style="margin-top:8px;">Loading...</div>
+
+              <div style="overflow:auto; margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>File</th>
+                      <th>Size</th>
+                      <th>Uploaded</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="generalMediaTable">
+                    <tr><td colspan="4" class="muted">Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card" style="grid-column: span 6;">
+              <div class="row" style="justify-content: space-between; align-items:center;">
+                <div>
+                  <h3 style="margin:0;">Branch Media</h3>
+                  <div class="muted2" id="branchMediaTitleHint">Shown after General Media for the selected branch only.</div>
+                </div>
+                <button class="btn small" id="btnReloadBranchMedia">Reload</button>
+              </div>
+
+              <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+                <button class="btn" id="btnCreateBranchMediaFolder">Create Folder</button>
+                <input id="branchMediaFiles" type="file" multiple accept="video/*,.mp4,.webm,.ogg,.m4v,.mov" />
+                <button class="btn primary" id="btnUploadBranchMedia">Upload</button>
+              </div>
+              <div class="muted2" id="branchMediaMeta" style="margin-top:8px;">Loading...</div>
+
+              <div style="overflow:auto; margin-top:12px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>File</th>
+                      <th>Size</th>
+                      <th>Uploaded</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="branchMediaTable">
+                    <tr><td colspan="4" class="muted">Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -1952,6 +2010,20 @@ async function jpost(url, body) {
         try { return new Date(ms).toLocaleString(); } catch { return String(ms); }
       }
 
+      function fmtBytes(bytes) {
+        const value = Number(bytes || 0);
+        if (!Number.isFinite(value) || value <= 0) return "0 B";
+        const units = ["B", "KB", "MB", "GB"];
+        let size = value;
+        let idx = 0;
+        while (size >= 1024 && idx < units.length - 1) {
+          size /= 1024;
+          idx += 1;
+        }
+        const decimals = idx === 0 ? 0 : 1;
+        return `${size.toFixed(decimals)} ${units[idx]}`;
+      }
+
       function setActive(page) {
         const target = String(page || "dashboard");
         const allowed = new Set(allowedPages());
@@ -1971,6 +2043,7 @@ async function jpost(url, body) {
 
         // page loaders
         if (target === "setup") loadSetup();
+        if (target === "media") loadMediaManager();
         if (target === "branches") loadBranchesManager();
         if (target === "users") loadUsers();
         if (target === "permissions") loadPerms();
@@ -2000,6 +2073,7 @@ async function jpost(url, body) {
       let ALLOWED_BRANCHES = [];
       let USER_BRANCH_OPTIONS = [];
       let BRANCH_MANAGER_CACHE = [];
+      let MEDIA_CACHE = { general: [], branch: [] };
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
       const QS = new URLSearchParams(window.location.search);
@@ -2027,7 +2101,7 @@ async function jpost(url, body) {
       }
 
       function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {
-        return ["dashboard", "setup", "reports", "audit"].includes(String(page || "").trim().toLowerCase());
+        return ["dashboard", "setup", "media", "reports", "audit"].includes(String(page || "").trim().toLowerCase());
       }
 
       function adminEntryUrl(branchCode, page = CURRENT_PAGE) {
@@ -2050,6 +2124,7 @@ async function jpost(url, body) {
       const PAGE_PERMS = {
         dashboard: null,
         setup: "SETTINGS_MANAGE",
+        media: "SETTINGS_MANAGE",
         branches: "SETTINGS_MANAGE",
         users: "USERS_MANAGE",
         permissions: "PERMISSIONS_MANAGE",
@@ -2397,6 +2472,7 @@ async function jpost(url, body) {
           else await loadSetup();
           return;
         }
+        if (CURRENT_PAGE === "media") return loadMediaManager();
         if (CURRENT_PAGE === "branches") return loadBranchesManager();
         if (CURRENT_PAGE === "users") return loadUsers();
         if (CURRENT_PAGE === "permissions") return loadPerms();
@@ -2410,6 +2486,7 @@ async function jpost(url, body) {
         if (normalized === "reports") return "Loading reports for the selected branch...";
         if (normalized === "audit") return "Loading audit logs for the selected branch...";
         if (normalized === "setup") return "Loading setup for the selected branch...";
+        if (normalized === "media") return "Loading media for the selected branch...";
         return "Switching branch...";
       }
 
@@ -2964,7 +3041,6 @@ function downloadQrNow() {
         try {
           const d = await jget("/api/admin/display-config");
           if (d?.ok) {
-            $("mediaSourceDir").value = d.settings?.["media.sourceDir"] || "";
             $("displayShowVideo").value = String(d.settings?.["display.showVideo"] ?? "false");
             $("displayOrientation").value = String(d.settings?.["display.orientation"] ?? "landscape");
           }
@@ -3032,38 +3108,6 @@ function downloadQrNow() {
           el.textContent = "Last successful upload: Failed to load.";
         }
       }
-
-      async function pickMediaFolder() {
-  try {
-    const j = await jpost("/api/admin/media/source/select", {});
-    if (!j.ok) return toast("Media Folder", j.error || "Failed to open folder picker.", "err");
-    if (j.canceled) return toast("Media Folder", "Selection canceled.", "warn");
-
-    SETTINGS_CACHE = SETTINGS_CACHE || {};
-    SETTINGS_CACHE["media.sourceDir"] = j.folder || "";
-    $("mediaSourceDir").value = j.folder || "";
-
-    toast("Media Folder", "Saved. Display will use this folder now.", "");
-  } catch {
-    toast("Media Folder", "Request failed.", "err");
-  }
-}
-
-async function clearMediaFolder() {
-  try {
-    const j = await jpost("/api/admin/media/source/clear", {});
-    if (!j.ok) return toast("Media Folder", j.error || "Failed to clear.", "err");
-
-    SETTINGS_CACHE = SETTINGS_CACHE || {};
-    SETTINGS_CACHE["media.sourceDir"] = "";
-    $("mediaSourceDir").value = "";
-
-    toast("Media Folder", "Cleared. Display will use bundled videos.", "");
-  } catch {
-    toast("Media Folder", "Request failed.", "err");
-  }
-}
-
 
 async function pickGdriveServiceAccount() {
   try {
@@ -3273,7 +3317,6 @@ async function clearGdriveOAuth() {
           const jDisplay = await jpost("/api/admin/display-config", {
             "display.showVideo": String($("displayShowVideo").value) === "true" ? "true" : "false",
             "display.orientation": String($("displayOrientation").value) === "portrait" ? "portrait" : "landscape",
-            "media.sourceDir": String($("mediaSourceDir").value || "").trim(),
           });
           if (!jDisplay.ok) return toast("Setup", jDisplay.error || "Failed saving display settings.", "err");
 
@@ -3405,6 +3448,131 @@ async function clearGdriveOAuth() {
         } catch (e) {
           $("branchesTable").innerHTML = `<tr><td colspan="5" class="muted">Failed to load branches.</td></tr>`;
           toast("Branches", "Failed to load branches.", "err");
+        }
+      }
+
+      function mediaFileUrl(id, fileName) {
+        return window.appUrl(`/api/admin/media/file/${encodeURIComponent(String(id || ""))}?name=${encodeURIComponent(String(fileName || ""))}`);
+      }
+
+      function renderMediaTable(kind, rows) {
+        const normalized = String(kind || "").trim().toLowerCase() === "branch" ? "branch" : "general";
+        const tableId = normalized === "branch" ? "branchMediaTable" : "generalMediaTable";
+        const tbody = $(tableId);
+        if (!tbody) return;
+        const list = Array.isArray(rows) ? rows : [];
+        tbody.innerHTML = "";
+        if (!list.length) {
+          tbody.innerHTML = `<tr><td colspan="4" class="muted">No media uploaded yet.</td></tr>`;
+          return;
+        }
+        for (const row of list) {
+          const tr = document.createElement("tr");
+          const id = String(row.id || "").trim();
+          const fileName = String(row.fileName || row.storedName || "media").trim();
+          tr.innerHTML = `
+            <td><b>${escapeHtml(fileName)}</b></td>
+            <td>${escapeHtml(fmtBytes(row.sizeBytes))}</td>
+            <td>${escapeHtml(fmtTime(row.createdAt))}</td>
+            <td>
+              <div class="row" style="gap:8px; flex-wrap:nowrap;">
+                <a class="btn small" href="${escapeAttr(mediaFileUrl(id, fileName))}" target="_blank" rel="noopener noreferrer">View</a>
+                <button class="btn small danger" type="button" data-media-delete="${escapeAttr(id)}" data-media-kind="${escapeAttr(normalized)}">Delete</button>
+              </div>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+        tbody.querySelectorAll("[data-media-delete]").forEach((btn) => {
+          btn.addEventListener("click", () => deleteMediaFile(btn.getAttribute("data-media-delete"), btn.getAttribute("data-media-kind")));
+        });
+      }
+
+      async function loadMediaManager() {
+        const branchLabel = String(BRANCH_CACHE?.branchName || BRANCH_CACHE?.branchCode || "selected branch").trim();
+        if ($("branchMediaTitleHint")) {
+          $("branchMediaTitleHint").textContent = `Shown after General Media for ${branchLabel} only.`;
+        }
+        try {
+          const [general, branch] = await Promise.all([
+            jget("/api/admin/media/assets?scope=general"),
+            jget("/api/admin/media/assets?scope=branch"),
+          ]);
+          if (!general?.ok) throw new Error(general?.error || "general");
+          if (!branch?.ok) throw new Error(branch?.error || "branch");
+
+          MEDIA_CACHE = {
+            general: Array.isArray(general.files) ? general.files : [],
+            branch: Array.isArray(branch.files) ? branch.files : [],
+          };
+
+          if ($("generalMediaMeta")) {
+            $("generalMediaMeta").textContent = `${general.exists ? "Folder ready" : "Folder not created yet"} • ${MEDIA_CACHE.general.length} file(s) • ${general.folderPath || "-"}`;
+          }
+          if ($("branchMediaMeta")) {
+            const branchCode = String(branch.branch?.branchCode || BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
+            $("branchMediaMeta").textContent = `${branch.exists ? "Folder ready" : "Folder not created yet"} • ${MEDIA_CACHE.branch.length} file(s) • ${branchCode || "Branch"} • ${branch.folderPath || "-"}`;
+          }
+
+          renderMediaTable("general", MEDIA_CACHE.general);
+          renderMediaTable("branch", MEDIA_CACHE.branch);
+        } catch (e) {
+          renderMediaTable("general", []);
+          renderMediaTable("branch", []);
+          if ($("generalMediaMeta")) $("generalMediaMeta").textContent = "Failed to load general media.";
+          if ($("branchMediaMeta")) $("branchMediaMeta").textContent = "Failed to load branch media.";
+          toast("Media", "Failed to load media library.", "err");
+        }
+      }
+
+      async function createMediaFolder(scopeType) {
+        const scope = String(scopeType || "").trim().toUpperCase() === "BRANCH" ? "branch" : "general";
+        try {
+          const j = await jpost("/api/admin/media/folder", { scopeType: scope.toUpperCase() });
+          if (!j?.ok) return toast("Media", j?.error || "Failed to create folder.", "err");
+          toast("Media", `${scope === "branch" ? "Branch" : "General"} folder is ready.`, "ok");
+          await loadMediaManager();
+        } catch {
+          toast("Media", "Failed to create folder.", "err");
+        }
+      }
+
+      async function uploadMedia(scopeType) {
+        const scope = String(scopeType || "").trim().toLowerCase() === "branch" ? "branch" : "general";
+        const input = $(scope === "branch" ? "branchMediaFiles" : "generalMediaFiles");
+        const files = Array.from(input?.files || []);
+        if (!files.length) return toast("Media", "Choose at least one video file.", "warn");
+        const form = new FormData();
+        form.append("scopeType", scope.toUpperCase());
+        files.forEach((file) => form.append("files", file));
+        try {
+          const r = await fetch(window.appUrl(`/api/admin/media/upload?scope=${encodeURIComponent(scope)}`), {
+            method: "POST",
+            body: form,
+            credentials: "same-origin",
+          });
+          const j = await parseFetchJson(r);
+          if (!j?.ok) return toast("Media", j?.error || "Upload failed.", "err");
+          if (input) input.value = "";
+          toast("Media", `Uploaded ${Array.isArray(j.files) ? j.files.length : files.length} file(s).`, "ok");
+          await loadMediaManager();
+        } catch {
+          toast("Media", "Upload failed.", "err");
+        }
+      }
+
+      async function deleteMediaFile(id, kind) {
+        const mediaId = String(id || "").trim();
+        if (!mediaId) return;
+        const scope = String(kind || "").trim().toLowerCase() === "branch" ? "branch" : "general";
+        if (!confirm(`Delete this ${scope} media file?`)) return;
+        try {
+          const j = await jpost("/api/admin/media/delete", { id: mediaId });
+          if (!j?.ok) return toast("Media", j?.error || "Delete failed.", "err");
+          toast("Media", "File deleted.", "ok");
+          await loadMediaManager();
+        } catch {
+          toast("Media", "Delete failed.", "err");
         }
       }
 
@@ -5017,8 +5185,12 @@ function renderDailySummaryPage(){
       });
       setActiveSetupPane(SETUP_ACTIVE_PANE);
 
-      $("btnPickMediaFolder")?.addEventListener("click", pickMediaFolder);
-      $("btnClearMediaFolder")?.addEventListener("click", clearMediaFolder);
+      $("btnReloadGeneralMedia")?.addEventListener("click", loadMediaManager);
+      $("btnReloadBranchMedia")?.addEventListener("click", loadMediaManager);
+      $("btnCreateGeneralMediaFolder")?.addEventListener("click", () => createMediaFolder("general"));
+      $("btnCreateBranchMediaFolder")?.addEventListener("click", () => createMediaFolder("branch"));
+      $("btnUploadGeneralMedia")?.addEventListener("click", () => uploadMedia("general"));
+      $("btnUploadBranchMedia")?.addEventListener("click", () => uploadMedia("branch"));
       $("gdriveAuthMode")?.addEventListener("change", updateGdriveAuthModeUi);
       $("btnPickGdriveOAuthClient")?.addEventListener("click", pickGdriveOAuthClient);
       $("btnClearGdriveOAuthClient")?.addEventListener("click", clearGdriveOAuthClient);
