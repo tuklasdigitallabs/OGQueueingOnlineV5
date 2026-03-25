@@ -2250,11 +2250,7 @@ async function jpost(url, body) {
       function renderAdminBranchSwitcher() {
         const sel = $("adminBranchSwitch");
         if (!sel) return;
-        if (
-          !shouldShowAdminBranchSwitcher(CURRENT_PAGE) ||
-          !Array.isArray(ALLOWED_BRANCHES) ||
-          ALLOWED_BRANCHES.length <= 1
-        ) {
+        if (!shouldShowAdminBranchSwitcher(CURRENT_PAGE) || !Array.isArray(ALLOWED_BRANCHES) || !ALLOWED_BRANCHES.length) {
           sel.style.display = "none";
           sel.innerHTML = "";
           return;
@@ -2268,6 +2264,10 @@ async function jpost(url, body) {
         }).join("");
         const selected = String(CURRENT_USER?.selectedBranchId || "").trim();
         if (selected) sel.value = selected;
+        sel.disabled = ALLOWED_BRANCHES.length <= 1;
+        sel.title = sel.disabled
+          ? "Only one branch is available for this account."
+          : "Switch branch";
       }
 
       function escapeAttr(v) {
