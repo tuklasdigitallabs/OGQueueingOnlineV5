@@ -164,6 +164,40 @@ margin:0;
   @keyframes adminSpin {
     to { transform: rotate(360deg); }
   }
+  .uploadStatus{
+    display:none;
+    margin-top:10px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.68);
+  }
+  .uploadStatus.show{ display:block; }
+  .uploadStatusRow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .uploadStatusText{
+    font-size:13px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .uploadProgressBar{
+    width:100%;
+    height:10px;
+    border-radius:999px;
+    overflow:hidden;
+    background:rgba(60,40,20,.10);
+    margin-top:10px;
+  }
+  .uploadProgressFill{
+    width:0%;
+    height:100%;
+    background:linear-gradient(90deg, #ef8730 0%, #f4b14c 100%);
+    transition:width .15s ease;
+  }
 
   /* Topbar styled like a Staff card header */
   .topbar{
@@ -1159,6 +1193,13 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <input id="generalMediaFiles" type="file" multiple accept="video/*,.mp4,.webm,.ogg,.m4v,.mov" />
                 <button class="btn primary" id="btnUploadGeneralMedia">Upload</button>
               </div>
+              <div class="uploadStatus" id="generalUploadStatus" aria-live="polite">
+                <div class="uploadStatusRow">
+                  <div class="contentSpinner" aria-hidden="true"></div>
+                  <div class="uploadStatusText" id="generalUploadText">Preparing upload...</div>
+                </div>
+                <div class="uploadProgressBar"><div class="uploadProgressFill" id="generalUploadFill"></div></div>
+              </div>
               <div class="muted2" id="generalMediaMeta" style="margin-top:8px;">Loading...</div>
 
               <div style="overflow:auto; margin-top:12px;">
@@ -1191,6 +1232,13 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <button class="btn" id="btnCreateBranchMediaFolder">Create Folder</button>
                 <input id="branchMediaFiles" type="file" multiple accept="video/*,.mp4,.webm,.ogg,.m4v,.mov" />
                 <button class="btn primary" id="btnUploadBranchMedia">Upload</button>
+              </div>
+              <div class="uploadStatus" id="branchUploadStatus" aria-live="polite">
+                <div class="uploadStatusRow">
+                  <div class="contentSpinner" aria-hidden="true"></div>
+                  <div class="uploadStatusText" id="branchUploadText">Preparing upload...</div>
+                </div>
+                <div class="uploadProgressBar"><div class="uploadProgressFill" id="branchUploadFill"></div></div>
               </div>
               <div class="muted2" id="branchMediaMeta" style="margin-top:8px;">Loading...</div>
 
@@ -3455,6 +3503,96 @@ async function clearGdriveOAuth() {
         return window.appUrl(`/api/admin/media/file/${encodeURIComponent(String(id || ""))}?name=${encodeURIComponent(String(fileName || ""))}`);
       }
 
+      function uploadUiRefs(scope) {
+        const normalized = String(scope || "").trim().toLowerCase() === "branch" ? "branch" : "general";
+        return {
+          status: $(normalized === "branch" ? "branchUploadStatus" : "generalUploadStatus"),
+          text: $(normalized === "branch" ? "branchUploadText" : "generalUploadText"),
+          fill: $(normalized === "branch" ? "branchUploadFill" : "generalUploadFill"),
+          button: $(normalized === "branch" ? "btnUploadBranchMedia" : "btnUploadGeneralMedia"),
+          input: $(normalized === "branch" ? "branchMediaFiles" : "generalMediaFiles"),
+        };
+      }
+
+      function fmtDurationSeconds(totalSeconds) {
+        const secs = Math.max(0, Number(totalSeconds || 0));
+        const minutes = Math.floor(secs / 60);
+        const seconds = secs % 60;
+        return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+
+      function setUploadProgress(scope, state = {}) {
+        const refs = uploadUiRefs(scope);
+        if (!refs.status || !refs.text || !refs.fill) return;
+        const loading = !!state.loading;
+        refs.status.classList.toggle("show", loading || !!state.persist);
+        refs.text.textContent = String(state.text || "");
+        refs.fill.style.width = `${Math.max(0, Math.min(100, Number(state.percent || 0)))}%`;
+        if (refs.button) refs.button.disabled = loading;
+        if (refs.input) refs.input.disabled = loading;
+      }
+
+      function uploadWithProgress(scope, form) {
+        return new Promise((resolve, reject) => {
+          const startedAt = Date.now();
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", window.appUrl(`/api/admin/media/upload?scope=${encodeURIComponent(scope)}`), true);
+          xhr.withCredentials = true;
+
+          const updateProgressText = (percent, loaded, total) => {
+            const elapsed = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
+            const bytesLoaded = fmtBytes(loaded);
+            const bytesTotal = total > 0 ? fmtBytes(total) : "?";
+            setUploadProgress(scope, {
+              loading: true,
+              percent,
+              text: `Uploading... ${percent}% • ${bytesLoaded} / ${bytesTotal} • ${fmtDurationSeconds(elapsed)} elapsed`,
+            });
+          };
+
+          xhr.upload.addEventListener("progress", (ev) => {
+            if (!ev.lengthComputable) {
+              const elapsed = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
+              setUploadProgress(scope, {
+                loading: true,
+                percent: 0,
+                text: `Uploading... calculating size • ${fmtDurationSeconds(elapsed)} elapsed`,
+              });
+              return;
+            }
+            const percent = Math.max(0, Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+            updateProgressText(percent, ev.loaded, ev.total);
+          });
+
+          xhr.onreadystatechange = () => {
+            if (xhr.readyState !== 4) return;
+            try {
+              const data = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+              if (xhr.status >= 200 && xhr.status < 300 && data?.ok) {
+                setUploadProgress(scope, {
+                  loading: false,
+                  persist: true,
+                  percent: 100,
+                  text: `Upload complete • 100% • ${fmtDurationSeconds(Math.floor((Date.now() - startedAt) / 1000))} elapsed`,
+                });
+                window.setTimeout(() => {
+                  setUploadProgress(scope, { loading: false, persist: false, percent: 0, text: "" });
+                }, 1800);
+                resolve(data);
+                return;
+              }
+              reject(new Error(data?.error || `Upload failed (HTTP ${xhr.status})`));
+            } catch {
+              reject(new Error(`Upload failed (HTTP ${xhr.status})`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error("Upload failed."));
+          xhr.send(form);
+          setUploadProgress(scope, { loading: true, percent: 0, text: "Preparing upload..." });
+        });
+      }
+
       function renderMediaTable(kind, rows) {
         const normalized = String(kind || "").trim().toLowerCase() === "branch" ? "branch" : "general";
         const tableId = normalized === "branch" ? "branchMediaTable" : "generalMediaTable";
@@ -3539,24 +3677,20 @@ async function clearGdriveOAuth() {
 
       async function uploadMedia(scopeType) {
         const scope = String(scopeType || "").trim().toLowerCase() === "branch" ? "branch" : "general";
-        const input = $(scope === "branch" ? "branchMediaFiles" : "generalMediaFiles");
+        const input = uploadUiRefs(scope).input;
         const files = Array.from(input?.files || []);
         if (!files.length) return toast("Media", "Choose at least one video file.", "warn");
         const form = new FormData();
         form.append("scopeType", scope.toUpperCase());
         files.forEach((file) => form.append("files", file));
         try {
-          const r = await fetch(window.appUrl(`/api/admin/media/upload?scope=${encodeURIComponent(scope)}`), {
-            method: "POST",
-            body: form,
-            credentials: "same-origin",
-          });
-          const j = await parseFetchJson(r);
+          const j = await uploadWithProgress(scope, form);
           if (!j?.ok) return toast("Media", j?.error || "Upload failed.", "err");
           if (input) input.value = "";
           toast("Media", `Uploaded ${Array.isArray(j.files) ? j.files.length : files.length} file(s).`, "ok");
           await loadMediaManager();
         } catch {
+          setUploadProgress(scope, { loading: false, persist: false, percent: 0, text: "" });
           toast("Media", "Upload failed.", "err");
         }
       }
