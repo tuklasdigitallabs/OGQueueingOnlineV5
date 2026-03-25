@@ -436,25 +436,105 @@ margin:0;
 
   .muted{ color: var(--muted); }
   .muted2{ color: var(--muted2); }
-  .branchChecklist{
+  .branchPicker{
+    position:relative;
+  }
+  .branchPickerBtn{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:12px 14px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,.72);
+    color: var(--text);
+    font-weight:800;
+    cursor:pointer;
+    text-align:left;
+  }
+  .branchPickerBtn span:last-child{
+    color:var(--muted2);
+    font-size:11px;
+  }
+  .branchPickerMenu{
+    position:absolute;
+    left:0;
+    right:0;
+    top: calc(100% + 8px);
+    z-index:20;
+    display:none;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background: rgba(255,255,255,.98);
+    box-shadow: 0 18px 38px rgba(60,40,20,.16);
+  }
+  .branchPicker.open .branchPickerMenu{
+    display:block;
+  }
+  .branchPickerSearch{
+    width:100%;
+    padding:10px 12px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--text);
+    margin-bottom:10px;
+  }
+  .branchPickerSearch:focus{
+    outline:none;
+    border-color: rgba(225,6,0,.35);
+    box-shadow: 0 0 0 3px rgba(225,6,0,.08);
+  }
+  .branchPickerList{
     display:grid;
     gap:8px;
-    max-height: 190px;
+    max-height: 220px;
     overflow:auto;
-    padding: 10px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: rgba(255,255,255,.58);
   }
-  .branchChecklist label{
+  .branchPickerOption{
+    width:100%;
     display:flex;
     align-items:flex-start;
-    gap:8px;
-    font-size: 13px;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    background: rgba(60,40,20,.03);
     color: rgba(60,40,20,.86);
+    cursor:pointer;
+    text-align:left;
   }
-  .branchChecklist input[type="checkbox"]{
-    margin-top: 2px;
+  .branchPickerOption.active{
+    border-color: rgba(225,6,0,.35);
+    background: rgba(225,6,0,.08);
+  }
+  .branchPickerOption b{
+    display:block;
+  }
+  .branchPickerOption small{
+    display:block;
+    margin-top:2px;
+    color: var(--muted2);
+    font-size: 11px;
+  }
+  .branchPickerCheck{
+    font-size:11px;
+    font-weight:900;
+    color: var(--accent);
+    white-space:nowrap;
+    margin-top:2px;
+  }
+  .branchPickerEmpty{
+    padding:12px;
+    border:1px dashed var(--line);
+    border-radius:12px;
+    color:var(--muted2);
+    font-size:12px;
+    text-align:center;
   }
   .branchHint{
     font-size: 11px;
@@ -693,6 +773,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         <div class="nav">
           <button class="active" data-page="dashboard">Dashboard</button>
           <button data-page="setup">Setup</button>
+          <button data-page="branches">Branches</button>
           <button data-page="users">Users</button>
           <button data-page="permissions">Permissions</button>
           <button data-page="reports">Reports</button>
@@ -1047,6 +1128,76 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         </section>
 
 
+        <!-- BRANCHES -->
+        <section id="page-branches" class="hidden">
+          <div class="grid">
+            <div class="card" style="grid-column: span 7;">
+              <div class="row" style="justify-content: space-between; align-items:center;">
+                <h3 style="margin:0;">Branches</h3>
+                <button class="btn small" id="btnReloadBranches">Reload</button>
+              </div>
+
+              <div style="overflow:auto; margin-top:10px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th>Default</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="branchesTable">
+                    <tr><td colspan="5" class="muted">Load branches...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card" style="grid-column: span 5;">
+              <h3 id="branchFormTitle">Add Branch</h3>
+              <div style="display:grid; gap:10px;">
+                <input id="branchManageId" type="hidden" />
+                <div class="two">
+                  <div>
+                    <label class="muted2">Branch Code</label>
+                    <input id="branchManageCode" placeholder="e.g., YL-MOA" />
+                  </div>
+                  <div>
+                    <label class="muted2">Timezone</label>
+                    <input id="branchManageTimezone" value="Asia/Manila" />
+                  </div>
+                </div>
+                <div>
+                  <label class="muted2">Branch Name</label>
+                  <input id="branchManageName" placeholder="e.g., Yakiniku Like SM Mall of Asia" />
+                </div>
+                <div class="two">
+                  <div>
+                    <label class="muted2">Status</label>
+                    <select id="branchManageStatus">
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="INACTIVE">INACTIVE</option>
+                    </select>
+                  </div>
+                  <div style="display:flex; align-items:flex-end;">
+                    <label class="row" style="margin:0; gap:8px; font-weight:800;">
+                      <input id="branchManageDefault" type="checkbox" style="width:auto;" />
+                      <span>Set as default branch</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="row">
+                  <button class="btn primary" id="btnSaveBranchRecord">Save Branch</button>
+                  <button class="btn" id="btnResetBranchForm" type="button">New Branch</button>
+                </div>
+                <div class="branchHint">Manage branch records here, including branch code, name, status, and default branch.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- USERS -->
         <section id="page-users" class="hidden">
           <div class="grid">
@@ -1093,10 +1244,19 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 </div>
                 <div>
                   <label class="muted2">Branch Access</label>
-                  <div id="newUserBranches" class="branchChecklist">
-                    <div class="muted2">Loading branches...</div>
+                  <div id="newUserBranches" class="branchPicker">
+                    <button type="button" class="branchPickerBtn" data-role="toggle">
+                      <span>Select branches...</span>
+                      <span>Choose</span>
+                    </button>
+                    <div class="branchPickerMenu">
+                      <input type="search" class="branchPickerSearch" placeholder="Type branch name or code" data-role="search" />
+                      <div class="branchPickerList" data-role="list">
+                        <div class="branchPickerEmpty">Loading branches...</div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="branchHint">Select one or more branches this user can access.</div>
+                  <div class="branchHint">Open the dropdown, type to filter, then select one or more branches.</div>
                 </div>
                 <div class="two">
                   <div>
@@ -1878,6 +2038,7 @@ async function jpost(url, body) {
 
         // page loaders
         if (target === "setup") loadSetup();
+        if (target === "branches") loadBranchesManager();
         if (target === "users") loadUsers();
         if (target === "permissions") loadPerms();
         if (target === "audit") loadAudit();
@@ -1908,6 +2069,7 @@ async function jpost(url, body) {
       let CURRENT_USER = null;
       let ALLOWED_BRANCHES = [];
       let USER_BRANCH_OPTIONS = [];
+      let BRANCH_MANAGER_CACHE = [];
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
       const QS = new URLSearchParams(window.location.search);
@@ -1942,6 +2104,7 @@ async function jpost(url, body) {
       const PAGE_PERMS = {
         dashboard: null,
         setup: "SETTINGS_MANAGE",
+        branches: "SETTINGS_MANAGE",
         users: "USERS_MANAGE",
         permissions: "PERMISSIONS_MANAGE",
         reports: "REPORT_EXPORT_CSV",
@@ -2071,35 +2234,89 @@ async function jpost(url, body) {
         return Array.isArray(rows) ? rows : [];
       }
 
-      function renderUserBranchChecklist(containerId, selectedIds = []) {
+      function getBranchPickerState(containerId) {
+        const el = $(containerId);
+        if (!el) return { selectedIds: [], search: "" };
+        let selectedIds = [];
+        try {
+          selectedIds = JSON.parse(String(el.dataset.selectedIds || "[]"));
+        } catch {}
+        if (!Array.isArray(selectedIds)) selectedIds = [];
+        return {
+          selectedIds: selectedIds.map((v) => String(v || "").trim()).filter(Boolean),
+          search: String(el.dataset.search || "").trim().toLowerCase(),
+        };
+      }
+
+      function setBranchPickerState(containerId, nextState = {}) {
         const el = $(containerId);
         if (!el) return;
-        const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map((v) => String(v || "").trim()).filter(Boolean));
+        const state = getBranchPickerState(containerId);
+        const selectedIds = Array.isArray(nextState.selectedIds) ? nextState.selectedIds : state.selectedIds;
+        const search = nextState.search == null ? state.search : String(nextState.search || "").trim().toLowerCase();
+        el.dataset.selectedIds = JSON.stringify(selectedIds);
+        el.dataset.search = search;
+      }
+
+      function renderUserBranchPicker(containerId, selectedIds = [], search = "") {
+        const el = $(containerId);
+        if (!el) return;
+        setBranchPickerState(containerId, { selectedIds, search });
+        const state = getBranchPickerState(containerId);
+        const selected = new Set(state.selectedIds);
         const rows = getUserBranchOptions();
+        const btn = el.querySelector('[data-role="toggle"]');
+        const label = btn?.querySelector("span");
+        const searchInput = el.querySelector('[data-role="search"]');
+        const list = el.querySelector('[data-role="list"]');
+        if (searchInput) searchInput.value = state.search;
+        if (label) {
+          const selectedRows = rows.filter((row) => selected.has(String(row.branchId || "").trim()));
+          label.textContent = selectedRows.length
+            ? selectedRows.map((row) => String(row.branchCode || row.branchName || "Branch").trim()).join(", ")
+            : "Select branches...";
+        }
+        if (!list) return;
         if (!rows.length) {
-          el.innerHTML = `<div class="muted2">No active branches available.</div>`;
+          list.innerHTML = `<div class="branchPickerEmpty">No active branches available.</div>`;
           return;
         }
-        el.innerHTML = rows.map((row) => {
+        const filtered = rows.filter((row) => {
+          const branchCode = String(row.branchCode || "").trim().toUpperCase();
+          const branchName = String(row.branchName || "").trim();
+          const hay = `${branchCode} ${branchName}`.toLowerCase();
+          return !state.search || hay.includes(state.search);
+        });
+        if (!filtered.length) {
+          list.innerHTML = `<div class="branchPickerEmpty">No branches match your search.</div>`;
+          return;
+        }
+        list.innerHTML = filtered.map((row) => {
           const branchId = String(row.branchId || "").trim();
           const branchCode = String(row.branchCode || "").trim().toUpperCase();
           const branchName = String(row.branchName || branchCode || "Branch").trim();
-          const checked = selected.has(branchId) ? "checked" : "";
+          const active = selected.has(branchId);
           return `
-            <label>
-              <input type="checkbox" data-branch-id="${escapeAttr(branchId)}" ${checked} />
-              <span><b>${escapeHtml(branchName)}</b><br><span class="muted2">${escapeHtml(branchCode || branchId)}</span></span>
-            </label>
+            <button type="button" class="branchPickerOption ${active ? "active" : ""}" data-role="option" data-branch-id="${escapeAttr(branchId)}">
+              <span><b>${escapeHtml(branchName)}</b><small>${escapeHtml(branchCode || branchId)}</small></span>
+              <span class="branchPickerCheck">${active ? "Selected" : "Select"}</span>
+            </button>
           `;
         }).join("");
       }
 
-      function getCheckedBranchIds(containerId) {
-        const el = $(containerId);
-        if (!el) return [];
-        return Array.from(el.querySelectorAll('input[type="checkbox"][data-branch-id]:checked'))
-          .map((node) => String(node.getAttribute("data-branch-id") || "").trim())
-          .filter(Boolean);
+      function getSelectedBranchIds(containerId) {
+        return getBranchPickerState(containerId).selectedIds;
+      }
+
+      function toggleBranchPickerOption(containerId, branchId) {
+        const current = getBranchPickerState(containerId);
+        const id = String(branchId || "").trim();
+        if (!id) return;
+        const next = current.selectedIds.includes(id)
+          ? current.selectedIds.filter((item) => item !== id)
+          : [...current.selectedIds, id];
+        renderUserBranchPicker(containerId, next, current.search);
       }
 
       function branchLabelList(branchAccess) {
@@ -2177,6 +2394,7 @@ async function jpost(url, body) {
           else await loadSetup();
           return;
         }
+        if (CURRENT_PAGE === "branches") return loadBranchesManager();
         if (CURRENT_PAGE === "users") return loadUsers();
         if (CURRENT_PAGE === "permissions") return loadPerms();
         if (CURRENT_PAGE === "audit") return loadAudit();
@@ -3173,13 +3391,104 @@ async function clearGdriveOAuth() {
         }
       }
 
+      function resetBranchForm() {
+        $("branchFormTitle").textContent = "Add Branch";
+        $("branchManageId").value = "";
+        $("branchManageCode").value = "";
+        $("branchManageName").value = "";
+        $("branchManageTimezone").value = "Asia/Manila";
+        $("branchManageStatus").value = "ACTIVE";
+        $("branchManageDefault").checked = false;
+      }
+
+      function populateBranchForm(branch) {
+        const row = branch || {};
+        $("branchFormTitle").textContent = row.branchId ? "Edit Branch" : "Add Branch";
+        $("branchManageId").value = row.branchId || "";
+        $("branchManageCode").value = row.branchCode || "";
+        $("branchManageName").value = row.branchName || "";
+        $("branchManageTimezone").value = row.timezone || "Asia/Manila";
+        $("branchManageStatus").value = row.status || "ACTIVE";
+        $("branchManageDefault").checked = Number(row.isDefault || 0) === 1;
+      }
+
+      async function loadBranchesManager() {
+        try {
+          const j = await jget("/api/admin/branches/manage");
+          if (!j.ok) throw new Error(j.error || "branches");
+          BRANCH_MANAGER_CACHE = Array.isArray(j.branches) ? j.branches : [];
+          const tb = $("branchesTable");
+          tb.innerHTML = "";
+
+          if (!BRANCH_MANAGER_CACHE.length) {
+            tb.innerHTML = `<tr><td colspan="5" class="muted">No branches found.</td></tr>`;
+            resetBranchForm();
+            return;
+          }
+
+          for (const row of BRANCH_MANAGER_CACHE) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><b>${escapeHtml(row.branchCode || "-")}</b></td>
+              <td>${escapeHtml(row.branchName || "-")}</td>
+              <td>${escapeHtml(row.status || "ACTIVE")}</td>
+              <td>${Number(row.isDefault || 0) === 1 ? "Yes" : "No"}</td>
+              <td><button class="btn small" type="button" data-edit-branch="${escapeHtml(row.branchId)}">Edit</button></td>
+            `;
+            tb.appendChild(tr);
+          }
+
+          tb.querySelectorAll("[data-edit-branch]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const branchId = String(btn.getAttribute("data-edit-branch") || "").trim();
+              const branch = BRANCH_MANAGER_CACHE.find((row) => String(row.branchId || "").trim() === branchId);
+              populateBranchForm(branch || null);
+            });
+          });
+
+          if (!$("branchManageId").value) resetBranchForm();
+        } catch (e) {
+          $("branchesTable").innerHTML = `<tr><td colspan="5" class="muted">Failed to load branches.</td></tr>`;
+          toast("Branches", "Failed to load branches.", "err");
+        }
+      }
+
+      async function saveBranchRecord() {
+        const payload = {
+          branchId: String($("branchManageId").value || "").trim(),
+          branchCode: String($("branchManageCode").value || "").trim().toUpperCase(),
+          branchName: String($("branchManageName").value || "").trim(),
+          timezone: String($("branchManageTimezone").value || "").trim() || "Asia/Manila",
+          status: String($("branchManageStatus").value || "ACTIVE").trim().toUpperCase(),
+          isDefault: !!$("branchManageDefault").checked,
+        };
+
+        if (!payload.branchCode) return toast("Branches", "Branch code is required.", "warn");
+        if (!payload.branchName) return toast("Branches", "Branch name is required.", "warn");
+
+        const ok = confirm(`${payload.branchId ? "Save changes to" : "Create"} branch ${payload.branchCode}?`);
+        if (!ok) return;
+
+        try {
+          const j = await jpost("/api/admin/branches/manage", payload);
+          if (!j.ok) return toast("Branches", j.error || "Failed to save branch.", "err");
+          toast("Branches", payload.branchId ? "Branch updated." : "Branch created.", "ok");
+          BRANCH_MANAGER_CACHE = Array.isArray(j.branches) ? j.branches : BRANCH_MANAGER_CACHE;
+          resetBranchForm();
+          await loadBranchesManager();
+          await loadAccessContext();
+        } catch {
+          toast("Branches", "Request failed.", "err");
+        }
+      }
+
       // ---------- Users ----------
       async function loadUsers() {
         try {
           const j = await jget("/api/admin/users");
           if (!j.ok) throw new Error(j.error || "users");
           USER_BRANCH_OPTIONS = Array.isArray(j.branches) ? j.branches : getUserBranchOptions();
-          renderUserBranchChecklist("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
+          renderUserBranchPicker("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
 
           const tb = $("usersTable");
           tb.innerHTML = "";
@@ -3246,7 +3555,7 @@ async function clearGdriveOAuth() {
       async function createUser() {
         const name = ($("newUserName").value || "").trim();
         const role = $("newUserRole").value;
-        const branchIds = getCheckedBranchIds("newUserBranches");
+        const branchIds = getSelectedBranchIds("newUserBranches");
         const pin1 = ($("newUserPin").value || "").trim();
         const pin2 = ($("newUserPin2").value || "").trim();
         const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
@@ -3267,7 +3576,7 @@ async function clearGdriveOAuth() {
           $("newUserName").value = "";
           $("newUserPin").value = "";
           $("newUserPin2").value = "";
-          renderUserBranchChecklist("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
+          renderUserBranchPicker("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
           await loadUsers();
         } catch {
           toast("Users", "Request failed.", "err");
@@ -4953,6 +5262,35 @@ function printSummary(){
         btn.addEventListener("click", () => setActive(btn.dataset.page));
       });
       $("btnLogout")?.addEventListener("click", logoutAdmin);
+      $("btnReloadBranches")?.addEventListener("click", loadBranchesManager);
+      $("btnSaveBranchRecord")?.addEventListener("click", saveBranchRecord);
+      $("btnResetBranchForm")?.addEventListener("click", resetBranchForm);
+      (function wireUserBranchPicker() {
+        const picker = $("newUserBranches");
+        if (!picker) return;
+        picker.addEventListener("click", (ev) => {
+          const toggleBtn = ev.target.closest('[data-role="toggle"]');
+          const optionBtn = ev.target.closest('[data-role="option"]');
+          if (toggleBtn) {
+            picker.classList.toggle("open");
+            if (picker.classList.contains("open")) {
+              picker.querySelector('[data-role="search"]')?.focus();
+            }
+            return;
+          }
+          if (optionBtn) {
+            toggleBranchPickerOption("newUserBranches", optionBtn.getAttribute("data-branch-id"));
+          }
+        });
+        picker.querySelector('[data-role="search"]')?.addEventListener("input", (ev) => {
+          const current = getBranchPickerState("newUserBranches");
+          renderUserBranchPicker("newUserBranches", current.selectedIds, String(ev.target?.value || ""));
+          picker.classList.add("open");
+        });
+        document.addEventListener("click", (ev) => {
+          if (!picker.contains(ev.target)) picker.classList.remove("open");
+        });
+      })();
       $("adminBranchSwitch")?.addEventListener("change", async (ev) => {
         const branchId = String(ev.target?.value || "").trim();
         const prev = String(CURRENT_USER?.selectedBranchId || "").trim();

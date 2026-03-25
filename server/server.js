@@ -1432,6 +1432,18 @@ app.get("/static/js/:file", (req, res) => {
       return fallback ? [fallback] : [];
     }
   }
+  function listAllBranches() {
+    try {
+      return db.prepare(
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault, createdAt, updatedAt
+         FROM branches
+         ORDER BY isDefault DESC, branchName ASC, branchCode ASC`
+      ).all();
+    } catch {
+      const fallback = getDefaultBranchRecord();
+      return fallback ? [fallback] : [];
+    }
+  }
   function ensureSessionBranchContext(user) {
     if (!user || !user.userId) return user || null;
     const branches = listUserBranchAccess(user.userId);
@@ -2177,6 +2189,86 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       selectedBranchId: String(u?.selectedBranchId || ""),
       branches: listUserBranchAccess(u?.userId),
     });
+  });
+
+  app.get("/api/admin/branches/manage", requirePerm("SETTINGS_MANAGE"), (_req, res) => {
+    try {
+      return res.json({ ok: true, branches: listAllBranches() });
+    } catch (e) {
+      console.error("[admin/branches/manage:get]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/admin/branches/manage", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
+    try {
+      const branchId = String(req.body?.branchId || "").trim();
+      const branchCode = String(req.body?.branchCode || "").trim().toUpperCase();
+      const branchName = String(req.body?.branchName || "").trim();
+      const timezone = String(req.body?.timezone || "Asia/Manila").trim() || "Asia/Manila";
+      const status = String(req.body?.status || "ACTIVE").trim().toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+      const isDefault = req.body?.isDefault === true || String(req.body?.isDefault || "").toLowerCase() === "true";
+
+      if (!branchCode) return res.status(400).json({ ok: false, error: "branchCode is required." });
+      if (!branchName) return res.status(400).json({ ok: false, error: "branchName is required." });
+
+      const now = Date.now();
+      const existing = branchId ? getBranchById(branchId) : null;
+      const defaultBranch = getDefaultBranchRecord();
+      const orgId = String(existing?.orgId || defaultBranch?.orgId || getDbSetting("multibranch.defaultOrgId") || "").trim();
+      if (!orgId) return res.status(500).json({ ok: false, error: "No organization available for branch assignment." });
+
+      const duplicate = db.prepare(
+        `SELECT branchId FROM branches WHERE orgId=? AND upper(branchCode)=? AND branchId<>? LIMIT 1`
+      ).get(orgId, branchCode, branchId || "");
+      if (duplicate?.branchId) {
+        return res.status(409).json({ ok: false, error: "Branch code is already in use." });
+      }
+
+      let savedBranchId = branchId;
+      if (existing?.branchId) {
+        db.prepare(
+          `UPDATE branches
+           SET branchCode=?, branchName=?, timezone=?, status=?, updatedAt=?
+           WHERE branchId=?`
+        ).run(branchCode, branchName, timezone, status, now, existing.branchId);
+      } else {
+        savedBranchId = randomUUID();
+        db.prepare(
+          `INSERT INTO branches(branchId, orgId, branchCode, branchName, timezone, status, isDefault, createdAt, updatedAt)
+           VALUES(?,?,?,?,?,?,?,?,?)`
+        ).run(savedBranchId, orgId, branchCode, branchName, timezone, status, 0, now, now);
+      }
+
+      if (isDefault) {
+        db.prepare(`UPDATE branches SET isDefault=CASE WHEN branchId=? THEN 1 ELSE 0 END, updatedAt=? WHERE orgId=?`).run(savedBranchId, now, orgId);
+        db.prepare(
+          `INSERT INTO branch_config(id, branchCode, branchName, timezone, createdAt, updatedAt)
+           VALUES(1, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET branchCode=excluded.branchCode, branchName=excluded.branchName, timezone=excluded.timezone, updatedAt=excluded.updatedAt`
+        ).run(branchCode, branchName, timezone, now, now);
+      }
+
+      const saved = getBranchById(savedBranchId);
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        existing?.branchId ? "ADMIN_BRANCH_RECORD_UPDATE" : "ADMIN_BRANCH_RECORD_CREATE",
+        JSON.stringify({
+          actor: actorFromReq(req),
+          branchId: savedBranchId,
+          branchCode,
+          branchName,
+          timezone,
+          status,
+          isDefault,
+        }),
+        now
+      );
+
+      return res.json({ ok: true, branch: saved, branches: listAllBranches() });
+    } catch (e) {
+      console.error("[admin/branches/manage:post]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
   });
 
   app.post("/api/admin/select-branch", requireAuth, express.json(), (req, res) => {
