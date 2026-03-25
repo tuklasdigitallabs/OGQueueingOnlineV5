@@ -1831,7 +1831,13 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   const nextPath = scope === "admin"
     ? buildAdminEntryPath(selectedCode)
     : buildStaffEntryPath(selectedCode);
-  res.redirect(nextPath);
+  const query = new URLSearchParams();
+  const page = String(req?.query?.page || "").trim().toLowerCase();
+  const internal = String(req?.query?.internal || "").trim();
+  if (page) query.set("page", page);
+  if (internal) query.set("internal", internal);
+  const suffix = query.toString();
+  res.redirect(suffix ? `${nextPath}?${suffix}` : nextPath);
   return true;
 }
 
@@ -2188,7 +2194,16 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       return res.status(400).json({ ok: false, error: "Branch not assigned to this user." });
     }
     const nextUser = updateSessionSelectedBranch(req, "staff", branchId);
-    return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+    if (!req?.session || typeof req.session.save !== "function") {
+      return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+    }
+    return req.session.save((err) => {
+      if (err) {
+        console.error("[staff/select-branch]", err);
+        return res.status(500).json({ ok: false, error: "Failed to persist branch selection." });
+      }
+      return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+    });
   });
 
   app.get("/api/admin/branches", requireAuth, (req, res) => {
@@ -2289,7 +2304,16 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       return res.status(400).json({ ok: false, error: "Branch not assigned to this user." });
     }
     const nextUser = updateSessionSelectedBranch(req, "admin", branchId);
-    return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+    if (!req?.session || typeof req.session.save !== "function") {
+      return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+    }
+    return req.session.save((err) => {
+      if (err) {
+        console.error("[admin/select-branch]", err);
+        return res.status(500).json({ ok: false, error: "Failed to persist branch selection." });
+      }
+      return res.json({ ok: true, user: nextUser, branch: getBranchById(branchId) });
+    });
   });
 
   app.post("/api/internal/super-admin/recover", express.json(), (req, res) => {
