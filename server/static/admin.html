@@ -2049,6 +2049,8 @@ async function jpost(url, body) {
         }
         if (target === "system") loadSystemInfo();
 
+        renderAdminBranchSwitcher();
+        syncAdminUrlState();
         maybeCloseDrawerAfterNav();
       }
 
@@ -2074,6 +2076,7 @@ async function jpost(url, body) {
       let FEATURE_FLAGS = {};
       const QS = new URLSearchParams(window.location.search);
       const INTERNAL_MODE = QS.get("internal") || "";
+      const INITIAL_PAGE = String(QS.get("page") || "dashboard").trim().toLowerCase();
 
       function getPathBranchCode() {
         try {
@@ -2096,9 +2099,25 @@ async function jpost(url, body) {
         return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin-login`) : window.appUrl("/admin-login");
       }
 
-      function adminEntryUrl(branchCode) {
+      function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {
+        return ["dashboard", "setup", "reports", "audit", "upload"].includes(String(page || "").trim().toLowerCase());
+      }
+
+      function adminEntryUrl(branchCode, page = CURRENT_PAGE) {
         const code = String(branchCode || currentAdminBranchCode() || "").trim().toUpperCase();
-        return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin`) : window.appUrl("/admin");
+        const path = code ? `/b/${encodeURIComponent(code)}/admin` : "/admin";
+        const params = new URLSearchParams();
+        if (INTERNAL_MODE) params.set("internal", INTERNAL_MODE);
+        if (page) params.set("page", String(page).trim().toLowerCase());
+        const query = params.toString();
+        return window.appUrl(query ? `${path}?${query}` : path);
+      }
+
+      function syncAdminUrlState() {
+        if (!window.history?.replaceState) return;
+        try {
+          window.history.replaceState({}, "", adminEntryUrl(currentAdminBranchCode(), CURRENT_PAGE));
+        } catch {}
       }
 
       const PAGE_PERMS = {
@@ -2232,7 +2251,11 @@ async function jpost(url, body) {
       function renderAdminBranchSwitcher() {
         const sel = $("adminBranchSwitch");
         if (!sel) return;
-        if (!Array.isArray(ALLOWED_BRANCHES) || ALLOWED_BRANCHES.length <= 1) {
+        if (
+          !shouldShowAdminBranchSwitcher(CURRENT_PAGE) ||
+          !Array.isArray(ALLOWED_BRANCHES) ||
+          ALLOWED_BRANCHES.length <= 1
+        ) {
           sel.style.display = "none";
           sel.innerHTML = "";
           return;
@@ -5342,7 +5365,7 @@ function printSummary(){
           CURRENT_USER = j.user || CURRENT_USER;
           renderAdminBranchSwitcher();
           toast("Branch", `Switched to ${j.branch?.branchName || j.branch?.branchCode || "branch"}.`, "ok");
-          window.location.href = adminEntryUrl(j.branch?.branchCode);
+          window.location.href = adminEntryUrl(j.branch?.branchCode, CURRENT_PAGE);
         } catch {
           if ($("adminBranchSwitch")) $("adminBranchSwitch").value = prev;
           toast("Branch", "Failed to switch branch.", "err");
@@ -5507,11 +5530,14 @@ $("btnUploadNow").addEventListener("click", uploadNow);
       // boot
       (async function bootAdmin() {
         try {
+          if (INITIAL_PAGE) CURRENT_PAGE = INITIAL_PAGE;
           await loadAccessContext();
           await loadBasic();
           const allowed = allowedPages();
           if (allowed.length && !allowed.includes(CURRENT_PAGE)) {
             setActive(allowed[0]);
+          } else {
+            setActive(CURRENT_PAGE);
           }
         } catch (e) {
           console.error("[admin/boot]", e);
