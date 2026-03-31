@@ -3553,6 +3553,7 @@ async function clearGdriveOAuth() {
                 <div class="row" style="gap:8px; flex-wrap:wrap;">
                   <button class="btn small" type="button" data-edit-branch="${escapeHtml(row.branchId)}">Edit</button>
                   <button class="btn small" type="button" data-print-branch-qr="${escapeHtml(row.branchId)}">Print QR</button>
+                  <button class="btn small" type="button" data-download-branch-qr="${escapeHtml(row.branchId)}">Download QR</button>
                   <button class="btn small" type="button" data-copy-branch-guest="${escapeHtml(row.branchId)}">Copy Guest Link</button>
                 </div>
               </td>
@@ -3574,6 +3575,15 @@ async function clearGdriveOAuth() {
               const branchCode = String(branch?.branchCode || "").trim().toUpperCase();
               if (!branchCode) return toast("Branches", "Branch code not found.", "warn");
               openPrintWindowForQr(getQrPngUrl(branchCode), String(branch?.branchName || branchCode).trim(), branchCode);
+            });
+          });
+          tb.querySelectorAll("[data-download-branch-qr]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const branchId = String(btn.getAttribute("data-download-branch-qr") || "").trim();
+              const branch = BRANCH_MANAGER_CACHE.find((row) => String(row.branchId || "").trim() === branchId);
+              const branchCode = String(branch?.branchCode || "").trim().toUpperCase();
+              if (!branchCode) return toast("Branches", "Branch code not found.", "warn");
+              downloadImage(getQrPngUrl(branchCode), `${branchCode.toLowerCase()}-guest-qr.png`);
             });
           });
           tb.querySelectorAll("[data-copy-branch-guest]").forEach((btn) => {
