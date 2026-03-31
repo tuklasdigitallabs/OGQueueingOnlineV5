@@ -1467,7 +1467,7 @@ app.get("/static/js/:file", (req, res) => {
   function listAllBranches() {
     try {
       return db.prepare(
-        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault, createdAt, updatedAt
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
          FROM branches
          ORDER BY isDefault DESC, branchName ASC, branchCode ASC`
       ).all();
