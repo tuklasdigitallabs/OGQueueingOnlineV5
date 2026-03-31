@@ -1630,16 +1630,39 @@ app.get("/static/js/:file", (req, res) => {
 
   /* ===================== SECURITY ADDON: auth + perms ===================== */
 
+  function isScopedSessionPath(url, scope) {
+    const normalized = String(url || "").trim();
+    if (!normalized) return false;
+    if (scope === "super-admin") {
+      return normalized.startsWith("/api/super-admin/") || normalized.startsWith("/super-admin");
+    }
+    if (scope === "admin") {
+      return normalized.startsWith("/api/admin/")
+        || normalized === "/admin"
+        || normalized.startsWith("/admin/")
+        || /^\/b\/[^/]+\/admin(?:\/|$)/i.test(normalized)
+        || /^\/b\/[^/]+\/admin-login(?:\/|$)/i.test(normalized);
+    }
+    if (scope === "staff") {
+      return normalized.startsWith("/api/staff/")
+        || normalized === "/staff"
+        || normalized.startsWith("/staff/")
+        || /^\/b\/[^/]+\/staff(?:\/|$)/i.test(normalized)
+        || /^\/b\/[^/]+\/staff-login(?:\/|$)/i.test(normalized);
+    }
+    return false;
+  }
+
   function getSessionUser(req) {
     const url = stripBasePathFromUrl(String(req.path || req.originalUrl || ""));
     // Session separation: Admin and Staff must never overwrite each other
-    if (url.startsWith("/api/super-admin/") || url.startsWith("/super-admin")) {
+    if (isScopedSessionPath(url, "super-admin")) {
       return (req.session && req.session.adminUser) ? req.session.adminUser : null;
     }
-    if (url.startsWith("/api/admin/") || url.startsWith("/admin")) {
+    if (isScopedSessionPath(url, "admin")) {
       return (req.session && req.session.adminUser) ? req.session.adminUser : null;
     }
-    if (url.startsWith("/api/staff/") || url.startsWith("/staff")) {
+    if (isScopedSessionPath(url, "staff")) {
       return (req.session && req.session.staffUser) ? req.session.staffUser : null;
     }
     // Fallback for legacy endpoints
