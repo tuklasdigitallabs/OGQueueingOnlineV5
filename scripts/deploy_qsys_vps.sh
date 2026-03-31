@@ -51,7 +51,7 @@ git status --short || true
 
 echo "==> Pulling latest code"
 git fetch --all --prune
-git pull --ff-only
+git pull --ff-only origin main
 
 echo "==> Building Docker image"
 docker build -t "$IMAGE_NAME" -f Dockerfile.qsys .
