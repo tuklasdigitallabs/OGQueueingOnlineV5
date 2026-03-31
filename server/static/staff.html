@@ -1004,6 +1004,7 @@ function waitingMins(r){
       undoExpiresAt: 0,
       undoTimer: null
     };
+    const STATE_REFRESH_MS = 5000;
 
     function getPathBranchCode(){
       try{
@@ -1874,6 +1875,9 @@ function getQueuedMs(item) {
       setInterval(refreshServerStatus, 2000);
 
       await loadState();
+      setInterval(() => {
+        loadState().catch(() => {});
+      }, STATE_REFRESH_MS);
 
       // UI-only ticker: keeps Waiting minutes + Called count fresh without spamming the server.
       setInterval(() => {
