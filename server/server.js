@@ -9866,12 +9866,19 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
   try {
     const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
     const branch = getRequestBranch(req);
+    const branchCode = String(branch?.branchCode || "").trim().toUpperCase();
+    const withBranchCode = (url) => {
+      const raw = String(url || "").trim();
+      if (!raw || !branchCode) return raw;
+      const sep = raw.includes("?") ? "&" : "?";
+      return `${raw}${sep}branchCode=${encodeURIComponent(branchCode)}`;
+    };
     const generalAssets = listManagedMediaAssets("GENERAL", null).map((row) => ({
-      url: `/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`,
+      url: withBranchCode(`/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`),
       scopeType: "GENERAL",
     }));
     const branchAssets = listManagedMediaAssets("BRANCH", branch).map((row) => ({
-      url: `/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`,
+      url: withBranchCode(`/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`),
       scopeType: "BRANCH",
     }));
     const mergedManaged = [...generalAssets, ...branchAssets].map((row) => row.url);
@@ -9895,7 +9902,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
             .filter((f) => exts.test(f))
             .map(
               (f) =>
-                `/media/custom/${encodeURIComponent(f)}`,
+                withBranchCode(`/media/custom/${encodeURIComponent(f)}`),
             );
 
           if (customFiles.length) {
