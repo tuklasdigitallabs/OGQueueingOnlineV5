@@ -985,6 +985,47 @@ function dbgDisp(...args){
     }
   }
 
+  async function playVideoWithAutoplayFallback(player, state, src) {
+    if (!player) return false;
+    const statusEl = window.DisplayUI?.getStatusEl?.();
+    try {
+      await player.play();
+      if (statusEl) {
+        statusEl.textContent = `Playing video ${state.vidIndex}/${state.playlist.length}`;
+      }
+      return true;
+    } catch (err) {
+      const autoplayBlocked =
+        !!state.displaySettings?.videoSound &&
+        /NotAllowedError|play\(\) failed|user didn't interact/i.test(String(err?.name || "") + " " + String(err?.message || ""));
+      if (autoplayBlocked) {
+        try {
+          player.muted = true;
+          player.volume = 0.0;
+          await player.play();
+          if (statusEl) {
+            statusEl.textContent =
+              "Autoplay required muted video; sound was turned off for playback";
+          }
+          return true;
+        } catch (retryErr) {
+          if (statusEl) {
+            statusEl.textContent =
+              `Video playback failed: ${String(retryErr?.message || retryErr || "unknown error")}`;
+          }
+          console.error("[display] video play retry failed", { src, retryErr });
+          return false;
+        }
+      }
+      if (statusEl) {
+        statusEl.textContent =
+          `Video playback failed: ${String(err?.message || err || "unknown error")}`;
+      }
+      console.error("[display] video play failed", { src, err });
+      return false;
+    }
+  }
+
   async function playNextVideo(ui, state) {
     const players = ui.getAdPlayers?.();
     const a = players?.a;
@@ -998,9 +1039,8 @@ function dbgDisp(...args){
       state.vidIndex++;
       applyVideoSoundSetting(single, state.displaySettings);
       single.src = src;
-      try {
-        await single.play();
-      } catch {
+      const played = await playVideoWithAutoplayFallback(single, state, src);
+      if (!played) {
         setTimeout(() => playNextVideo(ui, state), 300);
       }
       return;
@@ -1059,9 +1099,8 @@ function dbgDisp(...args){
       return;
     }
 
-    try {
-      await next.play();
-    } catch {
+    const played = await playVideoWithAutoplayFallback(next, state, src);
+    if (!played) {
       setTimeout(() => playNextVideo(ui, state), 300);
       return;
     }
