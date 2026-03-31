@@ -1123,11 +1123,11 @@ function dbgDisp(...args){
 
   function applyVideoSoundSetting(adPlayer, displaySettings) {
     if (!adPlayer) return;
-    const soundOn = !!displaySettings.videoSound;
     adPlayer.autoplay = true;
     adPlayer.playsInline = true;
-    adPlayer.muted = !soundOn;
-    adPlayer.volume = soundOn ? 1.0 : 0.0;
+    // Queue display media is always silent. Audio is reserved for queue calls.
+    adPlayer.muted = true;
+    adPlayer.volume = 0.0;
   }
 
   function startPlaylistRefresh(ui, state) {
