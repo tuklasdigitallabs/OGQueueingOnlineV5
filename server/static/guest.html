@@ -231,7 +231,7 @@
         <div class="topbar">
           <div class="brandWrap">
             <h1>Get a Queue Number</h1>
-            <p class="sub" id="guestSub">Register for the selected branch.</p>
+            <p class="sub" id="guestSub">Register for your branch.</p>
           </div>
           <div class="badge" id="guestBranchBadge" title="Current branch">
             <span class="dot"></span>
@@ -249,11 +249,9 @@
 
           <form id="f" autocomplete="on">
             <div class="field" id="branchField">
-              <label for="branchCode">Branch</label>
-              <select id="branchCode">
-                <option value="">Loading branches...</option>
-              </select>
-              <div class="help" id="branchHelp">Choose the branch you are registering with.</div>
+              <label>Branch</label>
+              <input id="branchDisplay" value="Loading branch..." readonly />
+              <div class="help" id="branchHelp">This guest link is tied to a specific branch.</div>
             </div>
 
             <div class="field">
@@ -301,7 +299,7 @@
       const paxEl = document.getElementById("pax");
       const prioEl = document.getElementById("priorityType");
       const branchFieldEl = document.getElementById("branchField");
-      const branchCodeEl = document.getElementById("branchCode");
+      const branchDisplayEl = document.getElementById("branchDisplay");
       const branchHelpEl = document.getElementById("branchHelp");
       const guestSubEl = document.getElementById("guestSub");
       const guestBranchBadgeTextEl = document.getElementById("guestBranchBadgeText");
@@ -318,10 +316,6 @@
         const wanted = String(code || "").trim().toUpperCase();
         if (!wanted) return false;
         return availableBranches.some((row) => String(row.branchCode || "").trim().toUpperCase() === wanted);
-      }
-
-      function isPathBranchLocked() {
-        return !!pathBranchCode && hasActiveBranch(pathBranchCode);
       }
 
       function showErr(msg) {
@@ -368,22 +362,26 @@
       }
 
       function currentBranchCode() {
-        const bySelect = String(branchCodeEl?.value || "").trim().toUpperCase();
         const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
-        return bySelect || byQuery || pathBranchCode || selectedBranchCode || "";
+        return pathBranchCode || byQuery || selectedBranchCode || "";
       }
 
       function renderBranchMeta() {
         const activeCode = currentBranchCode();
         const selected = availableBranches.find((row) => String(row.branchCode || "").trim().toUpperCase() === activeCode)
-          || availableBranches.find((row) => row.isDefault)
-          || availableBranches[0]
           || null;
-        const name = String(selected?.branchName || selected?.branchCode || "Branch");
+        const name = String(selected?.branchName || selected?.branchCode || (activeCode ? "Branch" : "Unavailable"));
         const code = String(selected?.branchCode || "").trim().toUpperCase();
-        selectedBranchCode = code;
+        selectedBranchCode = code || activeCode;
         if (guestSubEl) guestSubEl.textContent = `Register for ${name}${code ? ` (${code})` : ""}.`;
-        if (guestBranchBadgeTextEl) guestBranchBadgeTextEl.textContent = code || name || "Branch";
+        if (guestBranchBadgeTextEl) guestBranchBadgeTextEl.textContent = code || activeCode || name || "Branch";
+        if (branchDisplayEl) {
+          branchDisplayEl.value = code
+            ? `${name} • ${code}`
+            : activeCode
+              ? `${name} • ${activeCode}`
+              : "Guest link missing branch";
+        }
       }
 
       async function loadBranches() {
@@ -392,47 +390,26 @@
           const j = await r.json();
           if (!r.ok || !j?.ok) throw new Error(j?.error || "Failed to load branches");
           availableBranches = Array.isArray(j.branches) ? j.branches : [];
-          if (branchFieldEl && branchCodeEl) {
-            if (availableBranches.length) {
-              branchCodeEl.innerHTML = availableBranches.map((row) => {
-                const code = String(row.branchCode || "").trim().toUpperCase();
-                const name = String(row.branchName || code || "Branch");
-                return `<option value="${code.replace(/"/g, "&quot;")}">${name} • ${code}</option>`;
-              }).join("");
-              const preferred = currentBranchCode();
-              if (preferred && availableBranches.some((row) => String(row.branchCode || "").trim().toUpperCase() === preferred)) {
-                branchCodeEl.value = preferred;
-              } else {
-                const fallback = availableBranches.find((row) => row.isDefault) || availableBranches[0];
-                branchCodeEl.value = String(fallback?.branchCode || "").trim().toUpperCase();
-              }
-              if (isPathBranchLocked()) {
-                branchCodeEl.value = pathBranchCode;
-                branchCodeEl.disabled = true;
-                if (branchHelpEl) {
-                  branchHelpEl.textContent = "This guest link is already locked to a specific branch.";
-                }
-              } else {
-                branchCodeEl.disabled = false;
-                if (branchHelpEl) {
-                  branchHelpEl.textContent = pathBranchCode
-                    ? `Branch link ${pathBranchCode} is unavailable. Please choose an active branch.`
-                    : "Choose the branch you are registering with.";
-                }
-              }
+          if (branchFieldEl) {
+            const activeCode = currentBranchCode();
+            if (!activeCode) {
+              if (branchHelpEl) branchHelpEl.textContent = "This guest link is missing a branch code. Please use the branch QR code.";
+              if (branchDisplayEl) branchDisplayEl.value = "Invalid guest link";
+              btnSubmit.disabled = true;
+            } else if (!hasActiveBranch(activeCode)) {
+              if (branchHelpEl) branchHelpEl.textContent = `Branch link ${activeCode} is unavailable right now. Please ask staff for the latest QR code.`;
+              if (branchDisplayEl) branchDisplayEl.value = activeCode;
+              btnSubmit.disabled = true;
             } else {
-              branchCodeEl.innerHTML = `<option value="">No branches available</option>`;
-              branchCodeEl.disabled = true;
-              if (branchHelpEl) branchHelpEl.textContent = "No active branches are available right now.";
+              if (branchHelpEl) branchHelpEl.textContent = "This guest link is tied to a specific branch.";
+              btnSubmit.disabled = false;
             }
           }
           renderBranchMeta();
         } catch {
-          if (branchCodeEl) {
-            branchCodeEl.innerHTML = `<option value="">Unable to load branches</option>`;
-            branchCodeEl.disabled = true;
-          }
-          if (branchHelpEl) branchHelpEl.textContent = "Unable to load branch options right now.";
+          btnSubmit.disabled = true;
+          if (branchDisplayEl) branchDisplayEl.value = pathBranchCode || "Unable to load branch";
+          if (branchHelpEl) branchHelpEl.textContent = "Unable to verify the branch for this guest link right now.";
           renderBranchMeta();
         }
       }
@@ -458,7 +435,7 @@
           if (!branchCode) {
             btnSubmit.disabled = false;
             btnSubmit.textContent = "Get Number";
-            return showErr("Please select a branch first.");
+            return showErr("This guest link is missing a branch. Please use the branch QR code.");
           }
           const targetUrl = branchCode
             ? window.appUrl("/api/queue/create?branchCode=" + encodeURIComponent(branchCode))
@@ -485,7 +462,6 @@
         }
       }
 
-      branchCodeEl?.addEventListener("change", renderBranchMeta);
       loadBranches();
       f.addEventListener("submit", submitGuestRegistration);
       btnSubmit.addEventListener("click", submitGuestRegistration);
