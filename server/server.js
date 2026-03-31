@@ -8683,7 +8683,12 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       announceDisplayTicket(called);
       try {
         const io = req.app.get("io");
-        if (io) io.emit("display:recall", { id: called.id, branchCode: bc, groupCode: called.groupCode, code, at: now });
+        if (io) {
+          const recallPayload = { id: called.id, branchCode: bc, groupCode: called.groupCode, code, at: now };
+          io.emit("display:recall", recallPayload);
+          // Back-compat for older display clients that still listen for the legacy recall event.
+          io.emit("QUEUE_RECALL", recallPayload);
+        }
       } catch {}
 
       // Also notify other clients that something changed (overview/SSE etc.)
