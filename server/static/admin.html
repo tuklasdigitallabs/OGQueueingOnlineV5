@@ -2822,10 +2822,16 @@ async function jpost(url, body) {
 
       // ---------- Setup page ----------
       
-      function getQrPngUrl(branchCode) {
+function getQrPngUrl(branchCode) {
   const code = String(branchCode || "").trim().toUpperCase();
   if (!code) return "";
   return window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`);
+}
+
+function getGuestEntryUrl(branchCode) {
+  const code = String(branchCode || "").trim().toUpperCase();
+  if (!code) return "";
+  return window.appAbsoluteUrl(`/b/${encodeURIComponent(code)}/guest`);
 }
 
 function refreshQrPreview() {
@@ -2845,7 +2851,7 @@ function refreshQrPreview() {
 
   const url = getQrPngUrl(code);
   img.src = url;
-  txt.value = window.appAbsoluteUrl(`/b/${encodeURIComponent(code)}/guest`);
+  txt.value = getGuestEntryUrl(code);
 
   hint.textContent = "Tip: If on-screen scan fails, use Print QR for a larger code.";
 }
@@ -3537,12 +3543,19 @@ async function clearGdriveOAuth() {
 
           for (const row of BRANCH_MANAGER_CACHE) {
             const tr = document.createElement("tr");
+            const rowCode = String(row.branchCode || "").trim().toUpperCase();
             tr.innerHTML = `
-              <td><b>${escapeHtml(row.branchCode || "-")}</b></td>
+              <td><b>${escapeHtml(rowCode || "-")}</b></td>
               <td>${escapeHtml(row.branchName || "-")}</td>
               <td>${escapeHtml(row.status || "ACTIVE")}</td>
               <td>${Number(row.isDefault || 0) === 1 ? "Yes" : "No"}</td>
-              <td><button class="btn small" type="button" data-edit-branch="${escapeHtml(row.branchId)}">Edit</button></td>
+              <td>
+                <div class="row" style="gap:8px; flex-wrap:wrap;">
+                  <button class="btn small" type="button" data-edit-branch="${escapeHtml(row.branchId)}">Edit</button>
+                  <button class="btn small" type="button" data-print-branch-qr="${escapeHtml(row.branchId)}">Print QR</button>
+                  <button class="btn small" type="button" data-copy-branch-guest="${escapeHtml(row.branchId)}">Copy Guest Link</button>
+                </div>
+              </td>
             `;
             tb.appendChild(tr);
           }
@@ -3552,6 +3565,30 @@ async function clearGdriveOAuth() {
               const branchId = String(btn.getAttribute("data-edit-branch") || "").trim();
               const branch = BRANCH_MANAGER_CACHE.find((row) => String(row.branchId || "").trim() === branchId);
               populateBranchForm(branch || null);
+            });
+          });
+          tb.querySelectorAll("[data-print-branch-qr]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const branchId = String(btn.getAttribute("data-print-branch-qr") || "").trim();
+              const branch = BRANCH_MANAGER_CACHE.find((row) => String(row.branchId || "").trim() === branchId);
+              const branchCode = String(branch?.branchCode || "").trim().toUpperCase();
+              if (!branchCode) return toast("Branches", "Branch code not found.", "warn");
+              openPrintWindowForQr(getQrPngUrl(branchCode), String(branch?.branchName || branchCode).trim(), branchCode);
+            });
+          });
+          tb.querySelectorAll("[data-copy-branch-guest]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const branchId = String(btn.getAttribute("data-copy-branch-guest") || "").trim();
+              const branch = BRANCH_MANAGER_CACHE.find((row) => String(row.branchId || "").trim() === branchId);
+              const branchCode = String(branch?.branchCode || "").trim().toUpperCase();
+              const guestUrl = getGuestEntryUrl(branchCode);
+              if (!guestUrl) return toast("Branches", "Branch code not found.", "warn");
+              try {
+                await navigator.clipboard.writeText(guestUrl);
+                toast("Branches", `Guest link copied for ${branchCode}.`, "ok");
+              } catch {
+                window.prompt("Copy guest link", guestUrl);
+              }
             });
           });
 
