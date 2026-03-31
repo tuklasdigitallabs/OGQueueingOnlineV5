@@ -3799,9 +3799,9 @@ async function clearGdriveOAuth() {
           if (input) input.value = "";
           toast("Media", `Uploaded ${Array.isArray(j.files) ? j.files.length : files.length} file(s).`, "ok");
           await loadMediaManager();
-        } catch {
+        } catch (e) {
           setUploadProgress(scope, { loading: false, persist: false, percent: 0, text: "" });
-          toast("Media", "Upload failed.", "err");
+          toast("Media", String(e?.message || "Upload failed."), "err");
         }
       }
 

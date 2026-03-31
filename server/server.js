@@ -9703,6 +9703,10 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
       inserted.push(getManagedMediaAssetById(id));
     }
 
+    if (!inserted.length) {
+      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Allowed formats: mp4, webm, ogg, m4v, mov." });
+    }
+
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
       "ADMIN_MEDIA_UPLOAD",
       JSON.stringify({
@@ -9719,6 +9723,15 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
     console.error("[admin/media/upload]", e);
     return res.status(500).json({ ok: false, error: "Server error." });
   }
+});
+
+app.use((err, req, res, next) => {
+  const pathName = String(req?.path || req?.originalUrl || "");
+  if (!pathName.includes("/api/admin/media/upload")) return next(err);
+  const status = Number(err?.status || err?.statusCode || 500) || 500;
+  const message = String(err?.message || "Upload failed.").trim() || "Upload failed.";
+  console.error("[admin/media/upload:middleware]", err);
+  return res.status(status).json({ ok: false, error: message });
 });
 
 app.post("/api/admin/media/delete", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
