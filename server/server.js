@@ -2278,6 +2278,34 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     }
   });
 
+  function parseCsvCells(line) {
+    const cells = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (ch === "," && !inQuotes) {
+        cells.push(current.trim());
+        current = "";
+        continue;
+      }
+      current += ch;
+    }
+
+    cells.push(current.trim());
+    return cells.map((cell) => String(cell || "").replace(/^\uFEFF/, "").trim());
+  }
+
   app.post("/api/admin/branches/manage", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
     try {
       const branchId = String(req.body?.branchId || "").trim();
@@ -2346,6 +2374,112 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     } catch (e) {
       console.error("[admin/branches/manage:post]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/admin/branches/manage/import", requirePerm("SETTINGS_MANAGE"), express.json({ limit: "512kb" }), (req, res) => {
+    try {
+      const csvText = String(req.body?.csvText || "").replace(/^\uFEFF/, "").trim();
+      if (!csvText) {
+        return res.status(400).json({ ok: false, error: "csvText is required." });
+      }
+
+      const lines = csvText
+        .split(/\r?\n/)
+        .map((line) => String(line || "").trim())
+        .filter(Boolean);
+
+      if (!lines.length) {
+        return res.status(400).json({ ok: false, error: "No CSV rows were found." });
+      }
+
+      const parsedRows = lines.map(parseCsvCells);
+      const firstRow = parsedRows[0] || [];
+      const firstCode = String(firstRow[0] || "").trim().toUpperCase();
+      const firstName = String(firstRow[1] || "").trim().toUpperCase();
+      const hasHeader = firstCode === "BRANCHCODE" && firstName === "BRANCHNAME";
+      const rows = hasHeader ? parsedRows.slice(1) : parsedRows;
+
+      if (!rows.length) {
+        return res.status(400).json({ ok: false, error: "The CSV only contains a header row." });
+      }
+
+      const defaultBranch = getDefaultBranchRecord();
+      const orgId = String(defaultBranch?.orgId || getDbSetting("multibranch.defaultOrgId") || "").trim();
+      if (!orgId) {
+        return res.status(500).json({ ok: false, error: "No organization available for branch assignment." });
+      }
+
+      const now = Date.now();
+      let created = 0;
+      let updated = 0;
+      const importedCodes = [];
+      const touched = [];
+
+      const insertBranch = db.prepare(
+        `INSERT INTO branches(branchId, orgId, branchCode, branchName, timezone, status, isDefault, createdAt, updatedAt)
+         VALUES(?,?,?,?,?,?,?,?,?)`
+      );
+      const updateBranch = db.prepare(
+        `UPDATE branches
+         SET branchName=?, timezone=?, status=?, updatedAt=?
+         WHERE branchId=?`
+      );
+
+      const runImport = db.transaction(() => {
+        rows.forEach((cols, index) => {
+          const rowNumber = index + 1 + (hasHeader ? 1 : 0);
+          const branchCode = String(cols[0] || "").trim().toUpperCase();
+          const branchName = String(cols[1] || "").trim();
+
+          if (!branchCode || !branchName) {
+            throw new Error(`Row ${rowNumber} must contain branch code and branch name.`);
+          }
+
+          const existing = getBranchByCode(branchCode);
+          if (existing?.branchId) {
+            updateBranch.run(branchName, String(existing.timezone || "Asia/Manila").trim() || "Asia/Manila", "ACTIVE", now, existing.branchId);
+            updated += 1;
+            touched.push({
+              branchId: existing.branchId,
+              branchCode,
+              branchName,
+              action: "updated",
+            });
+          } else {
+            const branchId = randomUUID();
+            insertBranch.run(branchId, orgId, branchCode, branchName, "Asia/Manila", "ACTIVE", 0, now, now);
+            created += 1;
+            touched.push({
+              branchId,
+              branchCode,
+              branchName,
+              action: "created",
+            });
+          }
+
+          importedCodes.push(branchCode);
+        });
+      });
+
+      runImport();
+
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "ADMIN_BRANCH_IMPORT",
+        JSON.stringify({
+          actor: actorFromReq(req),
+          created,
+          updated,
+          importedCodes,
+          rows: touched,
+        }),
+        now
+      );
+
+      return res.json({ ok: true, created, updated, importedCodes, branches: listAllBranches() });
+    } catch (e) {
+      console.error("[admin/branches/manage/import]", e);
+      return res.status(400).json({ ok: false, error: String(e?.message || "Failed to import branches.") });
     }
   });
 

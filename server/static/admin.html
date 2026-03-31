@@ -1326,6 +1326,14 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                   <button class="btn primary" id="btnSaveBranchRecord">Save Branch</button>
                   <button class="btn" id="btnResetBranchForm" type="button">New Branch</button>
                 </div>
+                <div style="display:grid; gap:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.08);">
+                  <label class="muted2">Batch Upload CSV</label>
+                  <div class="row" style="gap:8px; flex-wrap:wrap;">
+                    <input id="branchImportFile" type="file" accept=".csv,text/csv" style="max-width:320px;" />
+                    <button class="btn" id="btnImportBranchesCsv" type="button">Import Branch CSV</button>
+                  </div>
+                  <div class="branchHint" style="margin-top:0;">CSV format: <code>branchCode,branchName</code>. Header row is optional.</div>
+                </div>
                 <div class="branchHint">Manage branch records here, including branch code, name, status, and default branch.</div>
               </div>
             </div>
@@ -3794,6 +3802,31 @@ async function clearGdriveOAuth() {
         }
       }
 
+      async function importBranchesCsv() {
+        const fileInput = $("branchImportFile");
+        const file = fileInput?.files?.[0];
+        if (!file) return toast("Branches", "Choose a CSV file first.", "warn");
+
+        try {
+          const csvText = await file.text();
+          if (!String(csvText || "").trim()) {
+            return toast("Branches", "The selected CSV file is empty.", "warn");
+          }
+
+          const j = await jpost("/api/admin/branches/manage/import", { csvText });
+          if (!j.ok) return toast("Branches", j.error || "Failed to import branches.", "err");
+
+          BRANCH_MANAGER_CACHE = Array.isArray(j.branches) ? j.branches : BRANCH_MANAGER_CACHE;
+          if (fileInput) fileInput.value = "";
+          resetBranchForm();
+          await loadBranchesManager();
+          await loadAccessContext();
+          toast("Branches", `Imported ${Number(j.created || 0)} new and updated ${Number(j.updated || 0)} existing branch${Number(j.created || 0) + Number(j.updated || 0) === 1 ? "" : "es"}.`, "ok");
+        } catch {
+          toast("Branches", "Failed to read or import the CSV file.", "err");
+        }
+      }
+
       // ---------- Users ----------
       async function loadUsers() {
         try {
@@ -5235,6 +5268,7 @@ function renderDailySummaryPage(){
       $("btnReloadBranches")?.addEventListener("click", loadBranchesManager);
       $("btnSaveBranchRecord")?.addEventListener("click", saveBranchRecord);
       $("btnResetBranchForm")?.addEventListener("click", resetBranchForm);
+      $("btnImportBranchesCsv")?.addEventListener("click", importBranchesCsv);
       (function wireUserBranchPicker() {
         const picker = $("newUserBranches");
         if (!picker) return;
