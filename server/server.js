@@ -3644,6 +3644,7 @@ function requireDisplayAuth(req, res, next) {
   const requestedBranchCode = String(
     req?.params?.branchCode || req?.query?.branchCode || ""
   ).trim().toUpperCase();
+  const canUseBranchSelectedFallback = req.method === "GET" && !!requestedBranchCode;
 
   const token = extractDisplayToken(req);
   if (token) {
@@ -3653,26 +3654,29 @@ function requireDisplayAuth(req, res, next) {
     if (device) {
       const pairedBranchCode = String(device.branchCode || "").trim();
       if (pairedBranchCode && requestedBranchCode && pairedBranchCode !== requestedBranchCode) {
-        return res.status(401).json({
-          ok: false,
-          error: "Display token belongs to a different branch. Re-pair this screen.",
-        });
-      }
-      if (pairedBranchCode) {
-        const pairedBranch = getBranchByCode(pairedBranchCode);
-        if (!pairedBranch) {
+        if (!canUseBranchSelectedFallback) {
           return res.status(401).json({
             ok: false,
-            error: "Display token is linked to an unknown branch. Re-pair this screen.",
+            error: "Display token belongs to a different branch. Re-pair this screen.",
           });
         }
-        req.qsysBranch = pairedBranch;
+      } else {
+        if (pairedBranchCode) {
+          const pairedBranch = getBranchByCode(pairedBranchCode);
+          if (!pairedBranch) {
+            return res.status(401).json({
+              ok: false,
+              error: "Display token is linked to an unknown branch. Re-pair this screen.",
+            });
+          }
+          req.qsysBranch = pairedBranch;
+        }
+        req.displayToken = token;
+        req.displayDevice = device;
+        setDisplayAuthCookie(res, token);
+        touchDisplayDevice(device.id, { lastIp: getReqIp(req) });
+        return next();
       }
-      req.displayToken = token;
-      req.displayDevice = device;
-      setDisplayAuthCookie(res, token);
-      touchDisplayDevice(device.id, { lastIp: getReqIp(req) });
-      return next();
     }
   }
 
@@ -3686,7 +3690,7 @@ function requireDisplayAuth(req, res, next) {
   // Branch-selected display mode:
   // for the Electron display agent we now trust the selected branch code
   // and allow read-only display access without pairing.
-  if (req.method === "GET" && requestedBranchCode) {
+  if (canUseBranchSelectedFallback) {
     const branch = getBranchByCode(requestedBranchCode);
     if (branch) {
       req.qsysBranch = branch;
