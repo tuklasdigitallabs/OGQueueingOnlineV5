@@ -314,6 +314,16 @@
       let selectedBranchCode = "";
       const pathBranchCode = getPathBranchCode();
 
+      function hasActiveBranch(code) {
+        const wanted = String(code || "").trim().toUpperCase();
+        if (!wanted) return false;
+        return availableBranches.some((row) => String(row.branchCode || "").trim().toUpperCase() === wanted);
+      }
+
+      function isPathBranchLocked() {
+        return !!pathBranchCode && hasActiveBranch(pathBranchCode);
+      }
+
       function showErr(msg) {
         err.style.display = "block";
         err.textContent = msg;
@@ -364,7 +374,8 @@
       }
 
       function renderBranchMeta() {
-        const selected = availableBranches.find((row) => String(row.branchCode || "").trim().toUpperCase() === currentBranchCode())
+        const activeCode = currentBranchCode();
+        const selected = availableBranches.find((row) => String(row.branchCode || "").trim().toUpperCase() === activeCode)
           || availableBranches.find((row) => row.isDefault)
           || availableBranches[0]
           || null;
@@ -395,7 +406,7 @@
                 const fallback = availableBranches.find((row) => row.isDefault) || availableBranches[0];
                 branchCodeEl.value = String(fallback?.branchCode || "").trim().toUpperCase();
               }
-              if (pathBranchCode) {
+              if (isPathBranchLocked()) {
                 branchCodeEl.value = pathBranchCode;
                 branchCodeEl.disabled = true;
                 if (branchHelpEl) {
@@ -404,7 +415,9 @@
               } else {
                 branchCodeEl.disabled = false;
                 if (branchHelpEl) {
-                  branchHelpEl.textContent = "Choose the branch you are registering with.";
+                  branchHelpEl.textContent = pathBranchCode
+                    ? `Branch link ${pathBranchCode} is unavailable. Please choose an active branch.`
+                    : "Choose the branch you are registering with.";
                 }
               }
             } else {

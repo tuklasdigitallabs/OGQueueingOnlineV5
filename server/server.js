@@ -13,7 +13,13 @@ const fs = require("fs");
 const { Server } = require("socket.io");
 const { randomUUID, createSign, createVerify, randomBytes, createHash } = require("crypto");
 const bcrypt = require("bcryptjs");
-const multer = require("multer");
+let multer;
+try {
+  multer = require("multer");
+} catch (error) {
+  console.warn("[media] 'multer' is not installed. Falling back to built-in multipart parser.");
+  multer = require("./lib/multer-fallback");
+}
 const { openDb } = require("./db");
 const session = require("express-session");
 const os = require("os");
