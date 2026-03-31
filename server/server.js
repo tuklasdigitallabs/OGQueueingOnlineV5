@@ -3964,7 +3964,7 @@ app.post("/api/super-admin/features", requireSuperAdminApi, express.json(), (req
     try {
       const branch = getRequestBranch(req);
       if (!branch?.branchId) return res.status(400).json({ ok: false, error: "No active branch context resolved." });
-      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch), mediaSource: getDisplayMediaSourceSummary(branch) });
     } catch (e) {
       console.error("[admin/display-config:get]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
@@ -3983,7 +3983,7 @@ app.post("/api/super-admin/features", requireSuperAdminApi, express.json(), (req
         Date.now()
       );
       emitChanged(app, db, "ADMIN_DISPLAY_CONFIG_UPDATE", { branchCode: String(branch.branchCode || "") });
-      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch), mediaSource: getDisplayMediaSourceSummary(branch) });
     } catch (e) {
       console.error("[admin/display-config:post]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
@@ -3995,7 +3995,7 @@ app.post("/api/super-admin/features", requireSuperAdminApi, express.json(), (req
       const branchCode = String(req.query?.branchCode || "").trim().toUpperCase();
       const branch = branchCode ? getBranchByCode(branchCode) : getRequestBranch(req);
       if (!branch?.branchId) return res.status(404).json({ ok: false, error: "Branch not found." });
-      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch), mediaSource: getDisplayMediaSourceSummary(branch) });
     } catch (e) {
       console.error("[public/display-config:get]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
@@ -4015,7 +4015,7 @@ app.post("/api/super-admin/features", requireSuperAdminApi, express.json(), (req
         Date.now()
       );
       emitChanged(app, db, "PUBLIC_DISPLAY_CONFIG_UPDATE", { branchCode });
-      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch) });
+      return res.json({ ok: true, branch, settings: getResolvedDisplaySettings(branch), mediaSource: getDisplayMediaSourceSummary(branch) });
     } catch (e) {
       console.error("[public/display-config:post]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
@@ -9587,6 +9587,47 @@ function listManagedMediaAssets(scopeType, branch) {
      WHERE scopeType='GENERAL' AND isActive=1
      ORDER BY createdAt ASC, fileName ASC`
   ).all();
+}
+
+function getDisplayMediaSourceSummary(branch) {
+  const generalCount = listManagedMediaAssets("GENERAL", null).length;
+  const branchCount = branch?.branchId ? listManagedMediaAssets("BRANCH", branch).length : 0;
+  const customDir = String(getResolvedDisplaySettings(branch)["media.sourceDir"] || "").trim();
+
+  if (branchCount > 0) {
+    return {
+      effectiveSource: "managed-branch",
+      label: `Branch videos + general videos (${branchCount} branch, ${generalCount} general)`,
+      generalCount,
+      branchCount,
+      customDir,
+    };
+  }
+  if (generalCount > 0) {
+    return {
+      effectiveSource: "managed-general",
+      label: `General videos (${generalCount}) for all branches`,
+      generalCount,
+      branchCount,
+      customDir,
+    };
+  }
+  if (customDir) {
+    return {
+      effectiveSource: "custom-folder",
+      label: customDir,
+      generalCount,
+      branchCount,
+      customDir,
+    };
+  }
+  return {
+    effectiveSource: "bundled",
+    label: "Bundled videos (default)",
+    generalCount,
+    branchCount,
+    customDir,
+  };
 }
 
 function getManagedMediaAssetById(id) {

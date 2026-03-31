@@ -38,6 +38,7 @@
     displayTargets: [],
     availableBranches: [],
     displaySettings: null,
+    displayMediaSource: null,
   };
 
   function normalizeServerUrl(serverUrl) {
@@ -152,9 +153,11 @@
       el.displayModeInput.value = normalizeDisplayMode(settings?.["display.orientation"] || state.launcherConfig?.displayMode);
     }
     if (el.mediaSourceValue) {
+      const mediaSourceLabel = String(state.displayMediaSource?.label || "").trim();
       const mediaSource = String(settings?.["media.sourceDir"] || "").trim();
-      el.mediaSourceValue.textContent = mediaSource || "Bundled videos (default)";
-      el.mediaSourceValue.title = mediaSource || "Bundled videos (default)";
+      const text = mediaSourceLabel || mediaSource || "Bundled videos (default)";
+      el.mediaSourceValue.textContent = text;
+      el.mediaSourceValue.title = text;
     }
     renderResolvedDisplayUrl();
   }
@@ -377,6 +380,7 @@
           return res.ok ? json : { ok: false, error: json?.error || "Unable to load branch display settings" };
         })();
     if (!j?.ok) throw new Error(j?.error || "Unable to load branch display settings");
+    state.displayMediaSource = j.mediaSource || null;
     renderDisplaySettings(j.settings || null);
 
     if (syncLocalConfig && window.qsys?.saveLauncherConfig) {
@@ -428,6 +432,7 @@
       return;
     }
     renderLauncherConfig(res.config || payload);
+    state.displayMediaSource = remoteJson.mediaSource || null;
     renderDisplaySettings(remoteJson.settings || null);
     setAgentStatus("Display setup saved for this PC.", false);
     const ok = await pingHealth();
