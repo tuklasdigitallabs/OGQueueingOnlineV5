@@ -1672,10 +1672,18 @@ app.get("/static/js/:file", (req, res) => {
       });
     } catch {}
   }
-  function destroySessionAndRespond(req, res) {
+  function hasAnyScopedSessionUser(session) {
+    return !!(session?.adminUser || session?.staffUser || session?.user);
+  }
+  function destroySessionAndRespond(req, res, { preserveRemainingUsers = false } = {}) {
     if (!req?.session || typeof req.session.destroy !== "function") {
-      clearSessionCookie(res);
+      if (!preserveRemainingUsers || !hasAnyScopedSessionUser(req?.session)) {
+        clearSessionCookie(res);
+      }
       return res.json({ ok: true });
+    }
+    if (preserveRemainingUsers && hasAnyScopedSessionUser(req.session)) {
+      return req.session.save(() => res.json({ ok: true }));
     }
     return req.session.destroy(() => {
       clearSessionCookie(res);
@@ -1897,6 +1905,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   function finalizeLoginSession(req, scope, sessUser) {
     return new Promise((resolve, reject) => {
       const nextUser = ensureSessionBranchContext(sessUser);
+      const preservedAdminUser = scope === "admin" ? null : req?.session?.adminUser || null;
+      const preservedStaffUser = scope === "staff" ? null : req?.session?.staffUser || null;
+      const preservedLegacyUser = req?.session?.user || null;
       if (!req || !req.session || typeof req.session.regenerate !== "function") {
         try {
           setSessionUser(req, scope, nextUser);
@@ -1908,6 +1919,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       req.session.regenerate((err) => {
         if (err) return reject(err);
         try {
+          if (preservedAdminUser) req.session.adminUser = preservedAdminUser;
+          if (preservedStaffUser) req.session.staffUser = preservedStaffUser;
+          if (preservedLegacyUser) req.session.user = preservedLegacyUser;
           setSessionUser(req, scope, nextUser);
           req.session.save((saveErr) => {
             if (saveErr) return reject(saveErr);
@@ -2186,12 +2200,12 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // Logout (separated)
   app.post("/api/staff/auth/logout", (req, res) => {
     try { clearSessionUser(req, "staff"); } catch {}
-    return destroySessionAndRespond(req, res);
+    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
   });
 
   app.post("/api/admin/auth/logout", (req, res) => {
     try { clearSessionUser(req, "admin"); } catch {}
-    return destroySessionAndRespond(req, res);
+    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
   });
 
   app.post("/api/super-admin/auth/logout", (req, res) => {
