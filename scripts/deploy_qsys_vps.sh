@@ -15,14 +15,14 @@ set -euo pipefail
 #   IMAGE_NAME=og-qsys-app:latest
 #   ENV_FILE=/opt/og-qsys/.env.qsys
 #   DATA_DIR=/opt/og-qsys/data
-#   DOCKER_NETWORK=og-inventory_default
+#   DOCKER_NETWORK=og-qsys-net
 
 APP_DIR="${APP_DIR:-/opt/og-qsys/app}"
 CONTAINER_NAME="${CONTAINER_NAME:-og-qsys-app}"
 IMAGE_NAME="${IMAGE_NAME:-og-qsys-app:latest}"
 ENV_FILE="${ENV_FILE:-/opt/og-qsys/.env.qsys}"
 DATA_DIR="${DATA_DIR:-/opt/og-qsys/data}"
-DOCKER_NETWORK="${DOCKER_NETWORK:-}"
+DOCKER_NETWORK="${DOCKER_NETWORK:-og-qsys-net}"
 HOST_PORT="${HOST_PORT:-3100}"
 CONTAINER_PORT="${CONTAINER_PORT:-3100}"
 HEALTH_URL="${HEALTH_URL:-https://onegourmetph.com/qsys/api/health}"
