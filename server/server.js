@@ -1931,10 +1931,29 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const preservedAdminUser = scope === "admin" ? null : req?.session?.adminUser || null;
       const preservedStaffUser = scope === "staff" ? null : req?.session?.staffUser || null;
       const preservedLegacyUser = req?.session?.user || null;
+      const hasOtherScopedSession = scope === "admin"
+        ? !!preservedStaffUser
+        : scope === "staff"
+          ? !!preservedAdminUser
+          : !!(preservedAdminUser || preservedStaffUser);
       if (!req || !req.session || typeof req.session.regenerate !== "function") {
         try {
           setSessionUser(req, scope, nextUser);
           return resolve();
+        } catch (e) {
+          return reject(e);
+        }
+      }
+      if (hasOtherScopedSession) {
+        try {
+          if (preservedAdminUser) req.session.adminUser = preservedAdminUser;
+          if (preservedStaffUser) req.session.staffUser = preservedStaffUser;
+          if (preservedLegacyUser) req.session.user = preservedLegacyUser;
+          setSessionUser(req, scope, nextUser);
+          return req.session.save((saveErr) => {
+            if (saveErr) return reject(saveErr);
+            return resolve();
+          });
         } catch (e) {
           return reject(e);
         }
