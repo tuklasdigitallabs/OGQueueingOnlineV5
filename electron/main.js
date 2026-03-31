@@ -622,7 +622,12 @@ ipcMain.handle("launcher-remote-display-config:get", async (_evt, payload) => {
     if (!res.ok || !res.json?.ok) {
       return { ok: false, error: res.json?.error || `Failed to load display settings for ${branchCode}.` };
     }
-    return { ok: true, branch: res.json.branch || null, settings: res.json.settings || {} };
+    return {
+      ok: true,
+      branch: res.json.branch || null,
+      settings: res.json.settings || {},
+      mediaSource: res.json.mediaSource || null,
+    };
   } catch (error) {
     return { ok: false, error: error?.message || "Failed to load display settings." };
   }
@@ -647,7 +652,12 @@ ipcMain.handle("launcher-remote-display-config:save", async (_evt, payload) => {
     if (!res.ok || !json?.ok) {
       return { ok: false, error: json?.error || `Failed to save display settings for ${branchCode}.` };
     }
-    return { ok: true, branch: json.branch || null, settings: json.settings || {} };
+    return {
+      ok: true,
+      branch: json.branch || null,
+      settings: json.settings || {},
+      mediaSource: json.mediaSource || null,
+    };
   } catch (error) {
     return { ok: false, error: error?.message || "Failed to save display settings." };
   }
