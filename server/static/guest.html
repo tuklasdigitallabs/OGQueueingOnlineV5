@@ -308,15 +308,8 @@
       const meta = document.getElementById("meta");
       const err = document.getElementById("err");
       const btnSubmit = document.getElementById("btnSubmit");
-      let availableBranches = [];
-      let selectedBranchCode = "";
+      let resolvedBranch = null;
       const pathBranchCode = getPathBranchCode();
-
-      function hasActiveBranch(code) {
-        const wanted = String(code || "").trim().toUpperCase();
-        if (!wanted) return false;
-        return availableBranches.some((row) => String(row.branchCode || "").trim().toUpperCase() === wanted);
-      }
 
       function showErr(msg) {
         err.style.display = "block";
@@ -363,16 +356,14 @@
 
       function currentBranchCode() {
         const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
-        return pathBranchCode || byQuery || selectedBranchCode || "";
+        const byResolved = String(resolvedBranch?.branchCode || "").trim().toUpperCase();
+        return pathBranchCode || byQuery || byResolved || "";
       }
 
       function renderBranchMeta() {
         const activeCode = currentBranchCode();
-        const selected = availableBranches.find((row) => String(row.branchCode || "").trim().toUpperCase() === activeCode)
-          || null;
-        const name = String(selected?.branchName || selected?.branchCode || (activeCode ? "Branch" : "Unavailable"));
-        const code = String(selected?.branchCode || "").trim().toUpperCase();
-        selectedBranchCode = code || activeCode;
+        const name = String(resolvedBranch?.branchName || resolvedBranch?.branchCode || (activeCode ? "Branch" : "Unavailable"));
+        const code = String(resolvedBranch?.branchCode || activeCode || "").trim().toUpperCase();
         if (guestSubEl) guestSubEl.textContent = `Register for ${name}${code ? ` (${code})` : ""}.`;
         if (guestBranchBadgeTextEl) guestBranchBadgeTextEl.textContent = code || activeCode || name || "Branch";
         if (branchDisplayEl) {
@@ -384,32 +375,36 @@
         }
       }
 
-      async function loadBranches() {
+      async function loadBranch() {
         try {
-          const r = await fetch(window.appUrl("/api/public/branches"));
+          const activeCode = currentBranchCode();
+          if (!activeCode) {
+            if (branchHelpEl) branchHelpEl.textContent = "This guest link is missing a branch code. Please use the branch QR code.";
+            if (branchDisplayEl) branchDisplayEl.value = "Invalid guest link";
+            btnSubmit.disabled = true;
+            renderBranchMeta();
+            return;
+          }
+
+          const r = await fetch(window.appUrl("/api/public/business-date?branchCode=" + encodeURIComponent(activeCode)));
           const j = await r.json();
-          if (!r.ok || !j?.ok) throw new Error(j?.error || "Failed to load branches");
-          availableBranches = Array.isArray(j.branches) ? j.branches : [];
+          if (!r.ok || !j?.ok) throw new Error(j?.error || "Failed to load branch");
+          resolvedBranch = {
+            branchId: String(j.branchId || "").trim(),
+            branchCode: String(j.branchCode || activeCode).trim().toUpperCase(),
+            branchName: String(j.branchName || activeCode).trim(),
+            timezone: String(j.timezone || "Asia/Manila").trim() || "Asia/Manila",
+          };
           if (branchFieldEl) {
-            const activeCode = currentBranchCode();
-            if (!activeCode) {
-              if (branchHelpEl) branchHelpEl.textContent = "This guest link is missing a branch code. Please use the branch QR code.";
-              if (branchDisplayEl) branchDisplayEl.value = "Invalid guest link";
-              btnSubmit.disabled = true;
-            } else if (!hasActiveBranch(activeCode)) {
-              if (branchHelpEl) branchHelpEl.textContent = `Branch link ${activeCode} is unavailable right now. Please ask staff for the latest QR code.`;
-              if (branchDisplayEl) branchDisplayEl.value = activeCode;
-              btnSubmit.disabled = true;
-            } else {
-              if (branchHelpEl) branchHelpEl.textContent = "This guest link is tied to a specific branch.";
-              btnSubmit.disabled = false;
-            }
+            if (branchHelpEl) branchHelpEl.textContent = "This guest link is tied to a specific branch.";
+            btnSubmit.disabled = false;
           }
           renderBranchMeta();
         } catch {
+          resolvedBranch = null;
           btnSubmit.disabled = true;
           if (branchDisplayEl) branchDisplayEl.value = pathBranchCode || "Unable to load branch";
-          if (branchHelpEl) branchHelpEl.textContent = "Unable to verify the branch for this guest link right now.";
+          if (branchHelpEl) branchHelpEl.textContent = `Branch link ${currentBranchCode() || pathBranchCode || ""} is unavailable right now. Please ask staff for the latest QR code.`;
           renderBranchMeta();
         }
       }
@@ -462,7 +457,7 @@
         }
       }
 
-      loadBranches();
+      loadBranch();
       f.addEventListener("submit", submitGuestRegistration);
       btnSubmit.addEventListener("click", submitGuestRegistration);
     </script>
