@@ -28,4 +28,6 @@ contextBridge.exposeInMainWorld("qsys", {
   saveLauncherConfig: (cfg) => ipcRenderer.invoke("launcher-config:save", cfg),
   getDisplayTargets: () => ipcRenderer.invoke("launcher-display-targets"),
   getLauncherStatus: () => ipcRenderer.invoke("launcher-status:get"),
+  getRemoteDisplayConfig: (branchCode) => ipcRenderer.invoke("launcher-remote-display-config:get", { branchCode }),
+  saveRemoteDisplayConfig: (payload) => ipcRenderer.invoke("launcher-remote-display-config:save", payload),
 });

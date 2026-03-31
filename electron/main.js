@@ -612,6 +612,47 @@ ipcMain.handle("launcher-status:get", async () => {
   return out;
 });
 
+ipcMain.handle("launcher-remote-display-config:get", async (_evt, payload) => {
+  if (!cfgGlobal) return { ok: false, error: "Config not initialized" };
+  const base = normalizeServerUrl(cfgGlobal.serverUrl, cfgGlobal.port);
+  const branchCode = normalizeBranchCode(payload?.branchCode);
+  if (!branchCode) return { ok: false, error: "Branch code is required." };
+  try {
+    const res = await fetchJsonMaybe(`${base}/api/public/display-config?branchCode=${encodeURIComponent(branchCode)}`);
+    if (!res.ok || !res.json?.ok) {
+      return { ok: false, error: res.json?.error || `Failed to load display settings for ${branchCode}.` };
+    }
+    return { ok: true, branch: res.json.branch || null, settings: res.json.settings || {} };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Failed to load display settings." };
+  }
+});
+
+ipcMain.handle("launcher-remote-display-config:save", async (_evt, payload) => {
+  if (!cfgGlobal) return { ok: false, error: "Config not initialized" };
+  const base = normalizeServerUrl(cfgGlobal.serverUrl, cfgGlobal.port);
+  const branchCode = normalizeBranchCode(payload?.branchCode);
+  if (!branchCode) return { ok: false, error: "Branch code is required." };
+  try {
+    const res = await fetch(`${base}/api/public/display-config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        branchCode,
+        "display.showVideo": String(payload?.displayShowVideo || "false") === "true" ? "true" : "false",
+        "display.orientation": normalizeDisplayMode(payload?.displayMode),
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.ok) {
+      return { ok: false, error: json?.error || `Failed to save display settings for ${branchCode}.` };
+    }
+    return { ok: true, branch: json.branch || null, settings: json.settings || {} };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Failed to save display settings." };
+  }
+});
+
 function createTray() {
   if (tray) return;
 

@@ -367,11 +367,16 @@
       renderDisplaySettings(null);
       return null;
     }
-    const res = await fetch(`${HARD_CODED_SERVER_URL}/api/public/display-config?branchCode=${encodeURIComponent(normalizedBranchCode)}`, {
-      cache: "no-store",
-    });
-    const j = await safeJson(res);
-    if (!res.ok || !j?.ok) throw new Error(j?.error || "Unable to load branch display settings");
+    const j = window.qsys?.getRemoteDisplayConfig
+      ? await window.qsys.getRemoteDisplayConfig(normalizedBranchCode)
+      : await (async () => {
+          const res = await fetch(`${HARD_CODED_SERVER_URL}/api/public/display-config?branchCode=${encodeURIComponent(normalizedBranchCode)}`, {
+            cache: "no-store",
+          });
+          const json = await safeJson(res);
+          return res.ok ? json : { ok: false, error: json?.error || "Unable to load branch display settings" };
+        })();
+    if (!j?.ok) throw new Error(j?.error || "Unable to load branch display settings");
     renderDisplaySettings(j.settings || null);
 
     if (syncLocalConfig && window.qsys?.saveLauncherConfig) {
@@ -398,17 +403,22 @@
       return;
     }
     setAgentStatus("Saving display setup...", false);
-    const remoteRes = await fetch(`${HARD_CODED_SERVER_URL}/api/public/display-config`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        branchCode: payload.branchCode,
-        "display.showVideo": payload.displayShowVideo,
-        "display.orientation": payload.displayMode,
-      }),
-    });
-    const remoteJson = await safeJson(remoteRes);
-    if (!remoteRes.ok || !remoteJson?.ok) {
+    const remoteJson = window.qsys?.saveRemoteDisplayConfig
+      ? await window.qsys.saveRemoteDisplayConfig(payload)
+      : await (async () => {
+          const remoteRes = await fetch(`${HARD_CODED_SERVER_URL}/api/public/display-config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              branchCode: payload.branchCode,
+              "display.showVideo": payload.displayShowVideo,
+              "display.orientation": payload.displayMode,
+            }),
+          });
+          const json = await safeJson(remoteRes);
+          return remoteRes.ok ? json : { ok: false, error: json?.error || "Failed to save branch display settings." };
+        })();
+    if (!remoteJson?.ok) {
       setAgentStatus(remoteJson?.error || "Failed to save branch display settings.", true);
       return;
     }
