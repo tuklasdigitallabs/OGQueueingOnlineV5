@@ -1022,8 +1022,7 @@ function waitingMins(r){
     }
 
     function staffLoginUrl(){
-      const code = currentBranchCodeForNav();
-      return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff-login`) : window.appUrl("/staff-login");
+      return window.appUrl("/staff-login");
     }
 
     function staffEntryUrl(branchCode){

@@ -180,28 +180,14 @@
     const $p = document.getElementById("pin");
     const $e = document.getElementById("err");
     const $dot = document.querySelector(".dot");
-    function getPathBranchCode() {
-      try {
-        const parts = String(window.location.pathname || "").split("/").filter(Boolean);
-        const idx = parts.findIndex((part) => String(part).toLowerCase() === "b");
-        if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim().toUpperCase();
-      } catch {}
-      return "";
-    }
-    function currentBranchCode() {
-      const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
-      return byQuery || getPathBranchCode() || "";
-    }
     function buildStaffEntryUrl(branchCodeArg) {
-      const code = String(branchCodeArg || currentBranchCode() || "").trim().toUpperCase();
+      const code = String(branchCodeArg || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
     }
 
     async function refreshHealth() {
       try {
-        const code = currentBranchCode();
-        const target = code ? window.appUrl(`/api/health?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/health");
-        const r = await fetch(target, { cache: "no-store" });
+        const r = await fetch(window.appUrl("/api/health"), { cache: "no-store" });
         const ok = r.ok;
         $dot.classList.remove("ok", "bad");
         $dot.classList.add(ok ? "ok" : "bad");
@@ -210,13 +196,6 @@
         $dot.classList.add("bad");
       }
     }
-
-    (function showBranchHint(){
-      const code = currentBranchCode();
-      if (!code) return;
-      const sub = document.querySelector(".sub");
-      if (sub) sub.textContent = `Enter your username and PIN for ${code}`;
-    })();
 
     // Numeric keypad optimization: strip non-digits as user types
     $p.addEventListener("input", () => {
@@ -232,20 +211,17 @@
     document.getElementById("btn").addEventListener("click", async () => {
       $e.textContent = "";
       try {
-        const code = currentBranchCode();
-        const target = code ? window.appUrl(`/api/staff/auth/login?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/staff/auth/login");
-        const r = await fetch(target, {
-
+        const r = await fetch(window.appUrl("/api/staff/auth/login"), {
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ fullName: $n.value, pin: $p.value, ...(code ? { branchCode: code } : {}) })
+          body: JSON.stringify({ fullName: $n.value, pin: $p.value })
         });
         const j = await r.json();
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
         const nextCode = String(
           j?.branch?.branchCode ||
           (Array.isArray(j?.allowedBranches) && j.allowedBranches[0]?.branchCode) ||
-          code
+          ""
         ).trim().toUpperCase();
         location.href = buildStaffEntryUrl(nextCode);
       } catch {

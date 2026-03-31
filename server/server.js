@@ -2488,9 +2488,7 @@ function buildGuestEntryPath(branchCodeInput = "") {
 }
 
 function buildStaffLoginPath(branchCodeInput = "") {
-  const code = String(branchCodeInput || "").trim().toUpperCase();
-  if (!code) return pathWithBase("/staff-login");
-  return pathWithBase(`/b/${encodeURIComponent(code)}/staff-login`);
+  return pathWithBase("/staff-login");
 }
 
 function buildStaffEntryPath(branchCodeInput = "") {
@@ -2775,10 +2773,7 @@ app.get("/admin-login", (req, res) => {
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
 app.get("/b/:branchCode/admin-login", (req, res) => {
-  const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
-  if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
-  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
-  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
+  return res.redirect(pathWithBase("/admin-login"));
 });
 
 app.get("/super-admin-login", (_req, res) =>
@@ -2802,15 +2797,12 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 );
 
 
-  app.get("/staff-login", (req, res) => {
+app.get("/staff-login", (req, res) => {
   if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
 });
 app.get("/b/:branchCode/staff-login", (req, res) => {
-  const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
-  if (!branchCode || !getBranchByCode(branchCode)) return res.status(404).send("Branch not found");
-  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
-  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
+  return res.redirect(pathWithBase("/staff-login"));
 });
 
 

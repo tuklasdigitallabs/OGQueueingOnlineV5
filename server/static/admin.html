@@ -1362,10 +1362,10 @@ tr.is-collapsed + tr.subrow + tr.subrow{
             </div>
 
             <div class="card" style="grid-column: span 5;">
-              <h3>Add User</h3>
+              <h3 id="userFormTitle">Add User</h3>
               <div style="display:grid; gap:10px;">
                 <div>
-                  <label class="muted2">Full Name</label>
+                  <label class="muted2" id="newUserNameLabel">Username</label>
                   <input id="newUserName" placeholder="e.g., Juan Dela Cruz" />
                 </div>
                 <div>
@@ -1392,7 +1392,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                   </div>
                   <div class="branchHint" id="newUserBranchHint">Staff and supervisor users must be assigned exactly one branch. Admin roles can access all branches.</div>
                 </div>
-                <div class="two">
+                <div class="two" id="newUserPinRow">
                   <div>
                     <label class="muted2">6-digit PIN</label>
                     <input id="newUserPin" inputmode="numeric" maxlength="6" placeholder="******" />
@@ -1402,8 +1402,11 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <input id="newUserPin2" inputmode="numeric" maxlength="6" placeholder="******" />
                   </div>
                 </div>
-                <button class="btn primary" id="btnCreateUser">Create User</button>
-                <div class="muted2">PIN is stored hashed (bcrypt) server-side.</div>
+                <div class="two">
+                  <button class="btn primary" id="btnCreateUser">Create User</button>
+                  <button class="btn" id="btnCancelUserEdit" type="button" style="display:none;">Cancel Edit</button>
+                </div>
+                <div class="muted2" id="userFormNote">PIN is stored hashed (bcrypt) server-side.</div>
               </div>
             </div>
           </div>
@@ -2124,6 +2127,7 @@ async function jpost(url, body) {
       let MEDIA_CACHE = { general: [], branch: [] };
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
+      let USER_FORM_MODE = { mode: "create", userId: "", originalName: "" };
       const QS = new URLSearchParams(window.location.search);
       const INTERNAL_MODE = QS.get("internal") || "";
       const INITIAL_PAGE = String(QS.get("page") || "dashboard").trim().toLowerCase();
@@ -2146,6 +2150,57 @@ async function jpost(url, body) {
 
       function adminLoginUrl() {
         return window.appUrl("/admin-login");
+      }
+
+      function setUserFormMode(mode = "create", user = null) {
+        const isEdit = mode === "edit";
+        USER_FORM_MODE = {
+          mode: isEdit ? "edit" : "create",
+          userId: isEdit ? String(user?.userId || "").trim() : "",
+          originalName: isEdit ? String(user?.fullName || "").trim() : "",
+        };
+        if ($("userFormTitle")) $("userFormTitle").textContent = isEdit ? "Edit User" : "Add User";
+        if ($("btnCreateUser")) $("btnCreateUser").textContent = isEdit ? "Save Changes" : "Create User";
+        if ($("btnCancelUserEdit")) $("btnCancelUserEdit").style.display = isEdit ? "" : "none";
+        if ($("newUserNameLabel")) $("newUserNameLabel").textContent = "Username";
+        if ($("newUserName")) $("newUserName").disabled = isEdit;
+        if ($("newUserPinRow")) $("newUserPinRow").style.display = isEdit ? "none" : "";
+        if ($("newUserPin")) {
+          $("newUserPin").disabled = isEdit;
+          if (isEdit) $("newUserPin").value = "";
+        }
+        if ($("newUserPin2")) {
+          $("newUserPin2").disabled = isEdit;
+          if (isEdit) $("newUserPin2").value = "";
+        }
+        if ($("userFormNote")) {
+          $("userFormNote").textContent = isEdit
+            ? "Edit mode only updates role and branch access. Username and PIN stay unchanged."
+            : "PIN is stored hashed (bcrypt) server-side.";
+        }
+      }
+
+      function resetUserForm() {
+        if ($("newUserName")) {
+          $("newUserName").value = "";
+          $("newUserName").disabled = false;
+        }
+        if ($("newUserRole")) $("newUserRole").value = "STAFF";
+        if ($("newUserPin")) $("newUserPin").value = "";
+        if ($("newUserPin2")) $("newUserPin2").value = "";
+        renderUserBranchPicker("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
+        setUserFormMode("create");
+        updateUserBranchPickerMode();
+      }
+
+      function beginEditUser(user) {
+        if (!user?.userId) return;
+        setUserFormMode("edit", user);
+        if ($("newUserName")) $("newUserName").value = String(user.fullName || "").trim();
+        if ($("newUserRole")) $("newUserRole").value = String(user.roleId || "STAFF").trim().toUpperCase();
+        renderUserBranchPicker("newUserBranches", Array.isArray(user.branchIds) ? user.branchIds : []);
+        updateUserBranchPickerMode();
+        $("newUserRole")?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
       function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {
@@ -3796,7 +3851,7 @@ async function clearGdriveOAuth() {
               const user = users.find(x => x.userId === id);
               if (!user) return;
 
-              if (act === "edit") return editUser(user);
+              if (act === "edit") return beginEditUser(user);
               if (act === "toggle") return toggleUser(user);
               if (act === "pin") return resetPin(user);
             });
@@ -3809,63 +3864,48 @@ async function clearGdriveOAuth() {
         }
       }
 
-      async function createUser() {
+      async function saveUserForm() {
         const name = ($("newUserName").value || "").trim();
         const role = $("newUserRole").value;
         const branchIds = roleUsesBranchAssignment(role) ? getSelectedBranchIds("newUserBranches") : [];
-        const pin1 = ($("newUserPin").value || "").trim();
-        const pin2 = ($("newUserPin2").value || "").trim();
         const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
+        const isEdit = USER_FORM_MODE.mode === "edit";
 
-        if (!name) return toast("Users", "Name is required.", "warn");
         if (!allowedRoles.includes(String(role || "").toUpperCase())) return toast("Users", "Invalid role.", "warn");
         if (roleUsesBranchAssignment(role) && branchIds.length !== 1) return toast("Users", "Select exactly one branch.", "warn");
-        if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
-        if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
+        if (!isEdit) {
+          const pin1 = ($("newUserPin").value || "").trim();
+          const pin2 = ($("newUserPin2").value || "").trim();
+          if (!name) return toast("Users", "Name is required.", "warn");
+          if (!/^\d{6}$/.test(pin1)) return toast("Users", "PIN must be 6 digits.", "warn");
+          if (pin1 !== pin2) return toast("Users", "PIN mismatch.", "warn");
+          if (!confirm(`Create user?\n\nName: ${name}\nRole: ${role}`)) return;
 
-        if (!confirm(`Create user?\n\nName: ${name}\nRole: ${role}`)) return;
+          try {
+            const j = await jpost("/api/admin/users/create", { fullName: name, roleId: role, pin: pin1, branchIds });
+            if (!j.ok) return toast("Users", j.error || "Create failed", "err");
 
-        try {
-          const j = await jpost("/api/admin/users/create", { fullName: name, roleId: role, pin: pin1, branchIds });
-          if (!j.ok) return toast("Users", j.error || "Create failed", "err");
-
-          toast("Users", "User created.", "ok");
-          $("newUserName").value = "";
-          $("newUserPin").value = "";
-          $("newUserPin2").value = "";
-          renderUserBranchPicker("newUserBranches", [String(CURRENT_USER?.selectedBranchId || "").trim()].filter(Boolean));
-          await loadUsers();
-        } catch {
-          toast("Users", "Request failed.", "err");
+            toast("Users", "User created.", "ok");
+            resetUserForm();
+            await loadUsers();
+          } catch {
+            toast("Users", "Request failed.", "err");
+          }
+          return;
         }
-      }
 
-      async function editUser(user) {
-        const fullName = prompt("Edit Full Name:", user.fullName || "");
-        if (fullName === null) return;
-
-        const roleId = prompt(
-          canUseInternal("users") ? "Edit Role (STAFF / SUPERVISOR / ADMIN):" : "Edit Role (STAFF / SUPERVISOR):",
-          user.roleId || "STAFF"
-        );
-        if (roleId === null) return;
-
-        const role = String(roleId || "").trim().toUpperCase();
-        const name = String(fullName || "").trim();
-        const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
-        const selectedBranchIds = promptUserBranchSelection(Array.isArray(user.branchIds) ? user.branchIds : [], role);
-        if (selectedBranchIds === null) return;
-
-        if (!name) return toast("Users", "Name cannot be empty.", "warn");
-        if (!allowedRoles.includes(role)) return toast("Users", "Invalid role.", "warn");
-        if (roleUsesBranchAssignment(role) && selectedBranchIds.length !== 1) return toast("Users", "Select exactly one branch.", "warn");
-
-        if (!confirm(`Save changes?\n\n${user.fullName} -> ${name}\n${user.roleId} -> ${role}`)) return;
+        if (!USER_FORM_MODE.userId) return toast("Users", "No user selected for edit.", "warn");
+        if (!confirm(`Save changes?\n\nUser: ${USER_FORM_MODE.originalName || name}\nRole: ${role}`)) return;
 
         try {
-          const j = await jpost("/api/admin/users/update", { userId: user.userId, fullName: name, roleId: role, branchIds: selectedBranchIds });
+          const j = await jpost("/api/admin/users/update", {
+            userId: USER_FORM_MODE.userId,
+            roleId: role,
+            branchIds,
+          });
           if (!j.ok) return toast("Users", j.error || "Update failed", "err");
           toast("Users", "Updated.", "ok");
+          resetUserForm();
           await loadUsers();
         } catch {
           toast("Users", "Request failed.", "err");
@@ -5338,7 +5378,8 @@ function renderDailySummaryPage(){
       $("btnRefreshGdriveSummary")?.addEventListener("click", loadSetupUploadSummary);
 
 
-      $("btnCreateUser").addEventListener("click", createUser);
+      $("btnCreateUser").addEventListener("click", saveUserForm);
+      $("btnCancelUserEdit")?.addEventListener("click", resetUserForm);
       $("btnReloadUsers").addEventListener("click", loadUsers);
 
       $("btnSavePerms").addEventListener("click", savePerms);

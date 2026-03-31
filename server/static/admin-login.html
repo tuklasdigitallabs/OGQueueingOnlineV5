@@ -172,28 +172,14 @@
     const $btn = document.getElementById("btn");
     const BTN_IDLE = "Login";
     const BTN_BUSY = "Signing In...";
-    function getPathBranchCode() {
-      try {
-        const parts = String(window.location.pathname || "").split("/").filter(Boolean);
-        const idx = parts.findIndex((part) => String(part).toLowerCase() === "b");
-        if (idx >= 0 && parts[idx + 1]) return String(parts[idx + 1]).trim().toUpperCase();
-      } catch {}
-      return "";
-    }
-    function currentBranchCode() {
-      const byQuery = String(new URLSearchParams(window.location.search).get("branchCode") || "").trim().toUpperCase();
-      return byQuery || "";
-    }
     function buildAdminEntryUrl(branchCode = "") {
-      const code = String(branchCode || currentBranchCode() || "").trim().toUpperCase();
+      const code = String(branchCode || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin`) : window.appUrl("/admin");
     }
 
     async function refreshHealth() {
       try {
-        const code = currentBranchCode();
-        const target = code ? window.appUrl(`/api/health?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/health");
-        const r = await fetch(target, { cache: "no-store" });
+        const r = await fetch(window.appUrl("/api/health"), { cache: "no-store" });
         const ok = r.ok;
         $dot.classList.remove("ok", "bad");
         $dot.classList.add(ok ? "ok" : "bad");
@@ -231,12 +217,10 @@
       }
       setSubmitting(true);
       try {
-        const code = currentBranchCode();
-        const target = code ? window.appUrl(`/api/admin/auth/login?branchCode=${encodeURIComponent(code)}`) : window.appUrl("/api/admin/auth/login");
-        const r = await fetch(target, {
+        const r = await fetch(window.appUrl("/api/admin/auth/login"), {
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ fullName, pin, ...(code ? { branchCode: code } : {}) })
+          body: JSON.stringify({ fullName, pin })
         });
         let j = null;
         try {
@@ -247,7 +231,8 @@
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
         // Server already enforces ADMIN role on /api/admin/auth/login
 
-        location.href = buildAdminEntryUrl(j.branch?.branchCode);
+        window.location.replace(buildAdminEntryUrl(j.branch?.branchCode));
+        return;
       } catch {
         $e.textContent = "Server error";
       } finally {
