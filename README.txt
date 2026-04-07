@@ -4,6 +4,44 @@ Standalone Local Queue Management System
 Electron + Node.js + Express + SQLite
 ============================================================
 
+CURRENT ONLINE/VPS NOTES
+------------------------------------------------------------
+
+This repo is now also used for QSys Online deployment at:
+https://onegourmetph.com/qsys
+
+The online deployment runs the same Node/Express app in Docker:
+- VPS app checkout: /opt/og-qsys/app
+- Runtime/data folder: /opt/og-qsys
+- App container: og-qsys-app
+- App port: 3100
+- Public base path: /qsys
+- Nginx container: og_nginx
+
+VPS deploy:
+
+cd /opt/og-qsys/app
+git pull --ff-only origin main
+bash scripts/deploy_qsys_vps.sh
+curl -s https://onegourmetph.com/qsys/api/health
+
+Important 2026-04-07 updates:
+- Business date auto-rollover now advances stale persisted dates on request.
+- Guest ticket page shows the current waiting position within the ticket's pax group.
+- Admin media uploads are converted to web-safe MP4 using FFmpeg.
+- Docker image installs FFmpeg for VPS transcoding.
+- Cloud media responses allow cross-origin playback by the local Electron display agent.
+- Existing uploaded videos must be deleted and re-uploaded to generate converted *-websafe.mp4 files.
+
+Recommended display video output:
+- Container: MP4
+- Video codec: H.264
+- Pixel format: yuv420p
+- Audio codec: AAC
+- Even width/height
+- Faststart enabled
+
+
 SYSTEM OVERVIEW
 ------------------------------------------------------------
 
@@ -131,6 +169,8 @@ Features:
 - Regular tile background: rgb(141, 6, 1)
 - Priority tile color: green
 - Automatic live updates
+- Video mode with cloud media-library playback
+- Uploaded videos are normalized to web-safe MP4 on the server when FFmpeg is available
 
 VOICE CALLING FEATURE:
 
@@ -169,6 +209,8 @@ Features:
 - Admin login (separate session)
 - Branch configuration
 - Display orientation setting
+- Media library management for General Media and Branch Media
+- Media upload conversion to web-safe MP4 through FFmpeg
 - Reporting dashboard
 - Summary metrics:
     • Waitlist count per group
@@ -304,6 +346,19 @@ If Display has no audio:
 - Check audio file path
 - Check display-core.js
 - Check browser console
+
+If Display video has MEDIA_ELEMENT_ERROR / Format error:
+- Confirm the uploaded file was re-uploaded after FFmpeg conversion was deployed.
+- Converted cloud files should end in *-websafe.mp4.
+- Check the media URL headers:
+  curl -sD - -o /dev/null "https://onegourmetph.com/qsys/media/library/<id>/<file>?branchCode=<branch>"
+- Expected headers include:
+  Content-Type: video/mp4
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+- Check codecs inside the container:
+  docker exec og-qsys-app ffprobe -hide_banner -v error -show_entries stream=index,codec_type,codec_name,profile,pix_fmt,width,height -of json "/var/lib/qsys/media-library/.../<file>-websafe.mp4"
+- Expected video codec is h264 with yuv420p. Expected audio codec is aac.
 
 If Admin summary fails:
 - Check server logs
