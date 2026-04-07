@@ -10,7 +10,9 @@
     "start:server": "node server/start.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-builder install-app-deps",
-    "dist": "electron-builder",
+    "dist": "npm run dist:win",
+    "prepare:ffmpeg:win": "powershell -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1",
+    "dist:win": "npm run prepare:ffmpeg:win && electron-builder --win",
     "seed:today": "node server/seed-demo-today.js"
   },
   "dependencies": {
@@ -42,9 +44,21 @@
     "asar": true,
     "files": [
       "electron/**/*",
+      "vendor/ffmpeg/**/*",
       "server/**/*",
       "package.json",
       "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/ffmpeg/win",
+        "to": "ffmpeg",
+        "filter": [
+          "ffmpeg.exe",
+          "LICENSE*",
+          "README*"
+        ]
+      }
     ],
     "win": {
       "target": "nsis",

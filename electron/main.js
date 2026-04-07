@@ -51,7 +51,7 @@ function sanitizeLocalMediaName(name) {
 }
 
 function runFfmpeg(args) {
-  const ffmpegBin = String(process.env.FFMPEG_PATH || "ffmpeg").trim() || "ffmpeg";
+  const ffmpegBin = resolveFfmpegBin();
   return new Promise((resolve, reject) => {
     execFile(ffmpegBin, args, { windowsHide: true, maxBuffer: 1024 * 1024 * 8 }, (error, stdout, stderr) => {
       if (error) {
@@ -63,6 +63,20 @@ function runFfmpeg(args) {
       resolve({ stdout, stderr });
     });
   });
+}
+
+function resolveFfmpegBin() {
+  const explicit = String(process.env.FFMPEG_PATH || "").trim();
+  if (explicit) return explicit;
+  const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, "ffmpeg", process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg") : "",
+    path.join(__dirname, "..", "vendor", "ffmpeg", process.platform === "win32" ? "win" : process.platform, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"),
+    path.join(process.cwd(), "vendor", "ffmpeg", process.platform === "win32" ? "win" : process.platform, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"),
+  ];
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return "ffmpeg";
 }
 
 async function convertLocalMediaToWebSafe(inputPath) {
