@@ -1192,6 +1192,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <button class="btn" id="btnCreateGeneralMediaFolder">Create Folder</button>
                 <input id="generalMediaFiles" type="file" multiple accept="video/*,.mp4,.mov,.m4v,.webm,.ogg,.ogv,.avi,.mkv" />
                 <button class="btn primary" id="btnUploadGeneralMedia">Upload</button>
+                <button class="btn danger" id="btnCleanupGeneralMedia" type="button">Clean Old Files</button>
               </div>
               <div class="uploadStatus" id="generalUploadStatus" aria-live="polite">
                 <div class="uploadStatusRow">
@@ -1232,6 +1233,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <button class="btn" id="btnCreateBranchMediaFolder">Create Folder</button>
                 <input id="branchMediaFiles" type="file" multiple accept="video/*,.mp4,.mov,.m4v,.webm,.ogg,.ogv,.avi,.mkv" />
                 <button class="btn primary" id="btnUploadBranchMedia">Upload</button>
+                <button class="btn danger" id="btnCleanupBranchMedia" type="button">Clean Old Files</button>
               </div>
               <div class="uploadStatus" id="branchUploadStatus" aria-live="polite">
                 <div class="uploadStatusRow">
@@ -1278,12 +1280,13 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <th>Code</th>
                       <th>Name</th>
                       <th>Status</th>
+                      <th>License</th>
                       <th>Default</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="branchesTable">
-                    <tr><td colspan="5" class="muted">Load branches...</td></tr>
+                    <tr><td colspan="6" class="muted">Load branches...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1332,9 +1335,9 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <input id="branchImportFile" type="file" accept=".csv,text/csv" style="max-width:320px;" />
                     <button class="btn" id="btnImportBranchesCsv" type="button">Import Branch CSV</button>
                   </div>
-                  <div class="branchHint" style="margin-top:0;">CSV format: <code>branchCode,branchName</code>. Header row is optional.</div>
+                  <div class="branchHint" style="margin-top:0;">CSV format: <code>branchCode,branchName</code>. Header row is optional. Imported branches start unactivated.</div>
                 </div>
-                <div class="branchHint">Manage branch records here, including branch code, name, status, and default branch.</div>
+                <div class="branchHint">Manage branch records here. New branches start unactivated and must be licensed in Provider Setup before staff or guests can use them.</div>
               </div>
             </div>
           </div>
@@ -3536,7 +3539,7 @@ async function clearGdriveOAuth() {
           tb.innerHTML = "";
 
           if (!BRANCH_MANAGER_CACHE.length) {
-            tb.innerHTML = `<tr><td colspan="5" class="muted">No branches found.</td></tr>`;
+            tb.innerHTML = `<tr><td colspan="6" class="muted">No branches found.</td></tr>`;
             resetBranchForm();
             return;
           }
@@ -3548,6 +3551,7 @@ async function clearGdriveOAuth() {
               <td><b>${escapeHtml(rowCode || "-")}</b></td>
               <td>${escapeHtml(row.branchName || "-")}</td>
               <td>${escapeHtml(row.status || "ACTIVE")}</td>
+              <td>${escapeHtml(row.licenseStatus || (row.licenseActivated ? "ACTIVATED" : "UNACTIVATED"))}</td>
               <td>${Number(row.isDefault || 0) === 1 ? "Yes" : "No"}</td>
               <td>
                 <div class="row" style="gap:8px; flex-wrap:wrap;">
@@ -3604,7 +3608,7 @@ async function clearGdriveOAuth() {
 
           if (!$("branchManageId").value) resetBranchForm();
         } catch (e) {
-          $("branchesTable").innerHTML = `<tr><td colspan="5" class="muted">Failed to load branches.</td></tr>`;
+          $("branchesTable").innerHTML = `<tr><td colspan="6" class="muted">Failed to load branches.</td></tr>`;
           toast("Branches", "Failed to load branches.", "err");
         }
       }
@@ -3821,6 +3825,20 @@ async function clearGdriveOAuth() {
           await loadMediaManager();
         } catch {
           toast("Media", "Delete failed.", "err");
+        }
+      }
+
+      async function cleanupMedia(scopeType) {
+        const scope = String(scopeType || "").trim().toLowerCase() === "branch" ? "branch" : "general";
+        if (!confirm(`Clean old ${scope} media files? This removes missing files and pre-conversion uploads that are not named -websafe.mp4.`)) return;
+        try {
+          const j = await jpost("/api/admin/media/cleanup", { scopeType: scope.toUpperCase() });
+          if (!j?.ok) return toast("Media", j?.error || "Cleanup failed.", "err");
+          const count = Array.isArray(j.removed) ? j.removed.length : 0;
+          toast("Media", `Cleaned ${count} old ${scope} file${count === 1 ? "" : "s"}.`, "ok");
+          await loadMediaManager();
+        } catch {
+          toast("Media", "Cleanup failed.", "err");
         }
       }
 
@@ -5450,6 +5468,8 @@ function renderDailySummaryPage(){
       $("btnCreateBranchMediaFolder")?.addEventListener("click", () => createMediaFolder("branch"));
       $("btnUploadGeneralMedia")?.addEventListener("click", () => uploadMedia("general"));
       $("btnUploadBranchMedia")?.addEventListener("click", () => uploadMedia("branch"));
+      $("btnCleanupGeneralMedia")?.addEventListener("click", () => cleanupMedia("general"));
+      $("btnCleanupBranchMedia")?.addEventListener("click", () => cleanupMedia("branch"));
       $("gdriveAuthMode")?.addEventListener("change", updateGdriveAuthModeUi);
       $("btnPickGdriveOAuthClient")?.addEventListener("click", pickGdriveOAuthClient);
       $("btnClearGdriveOAuthClient")?.addEventListener("click", clearGdriveOAuthClient);

@@ -1128,6 +1128,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   try {
     ensureAdminSeeds(db, { disableDefaultAdminSeed: isProduction });
     bootstrapDefaultOrganizationAndBranch(db);
+    ensureExistingDefaultBranchLicense();
   } catch (e) {
     console.warn("[AdminSeeds] warning:", e.message || e);
   }
@@ -1471,11 +1472,14 @@ app.get("/static/js/:file", (req, res) => {
          FROM branches
          WHERE upper(coalesce(status,'ACTIVE'))='ACTIVE'
          ORDER BY isDefault DESC, branchName ASC, branchCode ASC`
-      ).all();
+      ).all().map(enrichBranchLicense);
     } catch {
       const fallback = getDefaultBranchRecord();
-      return fallback ? [fallback] : [];
+      return fallback ? [enrichBranchLicense(fallback)] : [];
     }
+  }
+  function listOperationalBranches() {
+    return listActiveBranches().filter(isBranchOperational);
   }
   function listAllBranches() {
     try {
@@ -1483,10 +1487,10 @@ app.get("/static/js/:file", (req, res) => {
         `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
          FROM branches
          ORDER BY isDefault DESC, branchName ASC, branchCode ASC`
-      ).all();
+      ).all().map(enrichBranchLicense);
     } catch {
       const fallback = getDefaultBranchRecord();
-      return fallback ? [fallback] : [];
+      return fallback ? [enrichBranchLicense(fallback)] : [];
     }
   }
   function roleHasGlobalBranchAccess(roleId) {
@@ -1494,8 +1498,8 @@ app.get("/static/js/:file", (req, res) => {
     return normalized === "ADMIN" || normalized === "SUPER_ADMIN";
   }
   function listAccessibleBranchesForUser(userId, roleId = "") {
-    if (roleHasGlobalBranchAccess(roleId)) return listActiveBranches();
-    return listUserBranchAccess(userId);
+    if (roleHasGlobalBranchAccess(roleId)) return listOperationalBranches();
+    return listUserBranchAccess(userId).map(enrichBranchLicense).filter(isBranchOperational);
   }
   function ensureSessionBranchContext(user) {
     if (!user || !user.userId) return user || null;
@@ -1615,6 +1619,146 @@ app.get("/static/js/:file", (req, res) => {
     const now = Date.now();
     db.prepare(`UPDATE installation_state SET status=?, updatedAt=? WHERE id=1`).run(ACTIVATION_STATUS_EXPIRED, now);
     return { ...st, status: ACTIVATION_STATUS_EXPIRED, updatedAt: now };
+  }
+  function getBranchLicenseState(branch) {
+    const branchId = String(branch?.branchId || "").trim();
+    if (!branchId) return { status: ACTIVATION_STATUS_UNACTIVATED, activated: false, licenseExpiresAt: null };
+    const rawStatus = String(getBranchSetting(branchId, "license.status") || "").trim().toUpperCase();
+    const status = rawStatus || (Number(branch?.isDefault || 0) === 1 ? ACTIVATION_STATUS_ACTIVATED : ACTIVATION_STATUS_UNACTIVATED);
+    const exp = Number(getBranchSetting(branchId, "license.expiresAt") || 0) || null;
+    const expired = status === ACTIVATION_STATUS_ACTIVATED && exp && Date.now() > exp;
+    return {
+      status: expired ? ACTIVATION_STATUS_EXPIRED : status,
+      activated: status === ACTIVATION_STATUS_ACTIVATED && !expired,
+      licenseId: String(getBranchSetting(branchId, "license.licenseId") || ""),
+      licenseIssuedAt: Number(getBranchSetting(branchId, "license.issuedAt") || 0) || null,
+      licenseExpiresAt: exp,
+      activatedAt: Number(getBranchSetting(branchId, "license.activatedAt") || 0) || null,
+      activatedBy: String(getBranchSetting(branchId, "license.activatedBy") || ""),
+    };
+  }
+  function setBranchLicenseState(branchId, payload = {}) {
+    const id = String(branchId || "").trim();
+    if (!id) return;
+    setBranchSetting(id, "license.status", String(payload.status || ACTIVATION_STATUS_UNACTIVATED).trim().toUpperCase());
+    setBranchSetting(id, "license.licenseId", String(payload.licenseId || ""));
+    setBranchSetting(id, "license.issuedAt", String(Number(payload.issuedAt || 0) || ""));
+    setBranchSetting(id, "license.expiresAt", String(Number(payload.expiresAt || 0) || ""));
+    setBranchSetting(id, "license.activatedAt", String(Number(payload.activatedAt || 0) || ""));
+    setBranchSetting(id, "license.activatedBy", String(payload.activatedBy || ""));
+  }
+  function ensureBranchLicenseInitialized(branch, status = ACTIVATION_STATUS_UNACTIVATED) {
+    const branchId = String(branch?.branchId || "").trim();
+    if (!branchId) return;
+    const cur = String(getBranchSetting(branchId, "license.status") || "").trim();
+    if (cur) return;
+    setBranchLicenseState(branchId, { status });
+  }
+  function ensureExistingDefaultBranchLicense() {
+    try {
+      const rows = db.prepare(
+        `SELECT branchId, orgId, branchCode, branchName, timezone, status, isDefault
+         FROM branches
+         WHERE upper(coalesce(status,'ACTIVE'))='ACTIVE'`
+      ).all();
+      for (const row of rows) ensureBranchLicenseInitialized(row, ACTIVATION_STATUS_ACTIVATED);
+    } catch {
+      const branch = getDefaultBranchRecord();
+      if (branch?.branchId) ensureBranchLicenseInitialized(branch, ACTIVATION_STATUS_ACTIVATED);
+    }
+  }
+  function enrichBranchLicense(row) {
+    if (!row) return row;
+    const license = getBranchLicenseState(row);
+    return {
+      ...row,
+      licenseStatus: license.status,
+      licenseActivated: !!license.activated,
+      licenseId: license.licenseId,
+      licenseIssuedAt: license.licenseIssuedAt,
+      licenseExpiresAt: license.licenseExpiresAt,
+    };
+  }
+  function isBranchOperational(branch) {
+    if (!branch?.branchId) return false;
+    const status = String(branch.status || "ACTIVE").trim().toUpperCase();
+    return status === "ACTIVE" && getBranchLicenseState(branch).activated;
+  }
+  function findBranchForLicensePayload(payload) {
+    const branchCode = String(payload?.branchCode || "").trim().toUpperCase();
+    if (!branchCode) return null;
+    return getBranchByCode(branchCode);
+  }
+  function applyBranchLicenseToken({ token, action }) {
+    const rawToken = String(token || "").trim();
+    if (!rawToken) {
+      const err = new Error("token is required.");
+      err.http = 400;
+      throw err;
+    }
+    const st = refreshActivationState();
+    const installId = String(st.installId || getDbSetting("install.id") || "").trim();
+    const verified = verifyActivationToken(rawToken, { baseDir, expectedInstallId: installId });
+    const payload = verified.payload;
+    const branch = findBranchForLicensePayload(payload);
+    if (!branch?.branchId) {
+      const branchCode = String(payload?.branchCode || "").trim().toUpperCase();
+      const err = new Error(branchCode ? `Branch '${branchCode}' was not found.` : "Token is missing branchCode.");
+      err.http = branchCode ? 404 : 400;
+      throw err;
+    }
+
+    const now = Date.now();
+    const license = {
+      status: ACTIVATION_STATUS_ACTIVATED,
+      licenseId: String(payload.licenseId || "").trim(),
+      issuedAt: Number(payload.issuedAt || 0),
+      expiresAt: Number(payload.expiresAt || 0),
+      activatedAt: now,
+      activatedBy: String(payload.issuer || "provider").trim() || "provider",
+    };
+    const normalizedAction = String(action || "BRANCH_ACTIVATE").trim().toUpperCase();
+    const tokenAction = normalizedAction === "BRANCH_RENEW" ? "BRANCH_RENEW" : "BRANCH_ACTIVATE";
+
+    db.transaction(() => {
+      setBranchLicenseState(branch.branchId, license);
+      db.prepare(
+        `INSERT INTO activation_token_usage(tokenHash, installId, branchCode, licenseId, issuer, action, consumedAt)
+         VALUES(?,?,?,?,?,?,?)`
+      ).run(
+        verified.tokenHash,
+        installId,
+        String(branch.branchCode || payload.branchCode || "").trim().toUpperCase(),
+        license.licenseId,
+        license.activatedBy,
+        tokenAction,
+        now
+      );
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        tokenAction,
+        JSON.stringify({
+          branchId: branch.branchId,
+          branchCode: branch.branchCode,
+          branchName: branch.branchName,
+          licenseId: license.licenseId,
+          expiresAt: license.expiresAt,
+          issuer: license.activatedBy,
+        }),
+        now
+      );
+    })();
+
+    return {
+      ok: true,
+      status: ACTIVATION_STATUS_ACTIVATED,
+      installId,
+      branch: enrichBranchLicense(getBranchById(branch.branchId)),
+      branchCode: String(branch.branchCode || "").trim().toUpperCase(),
+      branchName: String(branch.branchName || "").trim(),
+      licenseIssuedAt: license.issuedAt || null,
+      licenseExpiresAt: license.expiresAt || null,
+      appliedAt: now,
+    };
   }
   function isActivationEnforced() {
     return String(process.env.QSYS_REQUIRE_ACTIVATION || "").trim() === "1";
@@ -1889,13 +2033,24 @@ function requireStaffPage(req, res, next) {
   next();
 }
 
-function requireAdminPage(req, res, next) {
+  function requireAdminPage(req, res, next) {
   const u = getSessionUser(req);
   if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
 
   const roleId = String(u.roleId || "").toUpperCase();
   if (!["ADMIN", "SUPER_ADMIN"].includes(roleId)) return res.redirect(buildStaffEntryPath(req?.params?.branchCode)); // or res.status(403).send("Forbidden");
   next();
+}
+
+function requireOperationalBranch(req, res, next) {
+  const branch = getRequestBranch(req);
+  if (isBranchOperational(branch)) return next();
+  return res.status(403).json({
+    ok: false,
+    error: "Branch is not activated. Please activate this branch in Provider Setup.",
+    branchCode: String(branch?.branchCode || ""),
+    licenseStatus: getBranchLicenseState(branch).status,
+  });
 }
 
 function requireSuperAdminPage(req, res, next) {
@@ -2308,6 +2463,14 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     });
   });
 
+  app.use("/api/staff", (req, res, next) => {
+    const pathName = String(req.path || "");
+    if (pathName.startsWith("/auth/") || pathName === "/branches" || pathName === "/select-branch" || pathName === "/feature-flags") {
+      return next();
+    }
+    return requireAuth(req, res, () => requireOperationalBranch(req, res, next));
+  });
+
   app.get("/api/admin/branches", requireAuth, (req, res) => {
     const u = ensureSessionBranchContext(getSessionUser(req));
     if (u) setSessionUser(req, "admin", u);
@@ -2393,6 +2556,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
           `INSERT INTO branches(branchId, orgId, branchCode, branchName, timezone, status, isDefault, createdAt, updatedAt)
            VALUES(?,?,?,?,?,?,?,?,?)`
         ).run(savedBranchId, orgId, branchCode, branchName, timezone, status, 0, now, now);
+        setBranchLicenseState(savedBranchId, { status: ACTIVATION_STATUS_UNACTIVATED });
       }
 
       if (isDefault) {
@@ -2498,6 +2662,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
           } else {
             const branchId = randomUUID();
             insertBranch.run(branchId, orgId, branchCode, branchName, "Asia/Manila", "ACTIVE", 0, now, now);
+            setBranchLicenseState(branchId, { status: ACTIVATION_STATUS_UNACTIVATED });
             created += 1;
             touched.push({
               branchId,
@@ -2896,10 +3061,12 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   });
 app.get("/staff", requireStaffPage, (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  if (!isBranchOperational(getRequestBranch(req))) return res.status(403).send("Branch is not activated.");
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
 });
 app.get("/b/:branchCode/staff", requireStaffPage, (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  if (!isBranchOperational(getRequestBranch(req))) return res.status(403).send("Branch is not activated.");
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
 });
 
@@ -2932,9 +3099,11 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
   app.get("/guest", (_req, res) => res.sendFile(path.join(__dirname, "static", "guest.html")));
   app.get("/b/:branchCode/guest", (req, res) => {
     const branchCode = String(req.params.branchCode || "").trim().toUpperCase();
-    if (!branchCode || !getBranchByCode(branchCode)) {
+    const branch = getBranchByCode(branchCode);
+    if (!branchCode || !branch) {
       return res.status(404).send("Branch not found");
     }
+    if (!isBranchOperational(branch)) return res.status(403).send("Branch is not activated.");
     return res.sendFile(path.join(__dirname, "static", "guest.html"));
   });
   app.get("/test", (_req, res) =>
@@ -3107,7 +3276,7 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
 
   app.get("/api/public/branches", (_req, res) => {
     try {
-      const rows = listActiveBranches().map((row) => ({
+      const rows = listOperationalBranches().map((row) => ({
         branchId: String(row.branchId || ""),
         branchCode: String(row.branchCode || "").trim().toUpperCase(),
         branchName: String(row.branchName || "").trim(),
@@ -3141,6 +3310,7 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
         licenseIssuedAt: Number(st.licenseIssuedAt || 0) || null,
         licenseExpiresAt: expiresAt,
         daysRemaining,
+        branches: listAllBranches(),
         activationPublicKeyLoaded: !!getActivationVerifier(baseDir),
         activationEnforced: isActivationEnforced(),
       });
@@ -3208,6 +3378,17 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
           now
         );
         bootstrapDefaultOrganizationAndBranch(db);
+        const activatedBranch = getBranchByCode(nextBranchCode);
+        if (activatedBranch?.branchId) {
+          setBranchLicenseState(activatedBranch.branchId, {
+            status: ACTIVATION_STATUS_ACTIVATED,
+            licenseId: String(payload.licenseId || "").trim(),
+            issuedAt: Number(payload.issuedAt || 0),
+            expiresAt: Number(payload.expiresAt || 0),
+            activatedAt: now,
+            activatedBy: String(payload.issuer || "provider").trim() || "provider",
+          });
+        }
       })();
 
       return res.json({
@@ -3283,6 +3464,17 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
         "RENEW",
         now
       );
+      const renewedBranch = getBranchByCode(currentCode);
+      if (renewedBranch?.branchId) {
+        setBranchLicenseState(renewedBranch.branchId, {
+          status: ACTIVATION_STATUS_ACTIVATED,
+          licenseId: String(payload.licenseId || "").trim(),
+          issuedAt: Number(payload.issuedAt || 0),
+          expiresAt: Number(payload.expiresAt || 0),
+          activatedAt: now,
+          activatedBy: String(payload.issuer || "provider").trim() || "provider",
+        });
+      }
 
       return res.json({
         ok: true,
@@ -3299,6 +3491,30 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
         return res.status(e.http).json({ ok: false, error: e.message || "Renewal failed." });
       }
       console.error("[provider/renew]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/provider/branches/activate", rateLimitAuthLogin, express.json(), (req, res) => {
+    try {
+      return res.json(applyBranchLicenseToken({ token: req.body?.token, action: "BRANCH_ACTIVATE" }));
+    } catch (e) {
+      if (e && typeof e.http === "number") {
+        return res.status(e.http).json({ ok: false, error: e.message || "Branch activation failed." });
+      }
+      console.error("[provider/branches/activate]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/provider/branches/renew", rateLimitAuthLogin, express.json(), (req, res) => {
+    try {
+      return res.json(applyBranchLicenseToken({ token: req.body?.token, action: "BRANCH_RENEW" }));
+    } catch (e) {
+      if (e && typeof e.http === "number") {
+        return res.status(e.http).json({ ok: false, error: e.message || "Branch renewal failed." });
+      }
+      console.error("[provider/branches/renew]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
     }
   });
@@ -3718,7 +3934,7 @@ function requireDisplayAuth(req, res, next) {
         req.displayDevice = device;
         setDisplayAuthCookie(res, token);
         touchDisplayDevice(device.id, { lastIp: getReqIp(req) });
-        return next();
+        return requireOperationalBranch(req, res, next);
       }
     }
   }
@@ -3727,7 +3943,7 @@ function requireDisplayAuth(req, res, next) {
   const expected = String(process.env.DISPLAY_KEY || "").trim();
   if (expected) {
     const got = String(req.headers["x-display-key"] || "").trim();
-    if (got && got === expected) return next();
+    if (got && got === expected) return requireOperationalBranch(req, res, next);
   }
 
   // Branch-selected display mode:
@@ -3737,7 +3953,7 @@ function requireDisplayAuth(req, res, next) {
     const branch = getBranchByCode(requestedBranchCode);
     if (branch) {
       req.qsysBranch = branch;
-      return next();
+      return requireOperationalBranch(req, res, next);
     }
   }
 
@@ -4501,7 +4717,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   function normalizeRequestedUserBranchIds(input, fallbackBranchId, roleScope = "") {
     const values = Array.isArray(input) ? input : [];
-    const valid = new Set(listActiveBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
+    const valid = new Set(listOperationalBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
     const unique = [];
     for (const raw of values) {
       const branchId = String(raw || "").trim();
@@ -4547,7 +4763,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
             branchAccess,
           };
         });
-      res.json({ ok: true, users: rows, branches: listActiveBranches() });
+      res.json({ ok: true, users: rows, branches: listOperationalBranches() });
     } catch (e) {
       console.error("[admin/users:get]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -5721,7 +5937,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
   });
   
   /* ---------- system: display window (Electron host) ---------- */
-app.get("/api/system/display/state", requireStaffApi, (req, res) => {
+app.get("/api/system/display/state", requireStaffApi, requireOperationalBranch, (req, res) => {
   try {
     const ctrl = global.QSYS_DISPLAY;
     if (!ctrl) return res.json({ ok: true, on: false, note: "Display controller not available" });
@@ -5732,7 +5948,7 @@ app.get("/api/system/display/state", requireStaffApi, (req, res) => {
   }
 });
 
-app.post("/api/system/display/open", requireStaffApi, (req, res) => {
+app.post("/api/system/display/open", requireStaffApi, requireOperationalBranch, (req, res) => {
   try {
     const ctrl = global.QSYS_DISPLAY;
     if (!ctrl) return res.status(400).json({ ok: false, error: "Display controller not available" });
@@ -5743,7 +5959,7 @@ app.post("/api/system/display/open", requireStaffApi, (req, res) => {
   }
 });
 
-app.post("/api/system/display/close", requireStaffApi, (req, res) => {
+app.post("/api/system/display/close", requireStaffApi, requireOperationalBranch, (req, res) => {
   try {
     const ctrl = global.QSYS_DISPLAY;
     if (!ctrl) return res.status(400).json({ ok: false, error: "Display controller not available" });
@@ -8544,6 +8760,14 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       const businessDate = ensureBusinessDate(db);
       const branch = getRequestBranch(req);
+      if (!isBranchOperational(branch)) {
+        return res.status(403).json({
+          ok: false,
+          error: "This branch is not activated for guest registration.",
+          branchCode: String(branch?.branchCode || ""),
+          licenseStatus: getBranchLicenseState(branch).status,
+        });
+      }
       const bc = String(branch?.branchCode || getBranchCode()).trim();
       const groupCode = computeGroupCode({ priorityType, pax });
 
@@ -9765,6 +9989,29 @@ function getManagedMediaAssetById(id) {
   ).get(String(id || "").trim());
 }
 
+function cleanupOldManagedMediaAssets(scopeType, branch) {
+  const rows = listManagedMediaAssets(scopeType, branch);
+  const removed = [];
+  const root = getManagedMediaRoot(baseDir);
+  for (const row of rows) {
+    const isWebSafe = /-websafe\.mp4$/i.test(String(row.fileName || ""));
+    const absPath = path.join(root, String(row.relativePath || ""));
+    const missing = !fs.existsSync(absPath);
+    if (isWebSafe && !missing) continue;
+    try {
+      if (!missing) fs.unlinkSync(absPath);
+    } catch {}
+    db.prepare(`DELETE FROM media_assets WHERE id=?`).run(String(row.id || ""));
+    removed.push({
+      id: row.id,
+      fileName: row.fileName,
+      storedName: row.storedName,
+      reason: missing ? "missing-file" : "not-websafe-upload",
+    });
+  }
+  return removed;
+}
+
 function normalizeMediaScope(raw) {
   return String(raw || "").trim().toUpperCase() === "BRANCH" ? "BRANCH" : "GENERAL";
 }
@@ -9923,6 +10170,32 @@ app.post("/api/admin/media/delete", requirePerm("SETTINGS_MANAGE"), express.json
     return res.json({ ok: true });
   } catch (e) {
     console.error("[admin/media/delete]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/admin/media/cleanup", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
+  try {
+    const { scopeType, branch } = getMediaScopeContext(req);
+    if (scopeType === "BRANCH" && !branch?.branchId) {
+      return res.status(400).json({ ok: false, error: "No active branch context resolved." });
+    }
+    const removed = cleanupOldManagedMediaAssets(scopeType, branch);
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "ADMIN_MEDIA_CLEANUP",
+      JSON.stringify({
+        actor: actorFromReq(req),
+        scopeType,
+        branchCode: String(branch?.branchCode || ""),
+        removedCount: removed.length,
+        removed,
+      }),
+      Date.now()
+    );
+    emitChanged(app, db, "ADMIN_MEDIA_CLEANUP", { branchCode: String(branch?.branchCode || "") });
+    return res.json({ ok: true, scopeType, branch: branch || null, removed });
+  } catch (e) {
+    console.error("[admin/media/cleanup]", e);
     return res.status(500).json({ ok: false, error: "Server error." });
   }
 });

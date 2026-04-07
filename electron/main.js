@@ -45,6 +45,52 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+function sanitizeLocalMediaName(name) {
+  const base = String(name || "video").trim() || "video";
+  return base.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/\s+/g, " ").slice(0, 96) || "video";
+}
+
+function runFfmpeg(args) {
+  const ffmpegBin = String(process.env.FFMPEG_PATH || "ffmpeg").trim() || "ffmpeg";
+  return new Promise((resolve, reject) => {
+    execFile(ffmpegBin, args, { windowsHide: true, maxBuffer: 1024 * 1024 * 8 }, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+async function convertLocalMediaToWebSafe(inputPath) {
+  const source = String(inputPath || "").trim();
+  if (!source || !fs.existsSync(source)) throw new Error("Selected local media file does not exist.");
+  const outDir = path.join(baseDirGlobal || getBaseDir(), "local-media");
+  ensureDir(outDir);
+  const ext = path.extname(source);
+  const stem = sanitizeLocalMediaName(path.basename(source, ext));
+  const outputPath = path.join(outDir, `${stem}-websafe-${Date.now()}.mp4`);
+  await runFfmpeg([
+    "-y",
+    "-i", source,
+    "-map", "0:v:0",
+    "-map", "0:a?",
+    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-preset", "medium",
+    "-crf", "22",
+    "-c:a", "aac",
+    "-b:a", "160k",
+    "-movflags", "+faststart",
+    outputPath,
+  ]);
+  return outputPath;
+}
+
 function exists(p) {
   try {
     return fs.existsSync(p);
@@ -482,7 +528,6 @@ function createKioskWindow(port, kioskUrl) {
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.js"),
       autoplayPolicy: "no-user-gesture-required",
-      webSecurity: false,
     },
   });
 
@@ -742,14 +787,22 @@ ipcMain.handle("launcher-media-file:pick", async () => {
       title: "Select Local Video File",
       properties: ["openFile"],
       filters: [
-        { name: "Web-compatible Video Files", extensions: ["mp4", "webm", "ogg"] },
+        { name: "Video Files", extensions: ["mp4", "m4v", "mov", "webm", "ogg", "ogv", "avi", "mkv"] },
         { name: "All Files", extensions: ["*"] },
       ],
     });
     if (result.canceled) return { ok: true, canceled: true, path: "" };
-    return { ok: true, canceled: false, path: String(result.filePaths?.[0] || "").trim() };
+    const sourcePath = String(result.filePaths?.[0] || "").trim();
+    const convertedPath = await convertLocalMediaToWebSafe(sourcePath);
+    return { ok: true, canceled: false, path: convertedPath, sourcePath, converted: true };
   } catch (error) {
-    return { ok: false, error: error?.message || "Failed to pick local media file." };
+    const missingFfmpeg = String(error?.code || "").toUpperCase() === "ENOENT";
+    return {
+      ok: false,
+      error: missingFfmpeg
+        ? "FFmpeg is not installed on this display PC. Install FFmpeg or use Cloud Source upload conversion."
+        : (error?.message || "Failed to convert local media file."),
+    };
   }
 });
 

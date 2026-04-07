@@ -521,11 +521,13 @@
     el.displayTargetInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.btnPickLocalMediaFile?.addEventListener("click", async () => {
       try {
+        setAgentStatus("Converting selected local video to web-safe MP4...", false);
         const picked = await window.qsys?.pickLocalMediaFile?.();
         if (!picked?.ok) throw new Error(picked?.error || "Failed to choose local media file.");
         if (picked.canceled) return;
         state.localMediaFile = String(picked.path || "").trim();
         renderLocalMediaControls();
+        setAgentStatus(picked.converted ? "Local video converted. Save to use this web-safe copy." : "Local video selected.", false);
       } catch (err) {
         setAgentStatus(err?.message || "Failed to choose local media file.", true);
       }

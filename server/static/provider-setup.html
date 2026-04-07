@@ -7,13 +7,19 @@
   <title>QSYS Provider Setup</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 24px; background: #111827; color: #f3f4f6; }
-    .wrap { max-width: 720px; margin: 0 auto; }
-    .card { background: #1f2937; padding: 20px; border-radius: 12px; margin-bottom: 18px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    .card { background: #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 18px; }
     h1, h2 { margin-top: 0; }
     textarea, input, button { width: 100%; box-sizing: border-box; margin-top: 8px; }
     textarea, input { padding: 10px; border-radius: 8px; border: 1px solid #374151; background: #111827; color: #f3f4f6; }
     button { padding: 12px; border: 0; border-radius: 8px; background: #f59e0b; color: #111827; font-weight: 700; cursor: pointer; }
     pre { white-space: pre-wrap; word-break: break-word; background: #0b1220; padding: 12px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; border-bottom: 1px solid #374151; padding: 10px 8px; vertical-align: top; }
+    th { color: #d1d5db; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .muted { color: #9ca3af; font-size: 13px; line-height: 1.4; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -22,6 +28,23 @@
     <div class="card">
       <h2>Installation Info</h2>
       <pre id="info">Loading...</pre>
+    </div>
+    <div class="card">
+      <h2>Branch Licenses</h2>
+      <div class="muted">Branches with license status UNACTIVATED or EXPIRED cannot use staff view or guest registration.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Branch</th>
+            <th>Record</th>
+            <th>License</th>
+            <th>Expires</th>
+          </tr>
+        </thead>
+        <tbody id="branchLicenses">
+          <tr><td colspan="4" class="muted">Loading...</td></tr>
+        </tbody>
+      </table>
     </div>
     <div class="card">
       <h2>Activate</h2>
@@ -34,6 +57,20 @@
       <button id="renewBtn" type="button">Renew Installation</button>
     </div>
     <div class="card">
+      <h2>Activate / Renew Branch</h2>
+      <div class="muted">Paste a provider token for the target branch code. The token branchCode must match an existing branch record.</div>
+      <div class="two">
+        <div>
+          <textarea id="branchActivateToken" rows="6" placeholder="Paste branch activation token"></textarea>
+          <button id="branchActivateBtn" type="button">Activate Branch</button>
+        </div>
+        <div>
+          <textarea id="branchRenewToken" rows="6" placeholder="Paste branch renewal token"></textarea>
+          <button id="branchRenewBtn" type="button">Renew Branch</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
       <h2>Result</h2>
       <pre id="result">Ready.</pre>
     </div>
@@ -42,16 +79,62 @@
   <script>
     const infoEl = document.getElementById("info");
     const resultEl = document.getElementById("result");
+    const branchLicensesEl = document.getElementById("branchLicenses");
+
+    function apiUrl(path) {
+      return String(path || "").replace(/^\/+/, "");
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function fmtTime(ms) {
+      const n = Number(ms || 0);
+      if (!n) return "-";
+      try {
+        return new Date(n).toLocaleString();
+      } catch {
+        return "-";
+      }
+    }
+
+    function renderBranches(branches) {
+      const rows = Array.isArray(branches) ? branches : [];
+      if (!rows.length) {
+        branchLicensesEl.innerHTML = `<tr><td colspan="4" class="muted">No branches found.</td></tr>`;
+        return;
+      }
+      branchLicensesEl.innerHTML = rows.map((row) => {
+        const code = String(row.branchCode || "").trim().toUpperCase();
+        const name = String(row.branchName || "").trim();
+        const license = String(row.licenseStatus || (row.licenseActivated ? "ACTIVATED" : "UNACTIVATED")).trim().toUpperCase();
+        return `
+          <tr>
+            <td><strong>${escapeHtml(code || "-")}</strong><br><span class="muted">${escapeHtml(name || "-")}</span></td>
+            <td>${escapeHtml(row.status || "ACTIVE")}${Number(row.isDefault || 0) === 1 ? "<br><span class=\"muted\">Default</span>" : ""}</td>
+            <td>${escapeHtml(license)}</td>
+            <td>${escapeHtml(fmtTime(row.licenseExpiresAt))}</td>
+          </tr>
+        `;
+      }).join("");
+    }
 
     async function loadInfo() {
-      const res = await fetch("/api/provider/install-info");
+      const res = await fetch(apiUrl("/api/provider/install-info"));
       const data = await res.json();
       infoEl.textContent = JSON.stringify(data, null, 2);
+      renderBranches(data.branches);
     }
 
     async function submitToken(url, token) {
       resultEl.textContent = "Working...";
-      const res = await fetch(url, {
+      const res = await fetch(apiUrl(url), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token })
@@ -71,6 +154,18 @@
       const token = document.getElementById("renewToken").value.trim();
       if (!token) return;
       await submitToken("/api/provider/renew", token);
+    });
+
+    document.getElementById("branchActivateBtn").addEventListener("click", async () => {
+      const token = document.getElementById("branchActivateToken").value.trim();
+      if (!token) return;
+      await submitToken("/api/provider/branches/activate", token);
+    });
+
+    document.getElementById("branchRenewBtn").addEventListener("click", async () => {
+      const token = document.getElementById("branchRenewToken").value.trim();
+      if (!token) return;
+      await submitToken("/api/provider/branches/renew", token);
     });
 
     loadInfo().catch((err) => {
