@@ -656,7 +656,23 @@ line-height: 0.86;
   }
 
   async function closeKiosk(){
-  // ✅ Hide display window via server so tray can re-open it
+  // Prefer local Electron bridge first; server close endpoint is staff-authenticated.
+  try{
+    if (window.qsys && typeof window.qsys.hide === "function") return window.qsys.hide();
+    if (window.api  && typeof window.api.hide  === "function") return window.api.hide();
+
+    if (window.require){
+      const { ipcRenderer } = window.require("electron");
+      if (ipcRenderer && typeof ipcRenderer.send === "function"){
+        ipcRenderer.send("display:hide");
+        return;
+      }
+    }
+  }catch(e){
+    console.warn("[DISPLAY] fallback hide failed", e);
+  }
+
+  // Hide display window via server so tray can re-open it
   const key = (function(){
     try { return String(localStorage.getItem(DISPLAY_KEY_STORAGE) || "").trim(); }
     catch { return ""; }
@@ -674,22 +690,6 @@ line-height: 0.86;
     console.warn("[DISPLAY] close rejected:", res.status);
   }catch(e){
     console.warn("[DISPLAY] /api/system/display/close failed", e);
-  }
-
-  // Fallback: if you have a preload bridge
-  try{
-    if (window.qsys && typeof window.qsys.hide === "function") return window.qsys.hide();
-    if (window.api  && typeof window.api.hide  === "function") return window.api.hide();
-
-    if (window.require){
-      const { ipcRenderer } = window.require("electron");
-      if (ipcRenderer && typeof ipcRenderer.send === "function"){
-        ipcRenderer.send("display:hide");
-        return;
-      }
-    }
-  }catch(e){
-    console.warn("[DISPLAY] fallback hide failed", e);
   }
 
   // Absolute last resort (may destroy window)

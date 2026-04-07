@@ -1,6 +1,6 @@
 ﻿
 // === DEBUG (Recall tracing) ===
-const QSYS_DISPLAY_DEBUG_RECALL = true;
+const QSYS_DISPLAY_DEBUG_RECALL = false;
 function dbgDisp(...args){
   if (!QSYS_DISPLAY_DEBUG_RECALL) return;
   try{ console.log("[DISPLAY-DBG]", ...args); }catch{}
@@ -50,6 +50,7 @@ function dbgDisp(...args){
   } catch {}
 
   function dbg(msg, obj) {
+    if (!QSYS_DISPLAY_DEBUG_RECALL) return;
     let plain = "";
     try {
       if (obj !== undefined) {
@@ -1546,9 +1547,6 @@ socket.on("display:recall", async (payload) => {
 });
 
 
-dbgDisp("socket:init");
-socket.on("connect", ()=>dbgDisp("socket:connect", {id: socket.id}));
-socket.on("disconnect", (reason)=>dbgDisp("socket:disconnect", {reason}));
 dbgDisp("socket:init");
 socket.on("connect", ()=>dbgDisp("socket:connect", {id: socket.id}));
 socket.on("disconnect", (reason)=>dbgDisp("socket:disconnect", {reason}));
