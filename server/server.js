@@ -51,6 +51,15 @@ function setPrivateSurfaceNoIndex(res) {
   res.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
 }
 
+function setDisplayMediaHeaders(res) {
+  // Display pages may run from the local Electron agent (http://127.0.0.1)
+  // while media is served by the cloud app. Override Helmet's default
+  // same-origin resource policy so Chromium can decode cross-origin videos.
+  res.set("Cross-Origin-Resource-Policy", "cross-origin");
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Accept-Ranges", "bytes");
+}
+
 function buildPrivateRobotsTxt() {
   return [
     "User-agent: *",
@@ -1321,7 +1330,10 @@ app.use("/static", (req, res, next) => {
   const p = String(req.path || ""); // path under /static
 
   // ✅ Allow media + bundled assets
-  if (p.startsWith("/media/")) return next();
+  if (p.startsWith("/media/")) {
+    setDisplayMediaHeaders(res);
+    return next();
+  }
   if (p.startsWith("/assets/")) return next(); // optional
   if (p.startsWith("/css/")) return next();
   if (p.startsWith("/img/")) return next();
@@ -9939,6 +9951,7 @@ app.get("/media/library/:id/:name", requireDisplayAuth, (req, res) => {
     }
     const absPath = path.join(getManagedMediaRoot(baseDir), String(row.relativePath || ""));
     if (!fs.existsSync(absPath)) return res.status(404).end();
+    setDisplayMediaHeaders(res);
     return res.sendFile(absPath);
   } catch (e) {
     console.error("[media/library]", e);
@@ -9960,6 +9973,7 @@ app.get("/media/custom/:name", requireDisplayAuth, (req, res) => {
     if (!abs.startsWith(baseResolved + path.sep)) return res.status(403).end();
 
     if (!fs.existsSync(abs)) return res.status(404).end();
+    setDisplayMediaHeaders(res);
     return res.sendFile(abs);
   } catch (e) {
     console.error("[media:custom]", e);
@@ -9973,6 +9987,7 @@ app.get("/media/local-file/current", requireDisplayAuth, (req, res) => {
     if (!filePath) return res.status(404).end();
     if (!isDisplayVideoFileName(filePath)) return res.status(400).end();
     if (!fs.existsSync(filePath)) return res.status(404).end();
+    setDisplayMediaHeaders(res);
     return res.sendFile(path.resolve(filePath));
   } catch (e) {
     console.error("[media:local-file]", e);
