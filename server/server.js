@@ -9576,7 +9576,8 @@ function listVideoFilesIn(dirAbs) {
 
 function isDisplayVideoFileName(fileName) {
   // Chromium/Electron commonly reports MEDIA_ERR_SRC_NOT_SUPPORTED for MOV/M4V containers.
-  return /\.(mp4|webm|ogg|ogv)$/i.test(String(fileName || ""));
+  // Keep uploaded/display-managed media to the broadest-safe target: MP4 (H.264 video + AAC audio).
+  return /\.mp4$/i.test(String(fileName || ""));
 }
 
 function getManagedMediaRoot(baseDir) {
@@ -9803,7 +9804,7 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
     }
 
     if (!inserted.length) {
-      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Allowed formats: mp4, webm, ogg." });
+      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Use MP4 encoded as H.264 video with AAC audio." });
     }
 
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
