@@ -8,6 +8,7 @@ const express = require("express");
 const http = require("http");
 const https = require("https");
 const { execFile } = require("child_process");
+const { promisify } = require("util");
 const path = require("path");
 const fs = require("fs");
 const { Server } = require("socket.io");
@@ -25,6 +26,7 @@ const session = require("express-session");
 const os = require("os");
 const QRCode = require("qrcode");
 const helmet = require("helmet");
+const execFileAsync = promisify(execFile);
 
 function normalizeBasePath(input) {
   const raw = String(input || "").trim();
@@ -9580,6 +9582,59 @@ function isDisplayVideoFileName(fileName) {
   return /\.mp4$/i.test(String(fileName || ""));
 }
 
+function isUploadVideoFileName(fileName) {
+  return /\.(mp4|m4v|mov|webm|ogg|ogv|avi|mkv)$/i.test(String(fileName || ""));
+}
+
+function toWebSafeMp4Name(fileName) {
+  const safe = sanitizeMediaFileName(fileName || "video.mp4");
+  const ext = path.extname(safe);
+  const stem = ext ? safe.slice(0, -ext.length) : safe;
+  return `${stem || "video"}-websafe.mp4`;
+}
+
+async function transcodeVideoToWebSafeMp4(file, originalName) {
+  const ffmpegBin = String(process.env.FFMPEG_PATH || "ffmpeg").trim() || "ffmpeg";
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "qsys-media-"));
+  const inputExt = path.extname(originalName || "") || ".video";
+  const inputPath = path.join(tempDir, `input${inputExt}`);
+  const outputPath = path.join(tempDir, "output.mp4");
+  try {
+    fs.writeFileSync(inputPath, file.buffer);
+    await execFileAsync(
+      ffmpegBin,
+      [
+        "-y",
+        "-i", inputPath,
+        "-map", "0:v:0",
+        "-map", "0:a?",
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", "medium",
+        "-crf", "22",
+        "-c:a", "aac",
+        "-b:a", "160k",
+        "-movflags", "+faststart",
+        outputPath,
+      ],
+      { timeout: 10 * 60 * 1000, maxBuffer: 1024 * 1024 * 8 }
+    );
+    return fs.readFileSync(outputPath);
+  } catch (e) {
+    const err = new Error(
+      e && e.code === "ENOENT"
+        ? "FFmpeg is not installed on this server. Rebuild/deploy the latest Docker image with FFmpeg support."
+        : `Video conversion failed for ${originalName || "uploaded file"}. Use a valid video file.`
+    );
+    err.http = e && e.code === "ENOENT" ? 500 : 400;
+    err.cause = e;
+    throw err;
+  } finally {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+  }
+}
+
 function getManagedMediaRoot(baseDir) {
   return path.join(baseDir, "media-library");
 }
@@ -9755,7 +9810,7 @@ app.post("/api/admin/media/folder", requirePerm("SETTINGS_MANAGE"), express.json
   }
 });
 
-app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.array("files", 20), (req, res) => {
+app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.array("files", 20), async (req, res) => {
   try {
     const { scopeType, branch } = getMediaScopeContext(req);
     if (scopeType === "BRANCH" && !branch?.branchId) {
@@ -9780,10 +9835,12 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
 
     for (const file of files) {
       const originalName = sanitizeMediaFileName(file.originalname || file.fieldname || "video.bin");
-      if (!isDisplayVideoFileName(originalName)) continue;
-      const storedName = `${Date.now()}-${randomUUID()}-${originalName}`;
+      if (!isUploadVideoFileName(originalName)) continue;
+      const webSafeName = toWebSafeMp4Name(originalName);
+      const webSafeBuffer = await transcodeVideoToWebSafeMp4(file, originalName);
+      const storedName = `${Date.now()}-${randomUUID()}-${webSafeName}`;
       const absPath = path.join(dir, storedName);
-      fs.writeFileSync(absPath, file.buffer);
+      fs.writeFileSync(absPath, webSafeBuffer);
       const relativePath = path.relative(getManagedMediaRoot(baseDir), absPath).replace(/\\/g, "/");
       const id = randomUUID();
       insertStmt.run(
@@ -9791,11 +9848,11 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
         scopeType,
         scopeType === "BRANCH" ? String(branch?.branchId || "") : null,
         scopeType === "BRANCH" ? String(branch?.branchCode || "") : null,
-        originalName,
+        webSafeName,
         storedName,
         relativePath,
-        String(file.mimetype || ""),
-        Number(file.size || 0),
+        "video/mp4",
+        Number(webSafeBuffer.length || 0),
         1,
         now,
         now
@@ -9804,7 +9861,7 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
     }
 
     if (!inserted.length) {
-      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Use MP4 encoded as H.264 video with AAC audio." });
+      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Use a video file such as MP4, MOV, WebM, OGG, AVI, or MKV." });
     }
 
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
@@ -9821,7 +9878,7 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
     return res.json({ ok: true, scopeType, branch: branch || null, files: inserted });
   } catch (e) {
     console.error("[admin/media/upload]", e);
-    return res.status(500).json({ ok: false, error: "Server error." });
+    return res.status(Number(e?.http || 500) || 500).json({ ok: false, error: e?.message || "Server error." });
   }
 });
 
