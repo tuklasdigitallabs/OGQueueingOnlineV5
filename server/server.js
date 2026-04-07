@@ -601,11 +601,18 @@ function setState(db, key, value) {
   ).run(key, String(value), now);
 }
 
-function ensureBusinessDate(db) {
+function ensureBusinessDate(db, appRef = null) {
   const today = getTodayManila();
   let cur = getState(db, "currentBusinessDate");
   if (!cur) {
     setState(db, "currentBusinessDate", today);
+    cur = today;
+  } else if (cur !== today) {
+    setState(db, "currentBusinessDate", today);
+    syncDefaultBranchBusinessDate(db, today);
+    setState(db, "lastAutoRolloverAt", Date.now());
+    try { emitChanged(appRef || global.__app || null, db, "AUTO_ROLLOVER"); } catch {}
+    console.log(`[QSysLocal] Auto rollover business date: ${cur} -> ${today}`);
     cur = today;
   }
   return cur;
@@ -624,15 +631,7 @@ function syncDefaultBranchBusinessDate(db, businessDate) {
 }
 
 function maybeAutoRolloverBusinessDate(db, app) {
-  const today = getTodayManila();
-  const cur = ensureBusinessDate(db);
-  if (cur !== today) {
-    setState(db, "currentBusinessDate", today);
-    syncDefaultBranchBusinessDate(db, today);
-    setState(db, "lastAutoRolloverAt", Date.now());
-    emitChanged(app, db, "AUTO_ROLLOVER");
-    console.log(`[QSysLocal] Auto rollover business date: ${cur} -> ${today}`);
-  }
+  ensureBusinessDate(db, app);
 }
 
 /* -------------------- admin schema (create if missing) -------------------- */
