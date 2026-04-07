@@ -160,6 +160,38 @@
       margin-bottom: 4px;
     }
 
+    .queue-position{
+      margin: calc(var(--sp) * 1.2) 0 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(228,148,36,.45);
+      background: rgba(228,148,36,.10);
+    }
+
+    .queue-position .label{
+      display:block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .queue-position strong{
+      display:block;
+      color: var(--primary);
+      font-size: 30px;
+      font-weight: 950;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .queue-position span:last-child{
+      color: rgba(255,255,255,.88);
+      font-size: 13px;
+    }
+
     .btn{
       display:block;
       margin: calc(var(--sp) * 1.5) 0 calc(var(--sp) * 0.8);
@@ -222,6 +254,12 @@
         <span id="ticketStatusHint">We will update this page when your number is called.</span>
       </div>
 
+      <div class="queue-position" id="queuePositionBox" aria-live="polite">
+        <span class="label">Your place in this group</span>
+        <strong id="queuePosition">—</strong>
+        <span id="queuePositionHint">Waiting for queue update.</span>
+      </div>
+
       <a href="#" class="btn" id="backToRegister">Thank you for registering!</a>
 
       <p class="note">
@@ -276,6 +314,34 @@
       return "Keep this page open for updates.";
     }
 
+    function renderWaitingPosition(t){
+      var box = document.getElementById("queuePositionBox");
+      if (!box) return;
+
+      var status = String((t && t.status) || "").toUpperCase();
+      var pos = Number(t && t.waitingPosition);
+      var ahead = Number(t && t.waitingAhead);
+
+      if (status === "WAITING" && Number.isFinite(pos) && pos > 0) {
+        box.style.display = "";
+        setText("queuePosition", "#" + String(pos));
+        var aheadText = Number.isFinite(ahead) && ahead > 0
+          ? (String(ahead) + " ahead of you")
+          : "You are next in this group";
+        setText("queuePositionHint", aheadText);
+        return;
+      }
+
+      if (status === "CALLED") {
+        box.style.display = "";
+        setText("queuePosition", "Called");
+        setText("queuePositionHint", "Please proceed when staff calls your number.");
+        return;
+      }
+
+      box.style.display = "none";
+    }
+
     function renderTicket(t, stale){
       if (!t) return;
       ticketBranchCode = String(t.branchCode || ticketBranchCode || "").trim().toUpperCase();
@@ -286,6 +352,7 @@
       setGroupBadge(t.group);
       setText("ticketStatus", String(t.status || "WAITING").toUpperCase());
       setText("ticketStatusHint", (stale ? "Reconnecting. Showing last saved status. " : "") + statusHint(t.status));
+      renderWaitingPosition(t);
 
       var back = document.getElementById("backToRegister");
       if (back) back.href = window.appUrl("/guest");

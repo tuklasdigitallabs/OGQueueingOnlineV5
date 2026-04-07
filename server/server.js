@@ -2997,6 +2997,43 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
 
       const isPriority = String(row.priorityType || "NONE").toUpperCase() !== "NONE";
       const code = `${isPriority ? "P" : ""}${row.groupCode}-${String(row.queueNum).padStart(2, "0")}`;
+      const status = String(row.status || "").toUpperCase();
+      let waitingPosition = null;
+      let waitingAhead = null;
+      if (status === "WAITING") {
+        const ahead = db
+          .prepare(
+            `
+          SELECT COUNT(*) AS n
+          FROM queue_items
+          WHERE branchCode=?
+            AND businessDate=?
+            AND groupCode=?
+            AND status='WAITING'
+            AND (
+              CASE
+                WHEN ?=1 THEN
+                  (priorityType IS NOT NULL AND priorityType!='NONE' AND queueNum < ?)
+                ELSE
+                  (
+                    (priorityType IS NOT NULL AND priorityType!='NONE')
+                    OR ((priorityType IS NULL OR priorityType='NONE') AND queueNum < ?)
+                  )
+              END
+            )
+        `
+          )
+          .get(
+            row.branchCode,
+            row.businessDate,
+            row.groupCode,
+            isPriority ? 1 : 0,
+            row.queueNum,
+            row.queueNum
+          )?.n || 0;
+        waitingAhead = Number(ahead) || 0;
+        waitingPosition = waitingAhead + 1;
+      }
 
       let branchName = row.branchCode;
       try {
@@ -3021,6 +3058,8 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
           branchName,
           businessDate: row.businessDate,
           status: row.status,
+          waitingPosition,
+          waitingAhead,
         },
       });
     } catch (e) {
