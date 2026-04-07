@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("qsysDisplay", {
   move: () => ipcRenderer.send("kiosk-move-mode"),
   fullscreen: () => ipcRenderer.send("kiosk-enter-fullscreen"),
   toggleFullscreen: () => ipcRenderer.send("kiosk-toggle-fullscreen"),
+  log: (level, message, details) => ipcRenderer.invoke("display-log", { level, message, details }),
 });
 
 // NEW launcher API (used by launcher.html)
@@ -30,4 +31,5 @@ contextBridge.exposeInMainWorld("qsys", {
   getLauncherStatus: () => ipcRenderer.invoke("launcher-status:get"),
   getRemoteDisplayConfig: (branchCode) => ipcRenderer.invoke("launcher-remote-display-config:get", { branchCode }),
   saveRemoteDisplayConfig: (payload) => ipcRenderer.invoke("launcher-remote-display-config:save", payload),
+  pickLocalMediaFile: () => ipcRenderer.invoke("launcher-media-file:pick"),
 });

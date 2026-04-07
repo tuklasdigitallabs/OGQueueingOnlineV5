@@ -145,6 +145,21 @@
       border:none;
     }
 
+    .status-box{
+      margin: calc(var(--sp) * 1.2) 0 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.05);
+    }
+
+    .status-box strong{
+      display:block;
+      color: var(--primary);
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
     .btn{
       display:block;
       margin: calc(var(--sp) * 1.5) 0 calc(var(--sp) * 0.8);
@@ -202,6 +217,11 @@
         </p>
       </div>
 
+      <div class="status-box" aria-live="polite">
+        <strong id="ticketStatus">WAITING</strong>
+        <span id="ticketStatusHint">We will update this page when your number is called.</span>
+      </div>
+
       <a href="#" class="btn" id="backToRegister">Thank you for registering!</a>
 
       <p class="note">
@@ -214,6 +234,7 @@
   </main>
 
   <script src="../app-boot.js"></script>
+  <script src="../socket.io/socket.io.js"></script>
   <script>
     function qs(name){
       return new URL(window.location.href).searchParams.get(name) || "";
@@ -246,31 +267,101 @@
       setText("ticketCodeNum", parts[1] || "—");
     }
 
+    function statusHint(status){
+      var s = String(status || "").toUpperCase();
+      if (s === "CALLED") return "Please proceed to the counter when staff calls your number.";
+      if (s === "SEATED") return "Your party has been seated.";
+      if (s === "SKIPPED") return "Please speak with staff if you still need your table.";
+      if (s === "WAITING") return "We will update this page when your number is called.";
+      return "Keep this page open for updates.";
+    }
+
+    function renderTicket(t, stale){
+      if (!t) return;
+      ticketBranchCode = String(t.branchCode || ticketBranchCode || "").trim().toUpperCase();
+      setTicketCode(t.code);
+      setText("guestName", t.name);
+      setText("branchName", t.branchName || t.branchCode);
+      setText("pax", t.pax);
+      setGroupBadge(t.group);
+      setText("ticketStatus", String(t.status || "WAITING").toUpperCase());
+      setText("ticketStatusHint", (stale ? "Reconnecting. Showing last saved status. " : "") + statusHint(t.status));
+
+      var back = document.getElementById("backToRegister");
+      if (back) back.href = window.appUrl("/guest");
+    }
+
+    function cacheKey(){
+      return "qsys_ticket_cache:" + String(ticketId || "");
+    }
+
+    function saveCachedTicket(t){
+      try { localStorage.setItem(cacheKey(), JSON.stringify({ ticket: t, savedAt: Date.now() })); } catch(e) {}
+    }
+
+    function loadCachedTicket(){
+      try {
+        var cached = JSON.parse(localStorage.getItem(cacheKey()) || "null");
+        return cached && cached.ticket ? cached.ticket : null;
+      } catch(e) {
+        return null;
+      }
+    }
+
     var ticketId = qs("id");
+    var ticketBranchCode = "";
+    var refreshTimer = null;
     if (!ticketId) alert("Missing ticket id.");
 
-    async function boot(){
+    async function loadTicket(options){
+      options = options || {};
       try{
-        var res = await fetch("/api/guest/ticket?id=" + encodeURIComponent(ticketId));
+        var res = await fetch(window.appUrl("/api/guest/ticket?id=" + encodeURIComponent(ticketId)), { cache: "no-store" });
         if (!res.ok) throw new Error("ticket fetch failed");
 
         var data = await res.json();
         if (!data || !data.ok || !data.ticket) throw new Error("bad payload");
 
         var t = data.ticket;
-
-        setTicketCode(t.code);
-        setText("guestName", t.name);
-        setText("branchName", t.branchName || t.branchCode);
-        setText("pax", t.pax);
-        setGroupBadge(t.group);
-
-        var back = document.getElementById("backToRegister");
-        if (back) back.href = window.appUrl("/guest");
+        ticketBranchCode = String(t.branchCode || "").trim().toUpperCase();
+        saveCachedTicket(t);
+        renderTicket(t, false);
       }catch(e){
         console.error(e);
-        alert("Unable to load ticket info.");
+        var cached = loadCachedTicket();
+        if (cached) {
+          renderTicket(cached, true);
+        } else if (!options.silent) {
+          alert("Unable to load ticket info.");
+        }
       }
+    }
+
+    function startRealtime(){
+      refreshTimer = setInterval(function(){
+        loadTicket({ silent: true });
+      }, 5000);
+
+      try {
+        if (!window.io) return;
+        var sock = io({
+          path: window.appUrl("/socket.io"),
+          query: ticketBranchCode ? { branchCode: ticketBranchCode } : undefined,
+          transports: ["websocket", "polling"]
+        });
+        sock.on("state:changed", function(payload){
+          var eventBranchCode = String((payload && payload.branchCode) || "").trim().toUpperCase();
+          if (eventBranchCode && ticketBranchCode && eventBranchCode !== ticketBranchCode) return;
+          loadTicket({ silent: true });
+        });
+      } catch(e) {}
+    }
+
+    async function boot(){
+      var cached = loadCachedTicket();
+      if (cached) renderTicket(cached, true);
+      await loadTicket();
+      startRealtime();
     }
 
     boot();

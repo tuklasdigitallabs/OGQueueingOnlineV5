@@ -179,6 +179,12 @@ function buildLocalDisplayShellUrl(cfg) {
     serverUrl,
     electronShell: "1",
   });
+  const mediaSourceMode = String(cfg?.mediaSourceMode || "").trim().toLowerCase();
+  const localMediaFile = String(cfg?.localMediaFile || "").trim();
+  if (mediaSourceMode === "local-file" && localMediaFile) {
+    params.set("localMediaMode", "1");
+    params.set("localMediaFile", localMediaFile);
+  }
   return `http://127.0.0.1:${cfg?.port}/${suffix}?${params.toString()}`;
 }
 
@@ -206,6 +212,48 @@ let baseDirGlobal = null;
 let cfgGlobal = null;
 let currentDisplayId = null;
 let displaySpeechProc = null;
+
+function getLogsDir() {
+  if (!baseDirGlobal) return null;
+  const logsDir = path.join(baseDirGlobal, "logs");
+  ensureDir(logsDir);
+  return logsDir;
+}
+
+function appendDisplayLogLine(line) {
+  const logsDir = getLogsDir();
+  if (!logsDir) return;
+  try {
+    fs.appendFileSync(path.join(logsDir, "display.log"), `${line}\n`, "utf8");
+  } catch (error) {
+    console.error("[QSysOnline] Failed to append display log:", error);
+  }
+}
+
+function writeDisplayLog(level, message, details) {
+  const ts = new Date().toISOString();
+  const safeLevel = String(level || "info").trim().toUpperCase() || "INFO";
+  const safeMessage = String(message || "").trim() || "Display event";
+  const detailText =
+    details == null
+      ? ""
+      : typeof details === "string"
+        ? details
+        : (() => {
+            try {
+              return JSON.stringify(details);
+            } catch {
+              return String(details);
+            }
+          })();
+  const line = `[${ts}] [DISPLAY] [${safeLevel}] ${safeMessage}${detailText ? ` ${detailText}` : ""}`;
+  if (safeLevel === "ERROR" || safeLevel === "WARN") {
+    console.error(line);
+  } else {
+    console.log(line);
+  }
+  appendDisplayLogLine(line);
+}
 
 // ===== Force to "Screen 2" (sorted index 1) =====
 function getScreen2Bounds() {
@@ -440,6 +488,24 @@ function createKioskWindow(port, kioskUrl) {
 
   win.webContents.setAudioMuted(false);
 
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    const levelMap = { 0: "info", 1: "warn", 2: "error", 3: "info" };
+    writeDisplayLog(levelMap[level] || "info", "Renderer console", {
+      message,
+      line,
+      sourceId,
+    });
+  });
+
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    writeDisplayLog("error", "Display failed to load", {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame,
+    });
+  });
+
   win.loadURL(kioskUrl);
 
   win.on("close", (e) => {
@@ -517,6 +583,8 @@ ipcMain.handle("launcher-config:get", async () => {
       serverUrl: String(cfgGlobal.serverUrl || ""),
       branchCode: normalizeBranchCode(cfgGlobal.branchCode),
       displayMode: normalizeDisplayMode(cfgGlobal.displayMode),
+      mediaSourceMode: String(cfgGlobal.mediaSourceMode || "cloud"),
+      localMediaFile: String(cfgGlobal.localMediaFile || ""),
       targetDisplayId: Number.isFinite(Number(cfgGlobal.targetDisplayId)) ? Number(cfgGlobal.targetDisplayId) : null,
       resolvedDisplayUrl: resolveKioskUrl(cfgGlobal),
       localLauncherUrl: `http://127.0.0.1:${cfgGlobal.port}/static/launcher.html`,
@@ -539,6 +607,8 @@ ipcMain.handle("launcher-config:save", async (_evt, payload) => {
     serverUrl: normalizeServerUrl(payload?.serverUrl, cfgGlobal.port),
     branchCode: normalizeBranchCode(payload?.branchCode),
     displayMode: normalizeDisplayMode(payload?.displayMode),
+    mediaSourceMode: String(payload?.mediaSourceMode || "cloud").trim().toLowerCase() === "local-file" ? "local-file" : "cloud",
+    localMediaFile: String(payload?.localMediaFile || "").trim(),
     targetDisplayId: Number.isFinite(Number(payload?.targetDisplayId)) ? Number(payload.targetDisplayId) : null,
   };
   next.kioskUrl = resolveKioskUrl(next);
@@ -552,6 +622,8 @@ ipcMain.handle("launcher-config:save", async (_evt, payload) => {
       serverUrl: String(cfgGlobal.serverUrl || ""),
       branchCode: normalizeBranchCode(cfgGlobal.branchCode),
       displayMode: normalizeDisplayMode(cfgGlobal.displayMode),
+      mediaSourceMode: String(cfgGlobal.mediaSourceMode || "cloud"),
+      localMediaFile: String(cfgGlobal.localMediaFile || ""),
       targetDisplayId: Number.isFinite(Number(cfgGlobal.targetDisplayId)) ? Number(cfgGlobal.targetDisplayId) : null,
       resolvedDisplayUrl: resolveKioskUrl(cfgGlobal),
       localLauncherUrl: `http://127.0.0.1:${cfgGlobal.port}/static/launcher.html`,
@@ -646,6 +718,7 @@ ipcMain.handle("launcher-remote-display-config:save", async (_evt, payload) => {
         branchCode,
         "display.showVideo": String(payload?.displayShowVideo || "false") === "true" ? "true" : "false",
         "display.orientation": normalizeDisplayMode(payload?.displayMode),
+        "media.sourceFile": "",
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -660,6 +733,33 @@ ipcMain.handle("launcher-remote-display-config:save", async (_evt, payload) => {
     };
   } catch (error) {
     return { ok: false, error: error?.message || "Failed to save display settings." };
+  }
+});
+
+ipcMain.handle("launcher-media-file:pick", async () => {
+  try {
+    const result = await dialog.showOpenDialog(launcherWin || undefined, {
+      title: "Select Local Video File",
+      properties: ["openFile"],
+      filters: [
+        { name: "Web-compatible Video Files", extensions: ["mp4", "webm", "ogg"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+    });
+    if (result.canceled) return { ok: true, canceled: true, path: "" };
+    return { ok: true, canceled: false, path: String(result.filePaths?.[0] || "").trim() };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Failed to pick local media file." };
+  }
+});
+
+ipcMain.handle("display-log", async (_evt, payload) => {
+  try {
+    writeDisplayLog(payload?.level, payload?.message, payload?.details);
+    return { ok: true };
+  } catch (error) {
+    console.error("[QSysOnline] display-log failed:", error);
+    return { ok: false, error: error?.message || "Failed to write display log." };
   }
 });
 

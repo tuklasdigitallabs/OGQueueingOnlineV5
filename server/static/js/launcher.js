@@ -17,6 +17,10 @@
     displayShowVideoInput: $("displayShowVideoInput"),
     displayModeInput: $("displayModeInput"),
     mediaSourceValue: $("mediaSourceValue"),
+    mediaSourceModeInput: $("mediaSourceModeInput"),
+    localMediaFileValue: $("localMediaFileValue"),
+    btnPickLocalMediaFile: $("btnPickLocalMediaFile"),
+    btnClearLocalMediaFile: $("btnClearLocalMediaFile"),
     displayTargetInput: $("displayTargetInput"),
     resolvedDisplayUrl: $("resolvedDisplayUrl"),
     agentConfigStatus: $("agentConfigStatus"),
@@ -39,6 +43,7 @@
     availableBranches: [],
     displaySettings: null,
     displayMediaSource: null,
+    localMediaFile: "",
   };
 
   function normalizeServerUrl(serverUrl) {
@@ -91,8 +96,22 @@
       branchCode: normalizeBranchCode(el.branchCodeInput?.value),
       displayShowVideo: String(el.displayShowVideoInput?.value || "false") === "true" ? "true" : "false",
       displayMode: normalizeDisplayMode(el.displayModeInput?.value),
+      mediaSourceMode: String(el.mediaSourceModeInput?.value || "cloud").trim().toLowerCase() === "local-file" ? "local-file" : "cloud",
+      localMediaFile: String(state.localMediaFile || "").trim(),
       targetDisplayId: getSelectedDisplayTargetId(),
     };
+  }
+
+  function renderLocalMediaControls() {
+    const mode = String(el.mediaSourceModeInput?.value || "cloud").trim().toLowerCase() === "local-file" ? "local-file" : "cloud";
+    const localPath = String(state.localMediaFile || "").trim();
+    if (el.localMediaFileValue) {
+      el.localMediaFileValue.textContent = localPath || "No local file selected";
+      el.localMediaFileValue.title = localPath || "";
+      el.localMediaFileValue.style.opacity = mode === "local-file" ? "1" : "0.7";
+    }
+    if (el.btnPickLocalMediaFile) el.btnPickLocalMediaFile.disabled = mode !== "local-file";
+    if (el.btnClearLocalMediaFile) el.btnClearLocalMediaFile.disabled = mode !== "local-file" || !localPath;
   }
 
   function renderBranchOptions(selectedCode) {
@@ -152,13 +171,19 @@
     if (el.displayModeInput) {
       el.displayModeInput.value = normalizeDisplayMode(settings?.["display.orientation"] || state.launcherConfig?.displayMode);
     }
+    const localMode = String(state.launcherConfig?.mediaSourceMode || "cloud").trim().toLowerCase() === "local-file";
+    state.localMediaFile = String(state.launcherConfig?.localMediaFile || state.localMediaFile || "").trim();
+    if (el.mediaSourceModeInput) el.mediaSourceModeInput.value = localMode ? "local-file" : "cloud";
     if (el.mediaSourceValue) {
       const mediaSourceLabel = String(state.displayMediaSource?.label || "").trim();
-      const mediaSource = String(settings?.["media.sourceDir"] || "").trim();
+      const mediaSource = localMode
+        ? String(state.localMediaFile || "").trim()
+        : String(settings?.["media.sourceDir"] || "").trim();
       const text = mediaSourceLabel || mediaSource || "Bundled videos (default)";
       el.mediaSourceValue.textContent = text;
       el.mediaSourceValue.title = text;
     }
+    renderLocalMediaControls();
     renderResolvedDisplayUrl();
   }
 
@@ -389,6 +414,8 @@
         serverUrl: HARD_CODED_SERVER_URL,
         branchCode: normalizedBranchCode,
         displayMode: normalizeDisplayMode(j.settings?.["display.orientation"]),
+        mediaSourceMode: String(state.launcherConfig?.mediaSourceMode || "cloud"),
+        localMediaFile: String(state.launcherConfig?.localMediaFile || state.localMediaFile || ""),
         targetDisplayId: getSelectedDisplayTargetId(),
       };
       const saved = await window.qsys.saveLauncherConfig(localPayload);
@@ -406,6 +433,10 @@
       setAgentStatus("Branch code is required before saving display setup.", true);
       return;
     }
+    if (payload.mediaSourceMode === "local-file" && !payload.localMediaFile) {
+      setAgentStatus("Choose a local video file before saving Local File playback.", true);
+      return;
+    }
     setAgentStatus("Saving display setup...", false);
     const remoteJson = window.qsys?.saveRemoteDisplayConfig
       ? await window.qsys.saveRemoteDisplayConfig(payload)
@@ -417,6 +448,7 @@
               branchCode: payload.branchCode,
               "display.showVideo": payload.displayShowVideo,
               "display.orientation": payload.displayMode,
+              "media.sourceFile": "",
             }),
           });
           const json = await safeJson(remoteRes);
@@ -483,7 +515,25 @@
     el.branchCodeInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.displayShowVideoInput?.addEventListener("change", renderResolvedDisplayUrl);
     el.displayModeInput?.addEventListener("change", renderResolvedDisplayUrl);
+    el.mediaSourceModeInput?.addEventListener("change", () => {
+      renderLocalMediaControls();
+    });
     el.displayTargetInput?.addEventListener("change", renderResolvedDisplayUrl);
+    el.btnPickLocalMediaFile?.addEventListener("click", async () => {
+      try {
+        const picked = await window.qsys?.pickLocalMediaFile?.();
+        if (!picked?.ok) throw new Error(picked?.error || "Failed to choose local media file.");
+        if (picked.canceled) return;
+        state.localMediaFile = String(picked.path || "").trim();
+        renderLocalMediaControls();
+      } catch (err) {
+        setAgentStatus(err?.message || "Failed to choose local media file.", true);
+      }
+    });
+    el.btnClearLocalMediaFile?.addEventListener("click", () => {
+      state.localMediaFile = "";
+      renderLocalMediaControls();
+    });
     return true;
   }
 

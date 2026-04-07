@@ -1928,32 +1928,15 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   function finalizeLoginSession(req, scope, sessUser) {
     return new Promise((resolve, reject) => {
       const nextUser = ensureSessionBranchContext(sessUser);
-      const preservedAdminUser = scope === "admin" ? null : req?.session?.adminUser || null;
-      const preservedStaffUser = scope === "staff" ? null : req?.session?.staffUser || null;
-      const preservedLegacyUser = req?.session?.user || null;
-      const hasOtherScopedSession = scope === "admin"
-        ? !!preservedStaffUser
-        : scope === "staff"
-          ? !!preservedAdminUser
-          : !!(preservedAdminUser || preservedStaffUser);
       if (!req || !req.session || typeof req.session.regenerate !== "function") {
         try {
+          if (req?.session) {
+            delete req.session.adminUser;
+            delete req.session.staffUser;
+            delete req.session.user;
+          }
           setSessionUser(req, scope, nextUser);
           return resolve();
-        } catch (e) {
-          return reject(e);
-        }
-      }
-      if (hasOtherScopedSession) {
-        try {
-          if (preservedAdminUser) req.session.adminUser = preservedAdminUser;
-          if (preservedStaffUser) req.session.staffUser = preservedStaffUser;
-          if (preservedLegacyUser) req.session.user = preservedLegacyUser;
-          setSessionUser(req, scope, nextUser);
-          return req.session.save((saveErr) => {
-            if (saveErr) return reject(saveErr);
-            return resolve();
-          });
         } catch (e) {
           return reject(e);
         }
@@ -1961,9 +1944,6 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       req.session.regenerate((err) => {
         if (err) return reject(err);
         try {
-          if (preservedAdminUser) req.session.adminUser = preservedAdminUser;
-          if (preservedStaffUser) req.session.staffUser = preservedStaffUser;
-          if (preservedLegacyUser) req.session.user = preservedLegacyUser;
           setSessionUser(req, scope, nextUser);
           req.session.save((saveErr) => {
             if (saveErr) return reject(saveErr);
@@ -2242,12 +2222,12 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // Logout (separated)
   app.post("/api/staff/auth/logout", (req, res) => {
     try { clearSessionUser(req, "staff"); } catch {}
-    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
+    return destroySessionAndRespond(req, res);
   });
 
   app.post("/api/admin/auth/logout", (req, res) => {
     try { clearSessionUser(req, "admin"); } catch {}
-    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
+    return destroySessionAndRespond(req, res);
   });
 
   app.post("/api/super-admin/auth/logout", (req, res) => {
@@ -3021,8 +3001,12 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
 
       let branchName = row.branchCode;
       try {
-        const cfg = getBranchConfigSafe();
-        if (cfg && cfg.branchName) branchName = String(cfg.branchName).trim() || branchName;
+        const branch = getBranchByCode(row.branchCode);
+        if (branch?.branchName) branchName = String(branch.branchName).trim() || branchName;
+        else {
+          const cfg = getBranchConfigSafe();
+          if (cfg && cfg.branchName) branchName = String(cfg.branchName).trim() || branchName;
+        }
       } catch {}
 
       return res.json({
@@ -3502,11 +3486,15 @@ function getResolvedDisplaySettings(branch) {
   const mediaSourceDirRaw = branchId
     ? getBranchSetting(branchId, "media.sourceDir") || getAppSetting("media.sourceDir")
     : getAppSetting("media.sourceDir");
+  const mediaSourceFileRaw = branchId
+    ? getBranchSetting(branchId, "media.sourceFile") || getAppSetting("media.sourceFile")
+    : getAppSetting("media.sourceFile");
 
   return {
     "display.showVideo": String(showVideoRaw || "false").trim().toLowerCase() === "true" ? "true" : "false",
     "display.orientation": String(orientationRaw || "landscape").trim().toLowerCase() === "portrait" ? "portrait" : "landscape",
     "media.sourceDir": String(mediaSourceDirRaw || "").trim(),
+    "media.sourceFile": String(mediaSourceFileRaw || "").trim(),
   };
 }
 
@@ -3529,6 +3517,9 @@ function saveBranchDisplaySettings(branch, updates = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(updates, "media.sourceDir")) {
     setBranchSetting(branchId, "media.sourceDir", String(updates["media.sourceDir"] || "").trim());
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, "media.sourceFile")) {
+    setBranchSetting(branchId, "media.sourceFile", String(updates["media.sourceFile"] || "").trim());
   }
   return true;
 }
@@ -4092,7 +4083,7 @@ const win = (() => {
     }
 
     const branch = getRequestBranch(req);
-    if (!saveBranchDisplaySettings(branch, { "media.sourceDir": folder })) {
+    if (!saveBranchDisplaySettings(branch, { "media.sourceDir": folder, "media.sourceFile": "" })) {
       return res.status(400).json({ ok: false, error: "No active branch context resolved." });
     }
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
@@ -4113,7 +4104,7 @@ app.post("/api/admin/media/source/clear", requirePerm("SETTINGS_MANAGE"), (req, 
   try {
     const now = Date.now();
     const branch = getRequestBranch(req);
-    if (!saveBranchDisplaySettings(branch, { "media.sourceDir": "" })) {
+    if (!saveBranchDisplaySettings(branch, { "media.sourceDir": "", "media.sourceFile": "" })) {
       return res.status(400).json({ ok: false, error: "No active branch context resolved." });
     }
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
@@ -9532,18 +9523,22 @@ function getBundledMediaDir() {
 }
 
 function listVideoFilesIn(dirAbs) {
-  const exts = /\.(mp4|webm|m4v|mov)$/i;
   if (!dirAbs) return [];
   try {
     if (!fs.existsSync(dirAbs)) return [];
     return fs
       .readdirSync(dirAbs)
-      .filter((f) => exts.test(f))
+      .filter((f) => isDisplayVideoFileName(f))
       // ignore hidden/system junk
       .filter((f) => !String(f).startsWith("."));
   } catch {
     return [];
   }
+}
+
+function isDisplayVideoFileName(fileName) {
+  // Chromium/Electron commonly reports MEDIA_ERR_SRC_NOT_SUPPORTED for MOV/M4V containers.
+  return /\.(mp4|webm|ogg|ogv)$/i.test(String(fileName || ""));
 }
 
 function getManagedMediaRoot(baseDir) {
@@ -9593,10 +9588,28 @@ function listManagedMediaAssets(scopeType, branch) {
   ).all();
 }
 
+function listDisplayManagedMediaAssets(scopeType, branch) {
+  return listManagedMediaAssets(scopeType, branch).filter((row) =>
+    isDisplayVideoFileName(row?.fileName || row?.storedName || row?.relativePath || "")
+  );
+}
+
 function getDisplayMediaSourceSummary(branch) {
-  const generalCount = listManagedMediaAssets("GENERAL", null).length;
-  const branchCount = branch?.branchId ? listManagedMediaAssets("BRANCH", branch).length : 0;
+  const generalCount = listDisplayManagedMediaAssets("GENERAL", null).length;
+  const branchCount = branch?.branchId ? listDisplayManagedMediaAssets("BRANCH", branch).length : 0;
   const customDir = String(getResolvedDisplaySettings(branch)["media.sourceDir"] || "").trim();
+  const localFile = String(getResolvedDisplaySettings(branch)["media.sourceFile"] || "").trim();
+
+  if (localFile) {
+    return {
+      effectiveSource: "local-file",
+      label: localFile,
+      generalCount,
+      branchCount,
+      customDir,
+      localFile,
+    };
+  }
 
   if (branchCount > 0) {
     return {
@@ -9605,6 +9618,7 @@ function getDisplayMediaSourceSummary(branch) {
       generalCount,
       branchCount,
       customDir,
+      localFile,
     };
   }
   if (generalCount > 0) {
@@ -9614,6 +9628,7 @@ function getDisplayMediaSourceSummary(branch) {
       generalCount,
       branchCount,
       customDir,
+      localFile,
     };
   }
   if (customDir) {
@@ -9623,6 +9638,7 @@ function getDisplayMediaSourceSummary(branch) {
       generalCount,
       branchCount,
       customDir,
+      localFile,
     };
   }
   return {
@@ -9631,6 +9647,7 @@ function getDisplayMediaSourceSummary(branch) {
     generalCount,
     branchCount,
     customDir,
+    localFile,
   };
 }
 
@@ -9715,7 +9732,6 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
       return res.status(500).json({ ok: false, error: "Failed to prepare media folder." });
     }
 
-    const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
     const now = Date.now();
     const inserted = [];
     const insertStmt = db.prepare(
@@ -9725,7 +9741,7 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
 
     for (const file of files) {
       const originalName = sanitizeMediaFileName(file.originalname || file.fieldname || "video.bin");
-      if (!exts.test(originalName)) continue;
+      if (!isDisplayVideoFileName(originalName)) continue;
       const storedName = `${Date.now()}-${randomUUID()}-${originalName}`;
       const absPath = path.join(dir, storedName);
       fs.writeFileSync(absPath, file.buffer);
@@ -9749,7 +9765,7 @@ app.post("/api/admin/media/upload", requirePerm("SETTINGS_MANAGE"), mediaUpload.
     }
 
     if (!inserted.length) {
-      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Allowed formats: mp4, webm, ogg, m4v, mov." });
+      return res.status(400).json({ ok: false, error: "No supported video files were uploaded. Allowed formats: mp4, webm, ogg." });
     }
 
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
@@ -9840,8 +9856,7 @@ app.get("/media/custom/:name", requireDisplayAuth, (req, res) => {
     if (!base) return res.status(404).end();
 
     const name = String(req.params.name || "");
-    const exts = /\.(mp4|webm|m4v|mov)$/i;
-    if (!exts.test(name)) return res.status(400).end();
+    if (!isDisplayVideoFileName(name)) return res.status(400).end();
 
     // Path traversal defense
     const abs = path.resolve(base, name);
@@ -9856,6 +9871,19 @@ app.get("/media/custom/:name", requireDisplayAuth, (req, res) => {
   }
 });
 
+app.get("/media/local-file/current", requireDisplayAuth, (req, res) => {
+  try {
+    const filePath = String(req.query?.path || getResolvedDisplaySettings(getRequestBranch(req))["media.sourceFile"] || "").trim();
+    if (!filePath) return res.status(404).end();
+    if (!isDisplayVideoFileName(filePath)) return res.status(400).end();
+    if (!fs.existsSync(filePath)) return res.status(404).end();
+    return res.sendFile(path.resolve(filePath));
+  } catch (e) {
+    console.error("[media:local-file]", e);
+    return res.status(500).end();
+  }
+});
+
 app.get("/wifi-qr-test", (req, res) => {
   res.sendFile(path.join(__dirname, "static", "wifi-qr-test.html"));
 });
@@ -9864,20 +9892,33 @@ app.get("/wifi-qr-test", (req, res) => {
 app.get("/api/media/list", requireDisplayAuth, (req, res) => {
 
   try {
-    const exts = /\.(mp4|webm|ogg|m4v|mov)$/i;
     const branch = getRequestBranch(req);
     const branchCode = String(branch?.branchCode || "").trim().toUpperCase();
+    const localFile = String(getResolvedDisplaySettings(branch)["media.sourceFile"] || "").trim();
     const withBranchCode = (url) => {
       const raw = String(url || "").trim();
       if (!raw || !branchCode) return raw;
       const sep = raw.includes("?") ? "&" : "?";
       return `${raw}${sep}branchCode=${encodeURIComponent(branchCode)}`;
     };
-    const generalAssets = listManagedMediaAssets("GENERAL", null).map((row) => ({
+
+    if (localFile) {
+      if (fs.existsSync(localFile) && isDisplayVideoFileName(localFile)) {
+        return res.json({
+          ok: true,
+          files: [withBranchCode("/media/local-file/current")],
+          source: "local-file",
+          file: localFile,
+        });
+      }
+      console.warn("[media:list] local file missing or unsupported, falling back:", localFile);
+    }
+
+    const generalAssets = listDisplayManagedMediaAssets("GENERAL", null).map((row) => ({
       url: withBranchCode(`/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`),
       scopeType: "GENERAL",
     }));
-    const branchAssets = listManagedMediaAssets("BRANCH", branch).map((row) => ({
+    const branchAssets = listDisplayManagedMediaAssets("BRANCH", branch).map((row) => ({
       url: withBranchCode(`/media/library/${encodeURIComponent(row.id)}/${encodeURIComponent(row.fileName)}`),
       scopeType: "BRANCH",
     }));
@@ -9899,7 +9940,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
         if (fs.existsSync(sourceDir) && fs.statSync(sourceDir).isDirectory()) {
           const customFiles = fs
             .readdirSync(sourceDir)
-            .filter((f) => exts.test(f))
+            .filter((f) => isDisplayVideoFileName(f))
             .map(
               (f) =>
                 withBranchCode(`/media/custom/${encodeURIComponent(f)}`),
@@ -9922,7 +9963,7 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
 
     const files = fs
       .readdirSync(mediaDir)
-      .filter((f) => exts.test(f))
+      .filter((f) => isDisplayVideoFileName(f))
       .map((f) => `/static/media/${encodeURIComponent(f)}`);
 
     return res.json({ ok: true, files, source: "bundled" });

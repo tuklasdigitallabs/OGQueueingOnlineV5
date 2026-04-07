@@ -68,6 +68,51 @@ function dbgDisp(...args){
     } catch {}
   }
 
+  function stringifyForLog(value) {
+    try {
+      if (value instanceof Error) {
+        return {
+          name: value.name || "Error",
+          message: value.message || String(value),
+          stack: value.stack || "",
+        };
+      }
+      if (value && typeof value === "object") {
+        return JSON.parse(JSON.stringify(value));
+      }
+      return value == null ? "" : String(value);
+    } catch {
+      try {
+        return String(value);
+      } catch {
+        return "[unserializable]";
+      }
+    }
+  }
+
+  function reportDisplayLog(level, message, details) {
+    const safeLevel = String(level || "info").toLowerCase();
+    const payload = stringifyForLog(details);
+    try {
+      const logFn =
+        safeLevel === "error"
+          ? console.error
+          : safeLevel === "warn"
+            ? console.warn
+            : console.log;
+      logFn("[display-log]", message, payload);
+    } catch {}
+    try {
+      if (window.qsysDisplay?.log) {
+        window.qsysDisplay.log(safeLevel, message, {
+          details: payload,
+          href: location.href,
+          branchCode: (typeof getDisplayBranchCode === "function" ? getDisplayBranchCode() : "") || "",
+        });
+      }
+    } catch {}
+  }
+
   function safeJsonParse(str, fallback) {
     try {
       return JSON.parse(str);
@@ -264,6 +309,37 @@ function dbgDisp(...args){
       }
     } catch {}
     return normalizeDisplayServerBase(window.location.origin) || window.location.origin;
+  }
+
+  function getLocalMediaFileFromQuery() {
+    try {
+      const qs = new URLSearchParams(window.location.search || "");
+      if (String(qs.get("localMediaMode") || "").trim() !== "1") return "";
+      return String(qs.get("localMediaFile") || "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function getLocalAgentUrl(input) {
+    const raw = String(input || "").trim();
+    try {
+      if (typeof window.appAbsoluteUrl === "function") return window.appAbsoluteUrl(raw || "/");
+    } catch {}
+    try {
+      return new URL(raw || "/", window.location.origin).toString();
+    } catch {
+      return raw;
+    }
+  }
+
+  function getLocalMediaUrl(filePath) {
+    const branchCode = getDisplayBranchCode();
+    const params = new URLSearchParams({
+      path: String(filePath || ""),
+    });
+    if (branchCode) params.set("branchCode", branchCode);
+    return getLocalAgentUrl(`/media/local-file/current?${params.toString()}`);
   }
 
   function absoluteDisplayServerUrl(input) {
@@ -942,6 +1018,7 @@ function dbgDisp(...args){
       if (statusEl)
         statusEl.textContent =
           "State load failed: " + (err?.message || "unknown");
+      reportDisplayLog("error", "Display state load failed", err);
       return [];
     }
   }
@@ -949,6 +1026,13 @@ function dbgDisp(...args){
   // ===== Playlist/video =====
   async function loadPlaylist(state) {
     try {
+      const localMediaFile = getLocalMediaFileFromQuery();
+      if (localMediaFile) {
+        state.playlist = [getLocalMediaUrl(localMediaFile)];
+        reportDisplayLog("info", "Using local media file override", { localMediaFile });
+        return;
+      }
+
       // IMPORTANT: video playlist must respect the same pairing token as state
       let token = "";
       try {
@@ -972,12 +1056,14 @@ function dbgDisp(...args){
           .filter((p) => !/dashinit/i.test(p))
           .map((p) => absoluteDisplayServerUrl(p));
       } else {
+        reportDisplayLog("warn", "Playlist API returned no files, using bundled fallback", j || {});
         state.playlist = [
           "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
           "/static/media/" + encodeURIComponent("SaveInsta.App - 3101717398286427917_369353778.mp4"),
         ].map((p) => window.appUrl(p));
       }
-    } catch {
+    } catch (err) {
+      reportDisplayLog("error", "Playlist load failed, using bundled fallback", err);
       state.playlist = [
         "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
         "/static/media/" + encodeURIComponent("SaveInsta.App - 3101717398286427917_369353778.mp4"),
@@ -1014,6 +1100,7 @@ function dbgDisp(...args){
               `Video playback failed: ${String(retryErr?.message || retryErr || "unknown error")}`;
           }
           console.error("[display] video play retry failed", { src, retryErr });
+          reportDisplayLog("error", "Video playback retry failed", { src, error: retryErr });
           return false;
         }
       }
@@ -1022,6 +1109,7 @@ function dbgDisp(...args){
           `Video playback failed: ${String(err?.message || err || "unknown error")}`;
       }
       console.error("[display] video play failed", { src, err });
+      reportDisplayLog("error", "Video playback failed", { src, error: err });
       return false;
     }
   }
@@ -1364,6 +1452,15 @@ function dbgDisp(...args){
 
     const onEndOrError = (ev) => {
       const el = ev?.currentTarget;
+      if (ev?.type === "error") {
+        reportDisplayLog("error", "Active video element emitted error", {
+          currentSrc: el?.currentSrc || el?.src || "",
+          networkState: el?.networkState,
+          readyState: el?.readyState,
+          mediaErrorCode: el?.error?.code || null,
+          mediaErrorMessage: el?.error?.message || "",
+        });
+      }
       // Only advance when the ACTIVE player ends/errors
       if (el && el.classList.contains("isActive")) playNextVideo(ui, state);
     };
@@ -1376,7 +1473,16 @@ function dbgDisp(...args){
   } else if (adPlayer) {
     // Single-player fallback
     adPlayer.addEventListener("ended", () => playNextVideo(ui, state));
-    adPlayer.addEventListener("error", () => playNextVideo(ui, state));
+    adPlayer.addEventListener("error", () => {
+      reportDisplayLog("error", "Single video element emitted error", {
+        currentSrc: adPlayer?.currentSrc || adPlayer?.src || "",
+        networkState: adPlayer?.networkState,
+        readyState: adPlayer?.readyState,
+        mediaErrorCode: adPlayer?.error?.code || null,
+        mediaErrorMessage: adPlayer?.error?.message || "",
+      });
+      playNextVideo(ui, state);
+    });
     applyVideoSoundSetting(adPlayer, state.displaySettings);
   }
 }
@@ -1403,6 +1509,20 @@ function dbgDisp(...args){
         state.calledKeys = new Set(keys);
         state.didInitCalledSnapshot = true;
       } catch {}
+    });
+
+    window.addEventListener("error", (event) => {
+      reportDisplayLog("error", "Unhandled display runtime error", {
+        message: event?.message || "",
+        filename: event?.filename || "",
+        lineno: event?.lineno || 0,
+        colno: event?.colno || 0,
+        error: event?.error || null,
+      });
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      reportDisplayLog("error", "Unhandled display promise rejection", event?.reason || null);
     });
 
     // Socket
@@ -1448,6 +1568,7 @@ socket.on("heartbeat", () => {
 
     socket.on("disconnect", () => {
       if (statusEl) statusEl.textContent = "Disconnected - retrying...";
+      reportDisplayLog("warn", "Display socket disconnected", { branchCode, socketId: socket.id || "" });
     });
 
     socket.on("state:changed", async (payload) => {

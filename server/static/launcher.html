@@ -486,6 +486,23 @@
                 <div class="v valueBlock" id="mediaSourceValue">Bundled videos (default)</div>
               </div>
               <div class="kvRow">
+                <div class="k">Playback Source</div>
+                <select class="v fieldControl" id="mediaSourceModeInput">
+                  <option value="cloud">Cloud Source</option>
+                  <option value="local-file">Local File</option>
+                </select>
+              </div>
+              <div class="kvRow">
+                <div class="k">Local Video File</div>
+                <div class="v">
+                  <div class="valueBlock mono" id="localMediaFileValue">No local file selected</div>
+                  <div class="btnRow" style="margin-top:10px;">
+                    <button type="button" class="btn btnNeutral" id="btnPickLocalMediaFile">Choose Local File</button>
+                    <button type="button" class="btn btnGhost" id="btnClearLocalMediaFile">Clear Local File</button>
+                  </div>
+                </div>
+              </div>
+              <div class="kvRow">
                 <div class="k">Target Screen</div>
                 <select class="v fieldControl" id="displayTargetInput">
                   <option value="">Primary / Auto</option>
