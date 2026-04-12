@@ -10,37 +10,41 @@
     <meta http-equiv="Expires" content="0" />
     <style>
       :root{
-        --bg:#f3eadc;
-        --panel:#faf6ee;
-        --card:#fbf7f0;
-        --line:rgba(0,0,0,.08);
-        --text:#1f2933;
-        --muted:rgba(31,41,51,.62);
-        --accent:#e10600;
-        --accent-soft:rgba(225,6,0,.08);
-        --good:#16a34a;
-        --shadow:0 10px 26px rgba(0,0,0,.10);
-        --radius:18px;
+        --bg:#efe4d4;
+        --panel:#fffaf3;
+        --card:#fffdfa;
+        --line:rgba(51,32,16,.12);
+        --text:#1e293b;
+        --muted:rgba(30,41,59,.68);
+        --accent:#b93819;
+        --accent-2:#0f766e;
+        --warn:#a16207;
+        --good:#15803d;
+        --danger:#b91c1c;
+        --shadow:0 16px 38px rgba(42,25,8,.10);
+        --radius:22px;
       }
       *{ box-sizing:border-box; }
       body{
         margin:0;
-        font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+        font-family: Georgia, "Times New Roman", serif;
         color:var(--text);
-        background: var(--bg);
-        background-image: radial-gradient(900px 600px at 18% 12%, rgba(225,6,0,.05), transparent 55%);
-        background-attachment: fixed;
+        background:
+          radial-gradient(800px 480px at 12% 0%, rgba(185,56,25,.10), transparent 60%),
+          linear-gradient(180deg, #f7efe4 0%, var(--bg) 100%);
+      }
+      button, input, select, textarea{
+        font:inherit;
       }
       .shell{
-        max-width:1200px;
+        max-width:1280px;
         margin:0 auto;
         padding:24px;
       }
       .hero{
-        display:flex;
-        justify-content:space-between;
+        display:grid;
+        grid-template-columns: 1.3fr .7fr;
         gap:18px;
-        align-items:flex-start;
         padding:24px;
         border:1px solid var(--line);
         border-radius:var(--radius);
@@ -56,106 +60,186 @@
       }
       h1{
         margin:0;
-        font-size:38px;
+        font-size:42px;
         line-height:1;
       }
       .hero p{
-        margin:10px 0 0;
-        max-width:720px;
+        margin:12px 0 0;
+        max-width:760px;
         color:var(--muted);
+        line-height:1.5;
       }
       .heroActions{
         display:flex;
+        justify-content:flex-end;
+        align-content:flex-start;
         gap:10px;
         flex-wrap:wrap;
       }
-      .groupActions{
-        display:flex;
-        gap:8px;
-        flex-wrap:wrap;
-        align-items:center;
-      }
-      button{
-        border:1px solid var(--line);
-        border-radius:14px;
-        padding:10px 12px;
-        font:inherit;
-        font-weight:900;
-        cursor:pointer;
-        background:rgba(60,40,20,.04);
-        color:var(--text);
-        transition: transform .08s ease, background .12s ease, border-color .12s ease;
-      }
-      button:hover{
-        background:rgba(60,40,20,.08);
-        transform:translateY(-1px);
-      }
-      button.primary{
-        border-color:rgba(225,6,0,.55);
-        background:rgba(225,6,0,.10);
-        color:var(--text);
-      }
       .meta{
         display:grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap:12px;
         margin:18px 0;
       }
       .stat{
         padding:16px;
         border:1px solid var(--line);
-        border-radius:var(--radius);
-        background:rgba(255,255,255,.85);
+        border-radius:18px;
+        background:rgba(255,255,255,.84);
+        box-shadow:var(--shadow);
       }
       .stat .label{
         font-size:12px;
-        text-transform:uppercase;
         letter-spacing:.12em;
+        text-transform:uppercase;
         color:var(--muted);
       }
       .stat .value{
         margin-top:8px;
-        font-size:28px;
+        font-size:30px;
         font-weight:700;
       }
-      .statusBar{
-        min-height:20px;
-        margin:10px 0 18px;
-        color:var(--accent);
+      .toolbar{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-bottom:18px;
       }
-      .pageHint{
-        margin:-6px 0 18px;
-        padding:12px 14px;
+      button{
         border:1px solid var(--line);
         border-radius:14px;
+        padding:11px 14px;
+        cursor:pointer;
+        background:rgba(80,50,20,.05);
+        color:var(--text);
+        font-weight:700;
+      }
+      button:hover{ background:rgba(80,50,20,.09); }
+      button.primary{
+        background:rgba(185,56,25,.10);
+        border-color:rgba(185,56,25,.45);
+      }
+      button.good{
+        background:rgba(21,128,61,.10);
+        border-color:rgba(21,128,61,.32);
+      }
+      button.alt{
+        background:rgba(15,118,110,.10);
+        border-color:rgba(15,118,110,.30);
+      }
+      button.warn{
+        background:rgba(161,98,7,.10);
+        border-color:rgba(161,98,7,.28);
+      }
+      button.danger{
+        background:rgba(185,28,28,.10);
+        border-color:rgba(185,28,28,.32);
+      }
+      .statusBar{
+        min-height:22px;
+        margin:10px 0 14px;
+        color:var(--accent);
+        font-weight:700;
+      }
+      .hint{
+        padding:12px 14px;
+        border:1px solid var(--line);
+        border-radius:16px;
         background:rgba(255,255,255,.72);
         color:var(--muted);
-        font-size:13px;
         line-height:1.45;
       }
-      .groups{
-        display:grid;
-        gap:16px;
+      .tabs{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin:18px 0 16px;
       }
-      .group{
+      .tab{
+        border-radius:999px;
+        padding:10px 16px;
+      }
+      .tab.active{
+        background:rgba(185,56,25,.14);
+        border-color:rgba(185,56,25,.38);
+      }
+      .panel{
+        display:none;
+        gap:18px;
+      }
+      .panel.active{
+        display:grid;
+      }
+      .card{
         border:1px solid var(--line);
         border-radius:var(--radius);
-        padding:18px;
-        background:rgba(255,255,255,.85);
+        background:rgba(255,255,255,.88);
         box-shadow:var(--shadow);
+        padding:18px;
       }
-      .groupHead{
-        display:flex;
-        justify-content:space-between;
+      .card h2, .card h3{
+        margin:0 0 10px;
+      }
+      .subtle{
+        color:var(--muted);
+        line-height:1.45;
+      }
+      .grid2{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap:18px;
+      }
+      .grid3{
+        display:grid;
+        grid-template-columns: repeat(3, 1fr);
         gap:12px;
-        align-items:center;
+      }
+      .field{
+        display:grid;
+        gap:6px;
         margin-bottom:12px;
       }
-      .groupHead h2{
-        margin:0;
-        font-size:20px;
+      .field label{
+        font-size:12px;
+        letter-spacing:.10em;
+        text-transform:uppercase;
+        color:var(--muted);
+        font-weight:700;
       }
-      .grid{
+      input, select, textarea{
+        width:100%;
+        border-radius:14px;
+        border:1px solid var(--line);
+        background:#fff;
+        padding:11px 12px;
+        color:var(--text);
+      }
+      textarea{
+        min-height:84px;
+        resize:vertical;
+      }
+      .rowActions{
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      }
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:5px 10px;
+        border-radius:999px;
+        font-size:12px;
+        font-weight:700;
+        border:1px solid var(--line);
+        background:rgba(80,50,20,.05);
+      }
+      .badge.ACTIVE{ color:var(--good); border-color:rgba(21,128,61,.28); }
+      .badge.ISSUED{ color:var(--accent-2); border-color:rgba(15,118,110,.25); }
+      .badge.DISABLED, .badge.REVOKED{ color:var(--danger); border-color:rgba(185,28,28,.25); }
+      .badge.EXPIRED{ color:var(--warn); border-color:rgba(161,98,7,.25); }
+      .featureGrid{
         display:grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap:12px;
@@ -163,7 +247,7 @@
       .feature{
         padding:14px;
         border:1px solid var(--line);
-        border-radius:var(--radius);
+        border-radius:18px;
         background:var(--card);
       }
       .feature label{
@@ -172,20 +256,16 @@
         align-items:flex-start;
         cursor:pointer;
       }
-      .feature input{
+      .feature input[type="checkbox"]{
+        width:auto;
         margin-top:3px;
         transform:scale(1.15);
-        accent-color:var(--good);
       }
       .featureName{
         font-weight:700;
       }
-      .featureBody{
-        display:block;
-      }
       .featureDesc{
         margin-top:6px;
-        color:var(--text);
         font-size:13px;
         line-height:1.4;
       }
@@ -195,13 +275,63 @@
         font-size:12px;
         word-break:break-word;
       }
-      code{
-        font-family: Consolas, monospace;
+      table{
+        width:100%;
+        border-collapse:collapse;
       }
-      @media (max-width: 700px){
-        .hero{ flex-direction:column; }
-        .heroActions{ width:100%; }
-        .heroActions button{ flex:1 1 180px; }
+      th, td{
+        text-align:left;
+        border-bottom:1px solid var(--line);
+        padding:10px 8px;
+        vertical-align:top;
+      }
+      th{
+        font-size:12px;
+        text-transform:uppercase;
+        letter-spacing:.08em;
+        color:var(--muted);
+      }
+      .tableWrap{
+        overflow:auto;
+      }
+      .mono{
+        font-family: Consolas, monospace;
+        font-size:13px;
+      }
+      .small{
+        font-size:12px;
+        color:var(--muted);
+      }
+      .eventList{
+        display:grid;
+        gap:10px;
+        max-height:640px;
+        overflow:auto;
+      }
+      .event{
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:12px;
+        background:var(--card);
+      }
+      .eventHead{
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        align-items:center;
+      }
+      pre{
+        margin:0;
+        padding:12px;
+        border-radius:16px;
+        background:#22180f;
+        color:#f8edde;
+        white-space:pre-wrap;
+        word-break:break-word;
+        overflow:auto;
+      }
+      @media (max-width: 980px){
+        .hero, .grid2, .grid3{ grid-template-columns:1fr; }
       }
     </style>
   </head>
@@ -209,18 +339,17 @@
     <div class="shell">
       <section class="hero">
         <div>
-          <p class="eyebrow">Hidden Provisioning Console</p>
-          <h1>Super Admin</h1>
+          <p class="eyebrow">Platform Control Surface</p>
+          <h1>Super Admin Console</h1>
           <p>
-            This page provisions optional additions without surfacing them in the normal client UI.
-            Nothing here activates unless you explicitly enable the flag and wire the feature to check it.
+            This is the control room for licensing, validation, feature provisioning, and internal operations.
+            Branch licenses are issued here, tracked here, and audited here so the platform has one authoritative super-admin workflow.
           </p>
         </div>
         <div class="heroActions">
-          <button id="internalToolsBtn" type="button">Internal Tools</button>
-          <button id="disableAllBtn" type="button">Disable All</button>
           <button id="reloadBtn" type="button">Reload</button>
-          <button id="saveBtn" class="primary" type="button">Save Changes</button>
+          <button id="saveFeaturesBtn" class="primary" type="button">Save Feature Changes</button>
+          <button id="internalToolsBtn" type="button">Internal Tools</button>
           <button id="logoutBtn" type="button">Logout</button>
         </div>
       </section>
@@ -231,20 +360,186 @@
           <div id="userName" class="value">-</div>
         </div>
         <div class="stat">
-          <div class="label">Enabled Features</div>
-          <div id="enabledCount" class="value">0</div>
+          <div class="label">Current Licenses</div>
+          <div id="licenseCount" class="value">0</div>
         </div>
         <div class="stat">
-          <div class="label">Catalog Size</div>
-          <div id="catalogCount" class="value">0</div>
+          <div class="label">Active Branch Licenses</div>
+          <div id="activeLicenseCount" class="value">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Enabled Features</div>
+          <div id="enabledCount" class="value">0</div>
         </div>
       </section>
 
       <div id="status" class="statusBar"></div>
-      <div class="pageHint">
-        Most provisioned features apply after page refresh. Restart the app only for features that rely on startup initialization or background services that begin on boot.
+      <div class="hint">
+        Expert recommendation: keep license issuance, activation, and auditing server-generated only. This console now follows that model so branch access changes and historical records stay consistent.
       </div>
-      <section id="groups" class="groups"></section>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="licensing" type="button">Licensing & Validation</button>
+        <button class="tab" data-tab="provisioning" type="button">Feature Provisioning</button>
+        <button class="tab" data-tab="internal" type="button">Internal Tools</button>
+      </div>
+
+      <section id="panel-licensing" class="panel active">
+        <div class="grid2">
+          <div class="card">
+            <h2>Validation</h2>
+            <div class="subtle">This controls the installation-level online validation cache. Branch license issuance is handled separately below.</div>
+            <div class="grid2">
+              <div class="field">
+                <label for="providerValidateUrl">Provider Validate URL</label>
+                <input id="providerValidateUrl" type="text" placeholder="https://provider.example.com/api/licenses/validate" />
+              </div>
+              <div class="field">
+                <label for="validationLicenseKey">Installation License Key</label>
+                <input id="validationLicenseKey" type="text" placeholder="QSYS-XXXX-XXXX-XXXX" />
+              </div>
+            </div>
+            <div class="rowActions" style="margin-bottom:14px;">
+              <button id="saveValidationBtn" class="alt" type="button">Save Validation Config</button>
+              <button id="validateNowBtn" class="good" type="button">Validate Now</button>
+            </div>
+            <div class="grid3">
+              <div class="card" style="padding:14px;">
+                <div class="small">Legacy Activation</div>
+                <div id="validationActivationStatus" style="font-weight:700; margin-top:6px;">-</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <div class="small">Validation Status</div>
+                <div id="validationStatus" style="font-weight:700; margin-top:6px;">-</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <div class="small">Plan</div>
+                <div id="validationPlan" style="font-weight:700; margin-top:6px;">-</div>
+              </div>
+            </div>
+            <div class="grid3" style="margin-top:12px;">
+              <div class="card" style="padding:14px;">
+                <div class="small">Masked Key</div>
+                <div id="validationKeyMasked" class="mono" style="margin-top:6px;">-</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <div class="small">Last Validated</div>
+                <div id="validationLastValidated" style="margin-top:6px;">-</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <div class="small">Grace Until</div>
+                <div id="validationGraceUntil" style="margin-top:6px;">-</div>
+              </div>
+            </div>
+            <div class="field" style="margin-top:12px;">
+              <label>Validation Error</label>
+              <div id="validationError" class="hint">No validation errors.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Issue Branch License</h2>
+            <div class="subtle">Select the branch, generate a consistent license number and key server-side, then issue it. Activation can happen immediately or later.</div>
+            <div class="field">
+              <label for="licenseBranch">Branch</label>
+              <select id="licenseBranch"></select>
+            </div>
+            <div class="rowActions" style="margin-bottom:12px;">
+              <button id="generateLicenseBtn" class="alt" type="button">Generate Number & Key</button>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="licenseNumber">License Number</label>
+                <input id="licenseNumber" type="text" readonly />
+              </div>
+              <div class="field">
+                <label for="licenseKey">License Key</label>
+                <input id="licenseKey" type="text" readonly />
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="licenseStatusSelect">Initial Status</label>
+                <select id="licenseStatusSelect">
+                  <option value="ISSUED">Issued</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="DISABLED">Disabled</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="licenseExpiresAt">Expires At</label>
+                <input id="licenseExpiresAt" type="datetime-local" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="licenseNotes">Notes</label>
+              <textarea id="licenseNotes" placeholder="Optional notes about branch launch, rollout timing, or special handling"></textarea>
+            </div>
+            <div class="rowActions">
+              <button id="createLicenseBtn" class="good" type="button">Create License</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h2>Current Licenses</h2>
+            <div class="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Branch</th>
+                    <th>License</th>
+                    <th>Status</th>
+                    <th>Issued</th>
+                    <th>Activated</th>
+                    <th>Disabled</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="licenseTable">
+                  <tr><td colspan="7" class="small">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>License History</h2>
+            <div id="licenseEvents" class="eventList">
+              <div class="small">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-provisioning" class="panel">
+        <div class="card">
+          <div class="rowActions" style="margin-bottom:14px;">
+            <button id="enableAllFeaturesBtn" type="button">Enable All</button>
+            <button id="disableAllFeaturesBtn" class="warn" type="button">Disable All</button>
+          </div>
+          <div id="featureGroups"></div>
+        </div>
+      </section>
+
+      <section id="panel-internal" class="panel">
+        <div class="grid2">
+          <div class="card">
+            <h2>Operations Shortcuts</h2>
+            <div class="subtle">Use these to jump into deeper operational views without leaving the Super Admin context.</div>
+            <div class="rowActions" style="margin-top:14px;">
+              <button id="openInternalToolsBtn" type="button">Open Internal Tools</button>
+              <button id="openProviderSetupBtn" type="button">Open Provider Setup</button>
+              <button id="openSupportHealthBtn" class="alt" type="button">Reload Console Data</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Snapshot</h2>
+            <pre id="consoleJson">Loading...</pre>
+          </div>
+        </div>
+      </section>
     </div>
 
     <script src="./app-boot.js"></script>
@@ -252,57 +547,152 @@
       const state = {
         user: null,
         features: [],
-        dirty: false,
+        branches: [],
+        licenses: [],
+        licenseEvents: [],
+        validation: {},
+        dirtyFeatures: false,
+        activeTab: "licensing",
       };
 
-      const groupsEl = document.getElementById("groups");
       const statusEl = document.getElementById("status");
       const userNameEl = document.getElementById("userName");
       const enabledCountEl = document.getElementById("enabledCount");
-      const catalogCountEl = document.getElementById("catalogCount");
+      const licenseCountEl = document.getElementById("licenseCount");
+      const activeLicenseCountEl = document.getElementById("activeLicenseCount");
+      const featureGroupsEl = document.getElementById("featureGroups");
+      const licenseTableEl = document.getElementById("licenseTable");
+      const licenseEventsEl = document.getElementById("licenseEvents");
+      const consoleJsonEl = document.getElementById("consoleJson");
 
       function setStatus(msg) {
         statusEl.textContent = msg || "";
       }
 
-      function syncFeatureStateFromInputs() {
-        const next = new Map(
-          state.features.map((feature) => [String(feature.key || ""), { ...feature }])
-        );
-        document.querySelectorAll("input[data-key]").forEach((el) => {
-          const key = String(el.getAttribute("data-key") || "");
-          if (!next.has(key)) return;
-          next.get(key).enabled = !!el.checked;
-        });
-        state.features = Array.from(next.values());
+      function fmtTime(ms) {
+        const n = Number(ms || 0);
+        if (!n) return "-";
+        try {
+          return new Date(n).toLocaleString();
+        } catch {
+          return "-";
+        }
       }
 
-      function setAllEnabled(enabled) {
-        document.querySelectorAll("input[data-key]").forEach((el) => {
-          el.checked = !!enabled;
-        });
-        syncFeatureStateFromInputs();
-        state.dirty = true;
-        render();
-        setStatus("Unsaved changes.");
+      function toEpochFromInput(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+        const n = new Date(raw).getTime();
+        return Number.isFinite(n) ? n : null;
       }
 
-      function setGroupEnabled(group, enabled) {
-        document.querySelectorAll(`input[data-group="${CSS.escape(String(group || ""))}"]`).forEach((el) => {
-          el.checked = !!enabled;
-        });
-        syncFeatureStateFromInputs();
-        state.dirty = true;
-        render();
-        setStatus("Unsaved changes.");
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
       }
 
-      function render() {
+      function setTab(nextTab) {
+        state.activeTab = nextTab;
+        document.querySelectorAll(".tab").forEach((btn) => {
+          btn.classList.toggle("active", btn.getAttribute("data-tab") === nextTab);
+        });
+        document.querySelectorAll(".panel").forEach((panel) => {
+          panel.classList.toggle("active", panel.id === `panel-${nextTab}`);
+        });
+      }
+
+      function renderSummary() {
         userNameEl.textContent = state.user ? state.user.fullName : "-";
-        const enabledCount = state.features.filter((f) => !!f.enabled).length;
-        enabledCountEl.textContent = String(enabledCount);
-        catalogCountEl.textContent = String(state.features.length);
+        enabledCountEl.textContent = String(state.features.filter((item) => !!item.enabled).length);
+        licenseCountEl.textContent = String(state.licenses.length);
+        activeLicenseCountEl.textContent = String(state.licenses.filter((item) => String(item.status || "").toUpperCase() === "ACTIVE").length);
+      }
 
+      function renderValidation() {
+        const v = state.validation || {};
+        document.getElementById("providerValidateUrl").value = v.providerValidateUrl || "";
+        document.getElementById("validationActivationStatus").textContent = v.activationStatus || "-";
+        document.getElementById("validationStatus").textContent = v.validationStatus || "-";
+        document.getElementById("validationPlan").textContent = v.licensePlanCode || "-";
+        document.getElementById("validationKeyMasked").textContent = v.licenseKeyMasked || "-";
+        document.getElementById("validationLastValidated").textContent = fmtTime(v.lastValidatedAt);
+        document.getElementById("validationGraceUntil").textContent = fmtTime(v.graceUntil);
+        document.getElementById("validationError").textContent = v.validationError || "No validation errors.";
+      }
+
+      function renderLicenseForm() {
+        const select = document.getElementById("licenseBranch");
+        const current = select.value;
+        select.innerHTML = state.branches.map((branch) => (
+          `<option value="${branch.branchId}">${escapeHtml(branch.branchCode)} - ${escapeHtml(branch.branchName)}</option>`
+        )).join("");
+        if (current && state.branches.some((branch) => branch.branchId === current)) {
+          select.value = current;
+        }
+      }
+
+      function renderLicenseTable() {
+        if (!state.licenses.length) {
+          licenseTableEl.innerHTML = `<tr><td colspan="7" class="small">No licenses have been issued yet.</td></tr>`;
+          return;
+        }
+        licenseTableEl.innerHTML = state.licenses.map((license) => `
+          <tr>
+            <td><strong>${escapeHtml(license.branchCode)}</strong><br><span class="small">${escapeHtml(license.branchName)}</span></td>
+            <td>
+              <div><strong>${escapeHtml(license.licenseNumber)}</strong></div>
+              <div class="mono">${escapeHtml(license.keyMasked || "")}</div>
+              <div class="small">Created by ${escapeHtml(license.createdBy || "-")}</div>
+            </td>
+            <td><span class="badge ${escapeHtml(license.status)}">${escapeHtml(license.status)}</span></td>
+            <td>${escapeHtml(fmtTime(license.issuedAt))}</td>
+            <td>${escapeHtml(fmtTime(license.activatedAt))}</td>
+            <td>${escapeHtml(fmtTime(license.deactivatedAt))}</td>
+            <td>
+              <div class="rowActions">
+                ${String(license.status) !== "ACTIVE" ? `<button type="button" class="good" data-license-action="ACTIVE" data-license-id="${license.id}">Activate</button>` : `<button type="button" class="warn" data-license-action="DISABLED" data-license-id="${license.id}">Disable</button>`}
+                ${String(license.status) !== "REVOKED" ? `<button type="button" class="danger" data-license-action="REVOKED" data-license-id="${license.id}">Revoke</button>` : ""}
+              </div>
+            </td>
+          </tr>
+        `).join("");
+
+        document.querySelectorAll("[data-license-action]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const licenseId = btn.getAttribute("data-license-id");
+            const nextStatus = btn.getAttribute("data-license-action");
+            const note = window.prompt(`Optional note for ${nextStatus.toLowerCase()}:`, "") || "";
+            await updateLicenseStatus(licenseId, nextStatus, note);
+          });
+        });
+      }
+
+      function renderLicenseEvents() {
+        if (!state.licenseEvents.length) {
+          licenseEventsEl.innerHTML = `<div class="small">No license events recorded yet.</div>`;
+          return;
+        }
+        licenseEventsEl.innerHTML = state.licenseEvents.map((event) => `
+          <div class="event">
+            <div class="eventHead">
+              <strong>${escapeHtml(event.action || "-")}</strong>
+              <span class="small">${escapeHtml(fmtTime(event.createdAt))}</span>
+            </div>
+            <div class="small" style="margin-top:6px;">
+              ${escapeHtml(event.licenseNumber || "-")}
+              ${event.fromStatus || event.toStatus ? ` | ${escapeHtml(event.fromStatus || "-")} -> ${escapeHtml(event.toStatus || "-")}` : ""}
+              ${event.actorName ? ` | ${escapeHtml(event.actorName)}` : ""}
+            </div>
+            ${event.note ? `<div style="margin-top:8px;">${escapeHtml(event.note)}</div>` : ""}
+          </div>
+        `).join("");
+      }
+
+      function renderFeatureProvisioning() {
         const grouped = new Map();
         for (const feature of state.features) {
           const group = String(feature.group || "Other");
@@ -310,63 +700,81 @@
           grouped.get(group).push(feature);
         }
 
-        groupsEl.innerHTML = "";
+        featureGroupsEl.innerHTML = "";
         for (const [group, items] of grouped.entries()) {
           const section = document.createElement("section");
-          section.className = "group";
-
-          const head = document.createElement("div");
-          head.className = "groupHead";
-          const title = document.createElement("h2");
-          title.textContent = group;
-          const meta = document.createElement("div");
-          meta.className = "groupActions";
-          const enableBtn = document.createElement("button");
-          enableBtn.type = "button";
-          enableBtn.textContent = "Enable All";
-          enableBtn.addEventListener("click", () => setGroupEnabled(group, true));
-          const disableBtn = document.createElement("button");
-          disableBtn.type = "button";
-          disableBtn.textContent = "Disable All";
-          disableBtn.addEventListener("click", () => setGroupEnabled(group, false));
-          const metaText = document.createElement("div");
-          metaText.textContent = `${items.filter((x) => x.enabled).length}/${items.length} enabled`;
-          meta.appendChild(enableBtn);
-          meta.appendChild(disableBtn);
-          meta.appendChild(metaText);
-          head.appendChild(title);
-          head.appendChild(meta);
-          section.appendChild(head);
-
-          const grid = document.createElement("div");
-          grid.className = "grid";
-          for (const item of items) {
-            const card = document.createElement("div");
-            card.className = "feature";
-            card.innerHTML = `
-              <label>
-                <input type="checkbox" data-key="${item.key}" data-group="${group}" ${item.enabled ? "checked" : ""} />
-                <div class="featureBody">
-                  <div class="featureName">${item.name}</div>
-                  <div class="featureDesc">${item.description || ""}</div>
-                  <div class="featureKey"><code>${item.key}</code></div>
+          section.className = "card";
+          section.style.marginBottom = "16px";
+          section.innerHTML = `
+            <div class="rowActions" style="justify-content:space-between; margin-bottom:12px;">
+              <h2 style="margin:0;">${group}</h2>
+              <div class="rowActions">
+                <button type="button" data-group-enable="${group}">Enable All</button>
+                <button type="button" class="warn" data-group-disable="${group}">Disable All</button>
+              </div>
+            </div>
+            <div class="featureGrid">
+              ${items.map((item) => `
+                <div class="feature">
+                  <label>
+                    <input type="checkbox" data-key="${item.key}" data-group="${group}" ${item.enabled ? "checked" : ""}>
+                    <div>
+                      <div class="featureName">${escapeHtml(item.name)}</div>
+                      <div class="featureDesc">${escapeHtml(item.description || "")}</div>
+                      <div class="featureKey"><code>${escapeHtml(item.key)}</code></div>
+                    </div>
+                  </label>
                 </div>
-              </label>
-            `;
-            grid.appendChild(card);
-          }
-          section.appendChild(grid);
-          groupsEl.appendChild(section);
+              `).join("")}
+            </div>
+          `;
+          featureGroupsEl.appendChild(section);
         }
 
         document.querySelectorAll("input[data-key]").forEach((el) => {
           el.addEventListener("change", () => {
-            syncFeatureStateFromInputs();
-            state.dirty = true;
-            render();
-            setStatus("Unsaved changes.");
-          }, { once: true });
+            const key = el.getAttribute("data-key");
+            const feature = state.features.find((item) => String(item.key) === String(key));
+            if (feature) feature.enabled = !!el.checked;
+            state.dirtyFeatures = true;
+            renderSummary();
+            setStatus("Feature changes are ready to save.");
+          });
         });
+        document.querySelectorAll("[data-group-enable]").forEach((btn) => {
+          btn.addEventListener("click", () => setGroupFeatures(btn.getAttribute("data-group-enable"), true));
+        });
+        document.querySelectorAll("[data-group-disable]").forEach((btn) => {
+          btn.addEventListener("click", () => setGroupFeatures(btn.getAttribute("data-group-disable"), false));
+        });
+      }
+
+      function renderConsoleJson() {
+        consoleJsonEl.textContent = JSON.stringify({
+          validation: state.validation,
+          licenses: state.licenses.slice(0, 6),
+          recentEvents: state.licenseEvents.slice(0, 6),
+        }, null, 2);
+      }
+
+      function renderAll() {
+        renderSummary();
+        renderValidation();
+        renderLicenseForm();
+        renderLicenseTable();
+        renderLicenseEvents();
+        renderFeatureProvisioning();
+        renderConsoleJson();
+      }
+
+      function setGroupFeatures(group, enabled) {
+        state.features.forEach((feature) => {
+          if (String(feature.group || "Other") === String(group || "")) feature.enabled = !!enabled;
+        });
+        state.dirtyFeatures = true;
+        renderFeatureProvisioning();
+        renderSummary();
+        setStatus("Feature changes are ready to save.");
       }
 
       async function loadUser() {
@@ -380,47 +788,107 @@
         state.user = j.user || null;
       }
 
-      async function loadFeatures() {
-        const r = await fetch(window.appUrl("/api/super-admin/features"), { cache: "no-store" });
+      async function loadConsole() {
+        const r = await fetch(window.appUrl("/api/super-admin/console"), { cache: "no-store" });
         const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) throw new Error(j.error || "Failed to load features");
+        if (!r.ok || !j.ok) throw new Error(j.error || "Failed to load console");
         state.features = Array.isArray(j.features) ? j.features : [];
+        state.branches = Array.isArray(j.branches) ? j.branches : [];
+        state.licenses = Array.isArray(j.licenses) ? j.licenses : [];
+        state.licenseEvents = Array.isArray(j.licenseEvents) ? j.licenseEvents : [];
+        state.validation = j.validation || {};
       }
 
       async function refresh() {
-        setStatus("Loading feature catalog...");
+        setStatus("Loading super admin console...");
         try {
           await loadUser();
-          await loadFeatures();
-          state.dirty = false;
-          render();
+          await loadConsole();
+          state.dirtyFeatures = false;
+          renderAll();
           setStatus("");
         } catch (err) {
-          setStatus(err.message || "Failed to load");
+          setStatus(err.message || "Failed to load console.");
         }
       }
 
-      async function save() {
-        const payload = {};
-        document.querySelectorAll("input[data-key]").forEach((el) => {
-          payload[el.getAttribute("data-key")] = !!el.checked;
+      async function postJson(url, payload) {
+        const r = await fetch(window.appUrl(url), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload || {}),
         });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || "Request failed");
+        return j;
+      }
+
+      async function saveFeatures() {
+        const features = {};
+        state.features.forEach((item) => { features[item.key] = !!item.enabled; });
         setStatus("Saving feature provisioning...");
-        try {
-          const r = await fetch(window.appUrl("/api/super-admin/features"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ features: payload }),
-          });
-          const j = await r.json().catch(() => ({}));
-          if (!r.ok || !j.ok) throw new Error(j.error || "Save failed");
-          await loadFeatures();
-          state.dirty = false;
-          render();
-          setStatus("Provisioning updated.");
-        } catch (err) {
-          setStatus(err.message || "Save failed");
+        await postJson("/api/super-admin/features", { features });
+        await refresh();
+        setStatus("Feature provisioning updated.");
+      }
+
+      async function saveValidationConfig() {
+        const providerValidateUrl = document.getElementById("providerValidateUrl").value.trim();
+        const licenseKey = document.getElementById("validationLicenseKey").value.trim();
+        setStatus("Saving validation config...");
+        await postJson("/api/provider/license/config", { providerValidateUrl, licenseKey });
+        await refresh();
+        setStatus("Validation config saved.");
+      }
+
+      async function validateNow() {
+        const providerValidateUrl = document.getElementById("providerValidateUrl").value.trim();
+        const licenseKey = document.getElementById("validationLicenseKey").value.trim();
+        setStatus("Running validation...");
+        const response = await postJson("/api/provider/license/validate", { providerValidateUrl, licenseKey });
+        document.getElementById("validationLicenseKey").value = "";
+        await refresh();
+        setStatus(`Validation completed with status ${response.status || "UNKNOWN"}.`);
+      }
+
+      async function generateLicenseDraft() {
+        const branchId = document.getElementById("licenseBranch").value;
+        if (!branchId) {
+          setStatus("Select a branch first.");
+          return;
         }
+        setStatus("Generating license number and key...");
+        const response = await postJson("/api/super-admin/licenses/generate", { branchId });
+        const draft = response.draft || {};
+        document.getElementById("licenseNumber").value = draft.licenseNumber || "";
+        document.getElementById("licenseKey").value = draft.licenseKey || "";
+        setStatus("Draft license values generated.");
+      }
+
+      async function createLicense() {
+        const branchId = document.getElementById("licenseBranch").value;
+        const licenseNumber = document.getElementById("licenseNumber").value.trim();
+        const licenseKey = document.getElementById("licenseKey").value.trim();
+        const status = document.getElementById("licenseStatusSelect").value;
+        const notes = document.getElementById("licenseNotes").value.trim();
+        const expiresAt = toEpochFromInput(document.getElementById("licenseExpiresAt").value);
+        if (!branchId) throw new Error("Select a branch first.");
+        if (!licenseNumber || !licenseKey) throw new Error("Generate a license number and key first.");
+        setStatus("Creating branch license...");
+        await postJson("/api/super-admin/licenses", { branchId, licenseNumber, licenseKey, status, notes, expiresAt });
+        document.getElementById("licenseNumber").value = "";
+        document.getElementById("licenseKey").value = "";
+        document.getElementById("licenseNotes").value = "";
+        document.getElementById("licenseExpiresAt").value = "";
+        await refresh();
+        setStatus("Branch license created.");
+      }
+
+      async function updateLicenseStatus(licenseId, status, note) {
+        setStatus(`Updating license to ${status.toLowerCase()}...`);
+        await postJson("/api/super-admin/licenses/status", { licenseId, status, note });
+        await refresh();
+        setStatus(`License updated to ${status}.`);
       }
 
       async function logout() {
@@ -431,13 +899,50 @@
         }
       }
 
+      document.querySelectorAll(".tab").forEach((btn) => {
+        btn.addEventListener("click", () => setTab(btn.getAttribute("data-tab")));
+      });
       document.getElementById("reloadBtn").addEventListener("click", refresh);
-      document.getElementById("disableAllBtn").addEventListener("click", () => setAllEnabled(false));
-      document.getElementById("saveBtn").addEventListener("click", save);
+      document.getElementById("saveFeaturesBtn").addEventListener("click", () => {
+        saveFeatures().catch((err) => setStatus(err.message || "Failed to save features."));
+      });
+      document.getElementById("saveValidationBtn").addEventListener("click", () => {
+        saveValidationConfig().catch((err) => setStatus(err.message || "Failed to save validation config."));
+      });
+      document.getElementById("validateNowBtn").addEventListener("click", () => {
+        validateNow().catch((err) => setStatus(err.message || "Validation failed."));
+      });
+      document.getElementById("generateLicenseBtn").addEventListener("click", () => {
+        generateLicenseDraft().catch((err) => setStatus(err.message || "Failed to generate license draft."));
+      });
+      document.getElementById("createLicenseBtn").addEventListener("click", () => {
+        createLicense().catch((err) => setStatus(err.message || "Failed to create license."));
+      });
+      document.getElementById("disableAllFeaturesBtn").addEventListener("click", () => {
+        state.features.forEach((item) => { item.enabled = false; });
+        state.dirtyFeatures = true;
+        renderFeatureProvisioning();
+        renderSummary();
+        setStatus("Feature changes are ready to save.");
+      });
+      document.getElementById("enableAllFeaturesBtn").addEventListener("click", () => {
+        state.features.forEach((item) => { item.enabled = true; });
+        state.dirtyFeatures = true;
+        renderFeatureProvisioning();
+        renderSummary();
+        setStatus("Feature changes are ready to save.");
+      });
       document.getElementById("logoutBtn").addEventListener("click", logout);
       document.getElementById("internalToolsBtn").addEventListener("click", () => {
         window.location.assign(window.appUrl("/internal-tools"));
       });
+      document.getElementById("openInternalToolsBtn").addEventListener("click", () => {
+        window.location.assign(window.appUrl("/internal-tools"));
+      });
+      document.getElementById("openProviderSetupBtn").addEventListener("click", () => {
+        window.location.assign(window.appUrl("/provider-setup"));
+      });
+      document.getElementById("openSupportHealthBtn").addEventListener("click", refresh);
 
       refresh();
     </script>

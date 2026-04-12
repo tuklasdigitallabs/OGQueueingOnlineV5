@@ -858,6 +858,47 @@ function ensureOnlineLicenseSchema(db) {
   `);
 }
 
+function ensureSuperAdminLicenseRegistrySchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS super_admin_licenses (
+      id TEXT PRIMARY KEY,
+      licenseNumber TEXT NOT NULL UNIQUE,
+      licenseKey TEXT NOT NULL UNIQUE,
+      branchId TEXT NOT NULL,
+      branchCode TEXT NOT NULL,
+      branchName TEXT NOT NULL,
+      status TEXT NOT NULL,
+      issuedAt INTEGER,
+      activatedAt INTEGER,
+      expiresAt INTEGER,
+      deactivatedAt INTEGER,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      createdBy TEXT,
+      updatedBy TEXT,
+      notes TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_super_admin_licenses_branchId ON super_admin_licenses(branchId);
+    CREATE INDEX IF NOT EXISTS idx_super_admin_licenses_status ON super_admin_licenses(status);
+
+    CREATE TABLE IF NOT EXISTS super_admin_license_events (
+      id TEXT PRIMARY KEY,
+      licenseId TEXT NOT NULL,
+      licenseNumber TEXT NOT NULL,
+      action TEXT NOT NULL,
+      fromStatus TEXT,
+      toStatus TEXT,
+      actorUserId TEXT,
+      actorName TEXT,
+      note TEXT,
+      payloadJson TEXT,
+      createdAt INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_super_admin_license_events_licenseId ON super_admin_license_events(licenseId);
+    CREATE INDEX IF NOT EXISTS idx_super_admin_license_events_createdAt ON super_admin_license_events(createdAt DESC);
+  `);
+}
+
 function ensureMultiBranchFoundationSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS organizations (
@@ -1166,6 +1207,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   ensureActivationState(db);
   ensureActivationTokenTables(db);
   ensureOnlineLicenseSchema(db);
+  ensureSuperAdminLicenseRegistrySchema(db);
   ensureMultiBranchFoundationSchema(db);
 
   // ✅ Ensure optional note column exists for override calls
@@ -1835,6 +1877,152 @@ app.get("/static/js/:file", (req, res) => {
         activatedBy: String(meta.source || "provider-api").trim() || "provider-api",
       });
     }
+  }
+  function normalizeRegistryLicenseStatus(value) {
+    const normalized = String(value || "").trim().toUpperCase();
+    if (["ISSUED", "ACTIVE", "DISABLED", "EXPIRED", "REVOKED"].includes(normalized)) return normalized;
+    return "ISSUED";
+  }
+  function mapRegistryStatusToBranchLicenseStatus(status) {
+    const normalized = normalizeRegistryLicenseStatus(status);
+    if (normalized === "ACTIVE") return ACTIVATION_STATUS_ACTIVATED;
+    if (normalized === "EXPIRED") return ACTIVATION_STATUS_EXPIRED;
+    return ACTIVATION_STATUS_UNACTIVATED;
+  }
+  function generateLicenseNumber(branchCode, issuedAt = Date.now()) {
+    const code = String(branchCode || "GEN").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "");
+    const year = new Date(Number(issuedAt || Date.now())).getFullYear();
+    const prefix = `QSYS-${code || "GEN"}-${year}`;
+    const row = db.prepare(
+      `SELECT licenseNumber FROM super_admin_licenses
+       WHERE licenseNumber LIKE ?
+       ORDER BY licenseNumber DESC
+       LIMIT 1`
+    ).get(`${prefix}-%`);
+    const suffix = Number(String(row?.licenseNumber || "").split("-").pop() || 0) || 0;
+    return `${prefix}-${String(suffix + 1).padStart(4, "0")}`;
+  }
+  function generateLicenseKey() {
+    const raw = randomBytes(16).toString("hex").toUpperCase();
+    return `QSYS-${raw.match(/.{1,4}/g).join("-")}`;
+  }
+  function listSuperAdminLicenses() {
+    return db.prepare(
+      `SELECT id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
+              expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+       FROM super_admin_licenses
+       ORDER BY createdAt DESC, licenseNumber DESC`
+    ).all().map((row) => ({
+      ...row,
+      keyMasked: maskLicenseKey(row.licenseKey),
+    }));
+  }
+  function listSuperAdminLicenseEvents(limit = 120) {
+    return db.prepare(
+      `SELECT id, licenseId, licenseNumber, action, fromStatus, toStatus, actorUserId, actorName, note, payloadJson, createdAt
+       FROM super_admin_license_events
+       ORDER BY createdAt DESC
+       LIMIT ?`
+    ).all(Math.max(1, Number(limit || 120))).map((row) => {
+      let payload = null;
+      try {
+        payload = row.payloadJson ? JSON.parse(row.payloadJson) : null;
+      } catch {
+        payload = null;
+      }
+      return { ...row, payload };
+    });
+  }
+  function getSuperAdminLicenseById(id) {
+    const normalized = String(id || "").trim();
+    if (!normalized) return null;
+    const row = db.prepare(
+      `SELECT id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
+              expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+       FROM super_admin_licenses
+       WHERE id=?
+       LIMIT 1`
+    ).get(normalized);
+    return row ? { ...row, keyMasked: maskLicenseKey(row.licenseKey) } : null;
+  }
+  function findActiveLicenseForBranch(branchId, excludeLicenseId = "") {
+    return db.prepare(
+      `SELECT id, licenseNumber, status
+       FROM super_admin_licenses
+       WHERE branchId=? AND upper(status) IN ('ISSUED','ACTIVE') AND id<>?
+       ORDER BY createdAt DESC
+       LIMIT 1`
+    ).get(String(branchId || "").trim(), String(excludeLicenseId || "").trim()) || null;
+  }
+  function appendSuperAdminLicenseEvent({ licenseId, licenseNumber, action, fromStatus, toStatus, actor, note, payload }) {
+    db.prepare(
+      `INSERT INTO super_admin_license_events(
+        id, licenseId, licenseNumber, action, fromStatus, toStatus, actorUserId, actorName, note, payloadJson, createdAt
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      randomUUID(),
+      String(licenseId || "").trim(),
+      String(licenseNumber || "").trim(),
+      String(action || "").trim().toUpperCase(),
+      String(fromStatus || "").trim().toUpperCase() || null,
+      String(toStatus || "").trim().toUpperCase() || null,
+      String(actor?.userId || "").trim() || null,
+      String(actor?.fullName || "").trim() || null,
+      String(note || "").trim() || null,
+      payload ? JSON.stringify(payload) : null,
+      Date.now()
+    );
+  }
+  function syncBranchLicenseFromRegistryRecord(record, actorName = "") {
+    const branch = getBranchById(record?.branchId);
+    if (!branch?.branchId) return;
+    const status = mapRegistryStatusToBranchLicenseStatus(record?.status);
+    const timestamp = status === ACTIVATION_STATUS_ACTIVATED
+      ? Number(record?.activatedAt || record?.updatedAt || Date.now()) || Date.now()
+      : Number(record?.deactivatedAt || record?.updatedAt || Date.now()) || Date.now();
+    setBranchLicenseState(branch.branchId, {
+      status,
+      licenseId: String(record?.licenseNumber || ""),
+      issuedAt: Number(record?.issuedAt || 0) || "",
+      expiresAt: Number(record?.expiresAt || 0) || "",
+      activatedAt: status === ACTIVATION_STATUS_ACTIVATED ? timestamp : "",
+      activatedBy: String(actorName || record?.updatedBy || record?.createdBy || "super-admin"),
+      snapshotJson: {
+        source: "super-admin-registry",
+        licenseId: record?.id,
+        licenseNumber: record?.licenseNumber,
+        status: record?.status,
+      },
+    });
+  }
+  function buildSuperAdminConsolePayload() {
+    const install = refreshActivationState();
+    const validation = getLicenseValidationState();
+    return {
+      features: SUPER_ADMIN_FEATURE_CATALOG.map((item) => ({
+        ...item,
+        enabled: isFeatureProvisioned(item.key),
+      })),
+      branches: listAllBranches(),
+      licenses: listSuperAdminLicenses(),
+      licenseEvents: listSuperAdminLicenseEvents(150),
+      validation: {
+        installId: String(install.installId || ""),
+        activationStatus: String(install.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
+        validationStatus: validation.validationStatus,
+        providerValidateUrl: getStoredLicenseValidateUrl() || "",
+        licenseKeyMasked: maskLicenseKey(validation.licenseKey),
+        licenseKeyConfigured: !!validation.licenseKey,
+        lastValidatedAt: validation.lastValidatedAt,
+        lastValidationAttemptAt: validation.lastValidationAttemptAt,
+        validationError: validation.validationError,
+        graceUntil: validation.graceUntil,
+        providerLicenseId: validation.providerLicenseId,
+        providerOrgId: validation.providerOrgId,
+        providerAccountId: validation.providerAccountId,
+        licensePlanCode: validation.licensePlanCode,
+      },
+    };
   }
   function getActivationState() {
     ensureActivationState(db);
@@ -4744,6 +4932,192 @@ app.post("/api/admin/display/devices/revoke-all", requirePerm("SETTINGS_MANAGE")
   } catch (e) {
     console.error("[admin/display/devices/revoke-all]", e);
     return res.status(500).json({ ok: false, error: "Failed to revoke display devices" });
+  }
+});
+
+app.get("/api/super-admin/console", requireSuperAdminApi, (_req, res) => {
+  try {
+    return res.json({ ok: true, ...buildSuperAdminConsolePayload() });
+  } catch (e) {
+    console.error("[super-admin/console:get]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/super-admin/licenses/generate", requireSuperAdminApi, express.json(), (req, res) => {
+  try {
+    const branchId = String(req.body?.branchId || "").trim();
+    const branch = branchId ? getBranchById(branchId) : null;
+    if (!branch?.branchId) return res.status(400).json({ ok: false, error: "Valid branchId is required." });
+    const issuedAt = Date.now();
+    return res.json({
+      ok: true,
+      draft: {
+        branchId: branch.branchId,
+        branchCode: branch.branchCode,
+        branchName: branch.branchName,
+        licenseNumber: generateLicenseNumber(branch.branchCode, issuedAt),
+        licenseKey: generateLicenseKey(),
+        status: "ISSUED",
+        issuedAt,
+      },
+    });
+  } catch (e) {
+    console.error("[super-admin/licenses/generate]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req, res) => {
+  try {
+    const branchId = String(req.body?.branchId || "").trim();
+    const branch = branchId ? getBranchById(branchId) : null;
+    if (!branch?.branchId) return res.status(400).json({ ok: false, error: "Valid branchId is required." });
+
+    const actor = actorFromReq(req);
+    const status = normalizeRegistryLicenseStatus(req.body?.status || "ISSUED");
+    const notes = String(req.body?.notes || "").trim();
+    const issuedAt = Number(req.body?.issuedAt || Date.now()) || Date.now();
+    const expiresAt = Number(req.body?.expiresAt || 0) || null;
+    const activatedAt = status === "ACTIVE" ? Date.now() : null;
+    const deactivatedAt = ["DISABLED", "REVOKED", "EXPIRED"].includes(status) ? Date.now() : null;
+    const existing = findActiveLicenseForBranch(branch.branchId);
+    if (existing) {
+      return res.status(409).json({
+        ok: false,
+        error: `Branch '${branch.branchCode}' already has an active or issued license (${existing.licenseNumber}).`,
+      });
+    }
+
+    const id = randomUUID();
+    const licenseNumber = String(req.body?.licenseNumber || generateLicenseNumber(branch.branchCode, issuedAt)).trim();
+    const licenseKey = String(req.body?.licenseKey || generateLicenseKey()).trim();
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO super_admin_licenses(
+        id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
+        expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      id,
+      licenseNumber,
+      licenseKey,
+      branch.branchId,
+      branch.branchCode,
+      branch.branchName,
+      status,
+      issuedAt,
+      activatedAt,
+      expiresAt,
+      deactivatedAt,
+      now,
+      now,
+      String(actor?.fullName || "super-admin"),
+      String(actor?.fullName || "super-admin"),
+      notes || null,
+    );
+    const record = getSuperAdminLicenseById(id);
+    syncBranchLicenseFromRegistryRecord(record, String(actor?.fullName || "super-admin"));
+    appendSuperAdminLicenseEvent({
+      licenseId: id,
+      licenseNumber,
+      action: "CREATE",
+      fromStatus: "",
+      toStatus: status,
+      actor,
+      note: notes,
+      payload: { branchId: branch.branchId, branchCode: branch.branchCode, expiresAt },
+    });
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "SUPER_ADMIN_LICENSE_CREATE",
+      JSON.stringify({
+        actor,
+        licenseId: id,
+        licenseNumber,
+        branchId: branch.branchId,
+        branchCode: branch.branchCode,
+        status,
+        expiresAt,
+      }),
+      now
+    );
+    return res.json({ ok: true, license: record, ...buildSuperAdminConsolePayload() });
+  } catch (e) {
+    console.error("[super-admin/licenses:create]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
+  }
+});
+
+app.post("/api/super-admin/licenses/status", requireSuperAdminApi, express.json(), (req, res) => {
+  try {
+    const licenseId = String(req.body?.licenseId || "").trim();
+    const nextStatus = normalizeRegistryLicenseStatus(req.body?.status || "");
+    const note = String(req.body?.note || "").trim();
+    if (!licenseId) return res.status(400).json({ ok: false, error: "licenseId is required." });
+    const current = getSuperAdminLicenseById(licenseId);
+    if (!current?.id) return res.status(404).json({ ok: false, error: "License not found." });
+    if (current.status === nextStatus && !note) {
+      return res.status(400).json({ ok: false, error: "No license change to apply." });
+    }
+    if (["ISSUED", "ACTIVE"].includes(nextStatus)) {
+      const conflict = findActiveLicenseForBranch(current.branchId, current.id);
+      if (conflict) {
+        return res.status(409).json({
+          ok: false,
+          error: `Branch '${current.branchCode}' already has another active or issued license (${conflict.licenseNumber}).`,
+        });
+      }
+    }
+    const actor = actorFromReq(req);
+    const now = Date.now();
+    const activatedAt = nextStatus === "ACTIVE"
+      ? (Number(current.activatedAt || 0) || now)
+      : null;
+    const deactivatedAt = ["DISABLED", "REVOKED", "EXPIRED"].includes(nextStatus)
+      ? now
+      : null;
+    db.prepare(
+      `UPDATE super_admin_licenses
+       SET status=?, activatedAt=?, deactivatedAt=?, updatedAt=?, updatedBy=?, notes=?
+       WHERE id=?`
+    ).run(
+      nextStatus,
+      activatedAt,
+      deactivatedAt,
+      now,
+      String(actor?.fullName || "super-admin"),
+      note || current.notes || null,
+      current.id
+    );
+    const updated = getSuperAdminLicenseById(current.id);
+    syncBranchLicenseFromRegistryRecord(updated, String(actor?.fullName || "super-admin"));
+    appendSuperAdminLicenseEvent({
+      licenseId: updated.id,
+      licenseNumber: updated.licenseNumber,
+      action: "STATUS_CHANGE",
+      fromStatus: current.status,
+      toStatus: nextStatus,
+      actor,
+      note,
+      payload: { previous: current.status, next: nextStatus },
+    });
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "SUPER_ADMIN_LICENSE_STATUS_UPDATE",
+      JSON.stringify({
+        actor,
+        licenseId: updated.id,
+        licenseNumber: updated.licenseNumber,
+        branchCode: updated.branchCode,
+        fromStatus: current.status,
+        toStatus: nextStatus,
+        note,
+      }),
+      now
+    );
+    return res.json({ ok: true, license: updated, ...buildSuperAdminConsolePayload() });
+  } catch (e) {
+    console.error("[super-admin/licenses/status]", e);
+    return res.status(500).json({ ok: false, error: "Server error." });
   }
 });
 
