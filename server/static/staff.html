@@ -1468,7 +1468,7 @@ function getQueuedMs(item) {
     }
 
     async function loadState(){
-      const { res, data } = await api("/api/state", "GET");
+      const { res, data } = await api("/api/staff/state", "GET");
       if (!res.ok || !data || !data.ok){
         toast("Not authenticated", "bad", "Please login again.");
         window.location.href = staffLoginUrl();

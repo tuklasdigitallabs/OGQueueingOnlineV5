@@ -7101,6 +7101,36 @@ app.get("/api/staff/queue-tools", requireAuth, (req, res) => {
   }
 });
 
+app.get("/api/staff/state", requireAuth, (req, res) => {
+  const businessDate = ensureBusinessDate(db);
+  const bc = getRequestBranchCode(req);
+
+  const rows = db
+    .prepare(
+      `
+    SELECT id, groupCode, queueNum, name, pax, status,
+           priorityType, createdAtLocal, calledAt, next_calls, calledNote, seatedAt, skippedAt
+    FROM queue_items
+    WHERE branchCode = ?
+      AND businessDate = ?
+      AND status IN ('WAITING','CALLED')
+    ORDER BY
+      CASE groupCode
+          WHEN 'A' THEN 1
+          WHEN 'B' THEN 2
+          WHEN 'C' THEN 3
+          WHEN 'D' THEN 4
+          ELSE 9
+      END,
+      CASE WHEN (priorityType IS NOT NULL AND priorityType!='NONE') THEN 0 ELSE 1 END,
+      queueNum ASC
+  `
+    )
+    .all(bc, businessDate);
+
+  res.json({ ok: true, branchCode: bc, branchName: getRequestBranchName(req), businessDate, rows });
+});
+
   /* ---------- state snapshot (DISPLAY + STAFF) ---------- */
   // SECURITY ADDON: must be authenticated
 app.get("/api/state", requireAuth, (req, res) => {
