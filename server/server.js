@@ -3285,6 +3285,61 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     }
   });
 
+  app.post("/api/admin/branches/manage/delete", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
+    try {
+      const branchId = String(req.body?.branchId || "").trim();
+      if (!branchId) return res.status(400).json({ ok: false, error: "branchId is required." });
+      const branch = getBranchById(branchId);
+      if (!branch?.branchId) return res.status(404).json({ ok: false, error: "Branch not found." });
+      if (Number(branch.isDefault || 0) === 1) {
+        return res.status(409).json({ ok: false, error: "Default branch cannot be deleted." });
+      }
+
+      const userAccessCount = Number(db.prepare(`SELECT count(1) AS n FROM user_branch_access WHERE branchId=?`).get(branchId)?.n || 0);
+      if (userAccessCount > 0) {
+        return res.status(409).json({ ok: false, error: "Remove user branch assignments before deleting this branch." });
+      }
+
+      const mediaCount = Number(db.prepare(`SELECT count(1) AS n FROM media_assets WHERE branchId=?`).get(branchId)?.n || 0);
+      if (mediaCount > 0) {
+        return res.status(409).json({ ok: false, error: "Remove branch media before deleting this branch." });
+      }
+
+      const licenseCount = Number(db.prepare(`SELECT count(1) AS n FROM super_admin_licenses WHERE branchId=?`).get(branchId)?.n || 0);
+      if (licenseCount > 0) {
+        return res.status(409).json({ ok: false, error: "This branch has license records. Revoke or archive them first." });
+      }
+
+      const tokenUsageCount = Number(db.prepare(`SELECT count(1) AS n FROM activation_token_usage WHERE upper(branchCode)=?`).get(String(branch.branchCode || "").trim().toUpperCase())?.n || 0);
+      if (tokenUsageCount > 0) {
+        return res.status(409).json({ ok: false, error: "This branch has activation history and cannot be deleted." });
+      }
+
+      const now = Date.now();
+      db.transaction(() => {
+        db.prepare(`DELETE FROM branch_settings WHERE branchId=?`).run(branchId);
+        db.prepare(`DELETE FROM branch_business_dates WHERE branchId=?`).run(branchId);
+        db.prepare(`DELETE FROM branch_license_state WHERE branchId=?`).run(branchId);
+        db.prepare(`DELETE FROM branches WHERE branchId=?`).run(branchId);
+        db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+          "ADMIN_BRANCH_RECORD_DELETE",
+          JSON.stringify({
+            actor: actorFromReq(req),
+            branchId,
+            branchCode: String(branch.branchCode || "").trim().toUpperCase(),
+            branchName: String(branch.branchName || "").trim(),
+          }),
+          now
+        );
+      })();
+
+      return res.json({ ok: true, branches: listAllBranches() });
+    } catch (e) {
+      console.error("[admin/branches/manage/delete]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
   app.post("/api/admin/branches/manage/import", requirePerm("SETTINGS_MANAGE"), express.json({ limit: "512kb" }), (req, res) => {
     try {
       const csvText = String(req.body?.csvText || "").replace(/^\uFEFF/, "").trim();
