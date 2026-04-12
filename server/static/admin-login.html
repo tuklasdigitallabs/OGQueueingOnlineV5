@@ -231,7 +231,12 @@
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
         // Server already enforces ADMIN role on /api/admin/auth/login
 
-        window.location.replace(buildAdminEntryUrl(j.branch?.branchCode));
+        const nextCode = String(
+          j?.branch?.branchCode ||
+          (Array.isArray(j?.allowedBranches) && j.allowedBranches[0]?.branchCode) ||
+          ""
+        ).trim().toUpperCase();
+        window.location.assign(buildAdminEntryUrl(nextCode));
         return;
       } catch {
         $e.textContent = "Server error";

@@ -2509,7 +2509,7 @@ app.get("/static/js/:file", (req, res) => {
     const url = stripBasePathFromUrl(String(req.path || req.originalUrl || ""));
     // Session separation: Admin and Staff must never overwrite each other
     if (isScopedSessionPath(url, "super-admin")) {
-      return (req.session && req.session.adminUser) ? req.session.adminUser : null;
+      return (req.session && req.session.superAdminUser) ? req.session.superAdminUser : null;
     }
     if (isScopedSessionPath(url, "admin")) {
       return (req.session && req.session.adminUser) ? req.session.adminUser : null;
@@ -2520,6 +2520,7 @@ app.get("/static/js/:file", (req, res) => {
     // Fallback for legacy endpoints
     if (req.session && req.session.staffUser) return req.session.staffUser;
     if (req.session && req.session.adminUser) return req.session.adminUser;
+    if (req.session && req.session.superAdminUser) return req.session.superAdminUser;
     return (req.session && req.session.user) ? req.session.user : null;
   }
 
@@ -2527,6 +2528,7 @@ app.get("/static/js/:file", (req, res) => {
     if (!req || !req.session) return;
     if (scope === "admin") req.session.adminUser = user;
     else if (scope === "staff") req.session.staffUser = user;
+    else if (scope === "super-admin") req.session.superAdminUser = user;
     else req.session.user = user; // legacy only
   }
 
@@ -2534,6 +2536,7 @@ app.get("/static/js/:file", (req, res) => {
     if (!req || !req.session) return;
     if (scope === "admin") delete req.session.adminUser;
     else if (scope === "staff") delete req.session.staffUser;
+    else if (scope === "super-admin") delete req.session.superAdminUser;
     else delete req.session.user;
   }
   function clearSessionCookie(res) {
@@ -2548,7 +2551,7 @@ app.get("/static/js/:file", (req, res) => {
     } catch {}
   }
   function hasAnyScopedSessionUser(session) {
-    return !!(session?.adminUser || session?.staffUser || session?.user);
+    return !!(session?.adminUser || session?.staffUser || session?.superAdminUser || session?.user);
   }
   function destroySessionAndRespond(req, res, { preserveRemainingUsers = false } = {}) {
     if (!req?.session || typeof req.session.destroy !== "function") {
@@ -2573,6 +2576,8 @@ app.get("/static/js/:file", (req, res) => {
       ? req.session.adminUser
       : scope === "staff"
         ? req.session.staffUser
+        : scope === "super-admin"
+          ? req.session.superAdminUser
         : req.session.user;
     if (!current) return null;
     const nextUser = ensureSessionBranchContext({ ...current, selectedBranchId: nextBranchId });
@@ -2760,6 +2765,7 @@ function getCanonicalBranchCodeForScope(req, scope) {
   if (!u?.userId) return "";
   if (scope === "admin") setSessionUser(req, "admin", u);
   if (scope === "staff") setSessionUser(req, "staff", u);
+  if (scope === "super-admin") setSessionUser(req, "super-admin", u);
   const selected = getBranchById(String(u.selectedBranchId || "").trim());
   return String(selected?.branchCode || "").trim().toUpperCase();
 }
@@ -2791,12 +2797,12 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   function finalizeLoginSession(req, scope, sessUser) {
     return new Promise((resolve, reject) => {
       const nextUser = ensureSessionBranchContext(sessUser);
-      if (!req || !req.session || typeof req.session.regenerate !== "function") {
+      if (!req || !req.session || typeof req.session.save !== "function") {
         try {
           if (req?.session) {
-            delete req.session.adminUser;
-            delete req.session.staffUser;
-            delete req.session.user;
+            if (scope === "admin") delete req.session.adminUser;
+            if (scope === "staff") delete req.session.staffUser;
+            if (scope === "super-admin") delete req.session.superAdminUser;
           }
           setSessionUser(req, scope, nextUser);
           return resolve();
@@ -2804,18 +2810,16 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
           return reject(e);
         }
       }
-      req.session.regenerate((err) => {
-        if (err) return reject(err);
-        try {
-          setSessionUser(req, scope, nextUser);
-          req.session.save((saveErr) => {
-            if (saveErr) return reject(saveErr);
-            return resolve();
-          });
-        } catch (e) {
-          return reject(e);
-        }
-      });
+      try {
+        clearSessionUser(req, scope);
+        setSessionUser(req, scope, nextUser);
+        req.session.save((saveErr) => {
+          if (saveErr) return reject(saveErr);
+          return resolve();
+        });
+      } catch (e) {
+        return reject(e);
+      }
     });
   }
 
@@ -2984,7 +2988,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
       const sessUser = { userId: u.userId, fullName: u.fullName, roleId: role };
-      await finalizeLoginSession(req, "admin", sessUser);
+      await finalizeLoginSession(req, "super-admin", sessUser);
       return res.json({ ok: true, scope: "super-admin", user: sessUser });
     } catch (e) {
       console.error("[super-admin/auth/login]", e);
@@ -3085,18 +3089,17 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // Logout (separated)
   app.post("/api/staff/auth/logout", (req, res) => {
     try { clearSessionUser(req, "staff"); } catch {}
-    return destroySessionAndRespond(req, res);
+    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
   });
 
   app.post("/api/admin/auth/logout", (req, res) => {
     try { clearSessionUser(req, "admin"); } catch {}
-    return destroySessionAndRespond(req, res);
+    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
   });
 
   app.post("/api/super-admin/auth/logout", (req, res) => {
-    try { clearSessionUser(req, "admin"); } catch {}
-    try { clearSessionUser(req, "staff"); } catch {}
-    return destroySessionAndRespond(req, res);
+    try { clearSessionUser(req, "super-admin"); } catch {}
+    return destroySessionAndRespond(req, res, { preserveRemainingUsers: true });
   });
 
   // Legacy logout: destroys everything (kept for older pages)
@@ -3871,16 +3874,17 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
 });
 
 app.get("/admin-login", (req, res) => {
-  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  if (req?.session?.adminUser && maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
 app.get("/b/:branchCode/admin-login", (req, res) => {
   return res.redirect(pathWithBase("/admin-login"));
 });
 
-app.get("/super-admin-login", (_req, res) =>
-  (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin-login.html")))
-);
+app.get("/super-admin-login", (req, res) => {
+  if (req?.session?.superAdminUser) return res.redirect(pathWithBase("/super-admin"));
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin-login.html")));
+});
 
 app.get("/super-admin-recover", (_req, res) =>
   (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "super-admin-recover.html")))
@@ -3900,7 +3904,7 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 
 
 app.get("/staff-login", (req, res) => {
-  if (getSessionUser(req) && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  if (req?.session?.staffUser && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
 });
 app.get("/b/:branchCode/staff-login", (req, res) => {
