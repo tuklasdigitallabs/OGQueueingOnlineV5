@@ -6,93 +6,216 @@
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
   <title>QSYS Provider Setup</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; background: #111827; color: #f3f4f6; }
-    .wrap { max-width: 980px; margin: 0 auto; }
-    .card { background: #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 18px; }
-    h1, h2 { margin-top: 0; }
-    textarea, input, button { width: 100%; box-sizing: border-box; margin-top: 8px; }
-    textarea, input { padding: 10px; border-radius: 8px; border: 1px solid #374151; background: #111827; color: #f3f4f6; }
-    button { padding: 12px; border: 0; border-radius: 8px; background: #f59e0b; color: #111827; font-weight: 700; cursor: pointer; }
-    pre { white-space: pre-wrap; word-break: break-word; background: #0b1220; padding: 12px; border-radius: 8px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { text-align: left; border-bottom: 1px solid #374151; padding: 10px 8px; vertical-align: top; }
-    th { color: #d1d5db; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-    .muted { color: #9ca3af; font-size: 13px; line-height: 1.4; }
-    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+    :root {
+      --bg: #f4efe6;
+      --panel: #fffaf2;
+      --ink: #2d2217;
+      --muted: #6e5d4c;
+      --line: #d9c7af;
+      --accent: #d96b2b;
+      --accent-2: #2d7b62;
+      --danger: #b2442f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(217, 107, 43, 0.15), transparent 28%),
+        linear-gradient(180deg, #f8f3ea 0%, var(--bg) 100%);
+      color: var(--ink);
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 18px 48px; }
+    .hero { margin-bottom: 20px; }
+    .eyebrow {
+      display: inline-block;
+      padding: 6px 10px;
+      background: rgba(45, 123, 98, 0.12);
+      color: var(--accent-2);
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 10px 0 8px; font-size: 36px; line-height: 1.05; }
+    .hero p { margin: 0; color: var(--muted); max-width: 760px; line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 18px; }
+    .stack { display: grid; gap: 18px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: 0 14px 40px rgba(84, 60, 33, 0.08);
+    }
+    .card h2, .card h3 { margin: 0 0 10px; }
+    .muted { color: var(--muted); line-height: 1.45; }
+    .statusRow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .statusBox {
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .statusBox strong { display: block; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .statusBox span { font-size: 18px; font-weight: 700; }
+    label { display: block; margin-top: 12px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    input, textarea, button {
+      width: 100%;
+      margin-top: 8px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      font: inherit;
+    }
+    input, textarea {
+      padding: 12px 14px;
+      background: #fff;
+      color: var(--ink);
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button {
+      padding: 13px 16px;
+      background: var(--accent);
+      color: #fff8f1;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+    }
+    button.alt { background: var(--accent-2); }
+    button.ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #251c14;
+      color: #f6ebdd;
+      padding: 14px;
+      border-radius: 14px;
+      min-height: 120px;
+      overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { text-align: left; border-bottom: 1px solid var(--line); padding: 10px 8px; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    details summary { cursor: pointer; font-weight: 700; }
+    .legacy { border-style: dashed; }
+    .resultOk { color: #98f0b8; }
+    .resultErr { color: #ffb3a4; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .statusRow, .row { grid-template-columns: 1fr; }
+      h1 { font-size: 30px; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Provider Setup</h1>
-    <div class="card">
-      <h2>Installation Info</h2>
-      <pre id="info">Loading...</pre>
+    <div class="hero">
+      <span class="eyebrow">Provider Control</span>
+      <h1>Online Licensing Setup</h1>
+      <p>Use a provider validation URL and a license key as the primary licensing path. The app caches the latest provider decision locally so branch access can keep working through short outages. Legacy token activation is still available below as a transition fallback.</p>
     </div>
-    <div class="card">
-      <h2>Branch Licenses</h2>
-      <div class="muted">Branches with license status UNACTIVATED or EXPIRED cannot use staff view or guest registration.</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Branch</th>
-            <th>Record</th>
-            <th>License</th>
-            <th>Expires</th>
-          </tr>
-        </thead>
-        <tbody id="branchLicenses">
-          <tr><td colspan="4" class="muted">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="card">
-      <h2>Activate</h2>
-      <textarea id="activateToken" rows="6" placeholder="Paste activation token"></textarea>
-      <button id="activateBtn" type="button">Activate Installation</button>
-    </div>
-    <div class="card">
-      <h2>Renew</h2>
-      <textarea id="renewToken" rows="6" placeholder="Paste renewal token"></textarea>
-      <button id="renewBtn" type="button">Renew Installation</button>
-    </div>
-    <div class="card">
-      <h2>Activate / Renew Branch</h2>
-      <div class="muted">Paste a provider token for the target branch code. The token branchCode must match an existing branch record.</div>
-      <div class="two">
-        <div>
-          <textarea id="branchActivateToken" rows="6" placeholder="Paste branch activation token"></textarea>
-          <button id="branchActivateBtn" type="button">Activate Branch</button>
+
+    <div class="grid">
+      <div class="stack">
+        <div class="card">
+          <h2>Installation Overview</h2>
+          <div class="muted">This summary shows both the legacy activation state and the new online validation cache so we can migrate safely.</div>
+          <div class="statusRow">
+            <div class="statusBox"><strong>Install</strong><span id="installId">-</span></div>
+            <div class="statusBox"><strong>Legacy Status</strong><span id="legacyStatus">-</span></div>
+            <div class="statusBox"><strong>Validation</strong><span id="validationStatus">-</span></div>
+            <div class="statusBox"><strong>Plan</strong><span id="planCode">-</span></div>
+          </div>
+          <div class="statusRow">
+            <div class="statusBox"><strong>Provider URL</strong><span id="providerUrl">-</span></div>
+            <div class="statusBox"><strong>License Key</strong><span id="maskedKey">-</span></div>
+            <div class="statusBox"><strong>Last Validated</strong><span id="lastValidated">-</span></div>
+            <div class="statusBox"><strong>Grace Until</strong><span id="graceUntil">-</span></div>
+          </div>
         </div>
-        <div>
-          <textarea id="branchRenewToken" rows="6" placeholder="Paste branch renewal token"></textarea>
-          <button id="branchRenewBtn" type="button">Renew Branch</button>
+
+        <div class="card">
+          <h2>License Key Validation</h2>
+          <label for="providerValidateUrl">Provider Validate URL</label>
+          <input id="providerValidateUrl" type="text" placeholder="https://provider.example.com/api/licenses/validate">
+          <label for="licenseKey">License Key</label>
+          <input id="licenseKey" type="text" placeholder="QSYS-XXXX-XXXX-XXXX">
+          <div class="row">
+            <button id="saveLicenseConfigBtn" type="button" class="ghost">Save Config</button>
+            <button id="validateLicenseBtn" type="button" class="alt">Validate Now</button>
+          </div>
+          <div class="muted" style="margin-top:10px;">Recommended provider response fields: <code>status</code>, <code>licenseId</code>, <code>expiresAt</code>, <code>graceUntil</code>, <code>features</code>, and a <code>branches</code> array with per-branch status.</div>
+        </div>
+
+        <div class="card">
+          <h2>Branch Entitlements</h2>
+          <div class="muted">Branches marked <code>UNACTIVATED</code> or <code>EXPIRED</code> stay blocked in the queue surfaces. Once online validation is fully rolled out, this table becomes the main source of truth.</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Branch</th>
+                <th>Record</th>
+                <th>License</th>
+                <th>Expires</th>
+              </tr>
+            </thead>
+            <tbody id="branchLicenses">
+              <tr><td colspan="4" class="muted">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Install Payload</h2>
+          <pre id="info">Loading...</pre>
         </div>
       </div>
-    </div>
-    <div class="card">
-      <h2>Result</h2>
-      <pre id="result">Ready.</pre>
+
+      <div class="stack">
+        <div class="card">
+          <h3>Result</h3>
+          <pre id="result">Ready.</pre>
+        </div>
+
+        <details class="card legacy">
+          <summary>Legacy Token Tools</summary>
+          <div class="muted" style="margin-top:10px;">These remain available during migration. Once the online license service is stable, we can retire this section.</div>
+          <label for="activateToken">Activate Installation Token</label>
+          <textarea id="activateToken" placeholder="Paste activation token"></textarea>
+          <button id="activateBtn" type="button">Activate Installation</button>
+
+          <label for="renewToken">Renew Installation Token</label>
+          <textarea id="renewToken" placeholder="Paste renewal token"></textarea>
+          <button id="renewBtn" type="button">Renew Installation</button>
+
+          <label for="branchActivateToken">Activate Branch Token</label>
+          <textarea id="branchActivateToken" placeholder="Paste branch activation token"></textarea>
+          <button id="branchActivateBtn" type="button">Activate Branch</button>
+
+          <label for="branchRenewToken">Renew Branch Token</label>
+          <textarea id="branchRenewToken" placeholder="Paste branch renewal token"></textarea>
+          <button id="branchRenewBtn" type="button">Renew Branch</button>
+        </details>
+      </div>
     </div>
   </div>
+
   <script src="./app-boot.js"></script>
   <script>
     const infoEl = document.getElementById("info");
     const resultEl = document.getElementById("result");
     const branchLicensesEl = document.getElementById("branchLicenses");
-
-    function apiUrl(path) {
-      return String(path || "").replace(/^\/+/, "");
-    }
-
-    function escapeHtml(value) {
-      return String(value || "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
 
     function fmtTime(ms) {
       const n = Number(ms || 0);
@@ -104,73 +227,115 @@
       }
     }
 
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setResult(payload, ok = true) {
+      resultEl.className = ok ? "resultOk" : "resultErr";
+      resultEl.textContent = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+    }
+
+    function renderSummary(data) {
+      document.getElementById("installId").textContent = data.installId || "-";
+      document.getElementById("legacyStatus").textContent = data.status || "-";
+      document.getElementById("validationStatus").textContent = data.validationStatus || "-";
+      document.getElementById("planCode").textContent = data.licensePlanCode || "-";
+      document.getElementById("providerUrl").textContent = data.providerValidateUrl || "-";
+      document.getElementById("maskedKey").textContent = data.licenseKeyMasked || "-";
+      document.getElementById("lastValidated").textContent = fmtTime(data.lastValidatedAt);
+      document.getElementById("graceUntil").textContent = fmtTime(data.graceUntil);
+      if (!document.getElementById("providerValidateUrl").value && data.providerValidateUrl) {
+        document.getElementById("providerValidateUrl").value = data.providerValidateUrl;
+      }
+    }
+
     function renderBranches(branches) {
       const rows = Array.isArray(branches) ? branches : [];
       if (!rows.length) {
         branchLicensesEl.innerHTML = `<tr><td colspan="4" class="muted">No branches found.</td></tr>`;
         return;
       }
-      branchLicensesEl.innerHTML = rows.map((row) => {
-        const code = String(row.branchCode || "").trim().toUpperCase();
-        const name = String(row.branchName || "").trim();
-        const license = String(row.licenseStatus || (row.licenseActivated ? "ACTIVATED" : "UNACTIVATED")).trim().toUpperCase();
-        return `
-          <tr>
-            <td><strong>${escapeHtml(code || "-")}</strong><br><span class="muted">${escapeHtml(name || "-")}</span></td>
-            <td>${escapeHtml(row.status || "ACTIVE")}${Number(row.isDefault || 0) === 1 ? "<br><span class=\"muted\">Default</span>" : ""}</td>
-            <td>${escapeHtml(license)}</td>
-            <td>${escapeHtml(fmtTime(row.licenseExpiresAt))}</td>
-          </tr>
-        `;
-      }).join("");
+      branchLicensesEl.innerHTML = rows.map((row) => `
+        <tr>
+          <td><strong>${escapeHtml(row.branchCode || "-")}</strong><br><span class="muted">${escapeHtml(row.branchName || "-")}</span></td>
+          <td>${escapeHtml(row.status || "ACTIVE")}${Number(row.isDefault || 0) === 1 ? "<br><span class=\"muted\">Default</span>" : ""}</td>
+          <td>${escapeHtml(row.licenseStatus || (row.licenseActivated ? "ACTIVATED" : "UNACTIVATED"))}</td>
+          <td>${escapeHtml(fmtTime(row.licenseExpiresAt))}</td>
+        </tr>
+      `).join("");
     }
 
     async function loadInfo() {
-      const res = await fetch(apiUrl("/api/provider/install-info"));
+      const res = await fetch("/api/provider/install-info");
       const data = await res.json();
       infoEl.textContent = JSON.stringify(data, null, 2);
+      renderSummary(data);
       renderBranches(data.branches);
+      return data;
     }
 
-    async function submitToken(url, token) {
-      resultEl.textContent = "Working...";
-      const res = await fetch(apiUrl(url), {
+    async function postJson(url, payload) {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token })
+        body: JSON.stringify(payload || {}),
       });
       const data = await res.json();
-      resultEl.textContent = JSON.stringify(data, null, 2);
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Request failed.");
+      }
+      return data;
+    }
+
+    async function saveLicenseConfig() {
+      const licenseKey = document.getElementById("licenseKey").value.trim();
+      const providerValidateUrl = document.getElementById("providerValidateUrl").value.trim();
+      setResult("Saving config...");
+      const data = await postJson("/api/provider/license/config", { licenseKey, providerValidateUrl });
+      setResult(data, true);
       await loadInfo();
     }
 
-    document.getElementById("activateBtn").addEventListener("click", async () => {
-      const token = document.getElementById("activateToken").value.trim();
-      if (!token) return;
-      await submitToken("/api/provider/activate", token);
-    });
+    async function validateLicense() {
+      const licenseKey = document.getElementById("licenseKey").value.trim();
+      const providerValidateUrl = document.getElementById("providerValidateUrl").value.trim();
+      setResult("Validating license...");
+      const data = await postJson("/api/provider/license/validate", { licenseKey, providerValidateUrl });
+      setResult(data, true);
+      await loadInfo();
+    }
 
-    document.getElementById("renewBtn").addEventListener("click", async () => {
-      const token = document.getElementById("renewToken").value.trim();
+    async function submitLegacyToken(url, fieldId) {
+      const token = document.getElementById(fieldId).value.trim();
       if (!token) return;
-      await submitToken("/api/provider/renew", token);
-    });
+      setResult("Submitting token...");
+      try {
+        const data = await postJson(url, { token });
+        setResult(data, true);
+        await loadInfo();
+      } catch (error) {
+        setResult(String(error && error.message || error), false);
+      }
+    }
 
-    document.getElementById("branchActivateBtn").addEventListener("click", async () => {
-      const token = document.getElementById("branchActivateToken").value.trim();
-      if (!token) return;
-      await submitToken("/api/provider/branches/activate", token);
+    document.getElementById("saveLicenseConfigBtn").addEventListener("click", () => {
+      saveLicenseConfig().catch((error) => setResult(String(error && error.message || error), false));
     });
+    document.getElementById("validateLicenseBtn").addEventListener("click", () => {
+      validateLicense().catch((error) => setResult(String(error && error.message || error), false));
+    });
+    document.getElementById("activateBtn").addEventListener("click", () => submitLegacyToken("/api/provider/activate", "activateToken"));
+    document.getElementById("renewBtn").addEventListener("click", () => submitLegacyToken("/api/provider/renew", "renewToken"));
+    document.getElementById("branchActivateBtn").addEventListener("click", () => submitLegacyToken("/api/provider/branches/activate", "branchActivateToken"));
+    document.getElementById("branchRenewBtn").addEventListener("click", () => submitLegacyToken("/api/provider/branches/renew", "branchRenewToken"));
 
-    document.getElementById("branchRenewBtn").addEventListener("click", async () => {
-      const token = document.getElementById("branchRenewToken").value.trim();
-      if (!token) return;
-      await submitToken("/api/provider/branches/renew", token);
-    });
-
-    loadInfo().catch((err) => {
-      infoEl.textContent = String(err && err.message || err);
-    });
+    loadInfo().catch((error) => setResult(String(error && error.message || error), false));
   </script>
 </body>
 </html>

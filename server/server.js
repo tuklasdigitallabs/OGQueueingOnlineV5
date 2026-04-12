@@ -96,6 +96,12 @@ function stripBasePathFromUrl(url) {
 const ACTIVATION_STATUS_UNACTIVATED = "UNACTIVATED";
 const ACTIVATION_STATUS_ACTIVATED = "ACTIVATED";
 const ACTIVATION_STATUS_EXPIRED = "EXPIRED";
+const LICENSE_STATUS_UNLICENSED = "UNLICENSED";
+const LICENSE_STATUS_ACTIVE = "ACTIVE";
+const LICENSE_STATUS_GRACE = "GRACE";
+const LICENSE_STATUS_EXPIRED = "EXPIRED";
+const LICENSE_STATUS_SUSPENDED = "SUSPENDED";
+const LICENSE_STATUS_REVOKED = "REVOKED";
 const BRANCH_CODE_PLACEHOLDER = "UNASSIGNED";
 const DEFAULT_SUPER_ADMIN_USER = "rbz1988";
 const DEFAULT_SUPER_ADMIN_PIN = "053787";
@@ -801,6 +807,57 @@ function ensureActivationTokenTables(db) {
   `);
 }
 
+function ensureOnlineLicenseSchema(db) {
+  ensureColumn(db, "installation_state", "licenseKey", "TEXT");
+  ensureColumn(db, "installation_state", "validationStatus", "TEXT NOT NULL DEFAULT 'UNLICENSED'");
+  ensureColumn(db, "installation_state", "validationSource", "TEXT");
+  ensureColumn(db, "installation_state", "lastValidatedAt", "INTEGER");
+  ensureColumn(db, "installation_state", "lastValidationAttemptAt", "INTEGER");
+  ensureColumn(db, "installation_state", "validationError", "TEXT");
+  ensureColumn(db, "installation_state", "graceUntil", "INTEGER");
+  ensureColumn(db, "installation_state", "providerAccountId", "TEXT");
+  ensureColumn(db, "installation_state", "providerOrgId", "TEXT");
+  ensureColumn(db, "installation_state", "providerLicenseId", "TEXT");
+  ensureColumn(db, "installation_state", "licensePlanCode", "TEXT");
+  ensureColumn(db, "installation_state", "licenseFeaturesJson", "TEXT");
+  ensureColumn(db, "installation_state", "licenseSnapshotJson", "TEXT");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS branch_license_state (
+      branchId TEXT PRIMARY KEY,
+      branchCode TEXT NOT NULL,
+      status TEXT NOT NULL,
+      licenseId TEXT,
+      entitled INTEGER NOT NULL DEFAULT 0,
+      issuedAt INTEGER,
+      expiresAt INTEGER,
+      lastValidatedAt INTEGER,
+      graceUntil INTEGER,
+      source TEXT,
+      snapshotJson TEXT,
+      updatedAt INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_branch_license_state_code ON branch_license_state(branchCode);
+
+    CREATE TABLE IF NOT EXISTS license_validation_events (
+      id TEXT PRIMARY KEY,
+      installId TEXT NOT NULL,
+      licenseKeyMasked TEXT,
+      requestType TEXT NOT NULL,
+      resultStatus TEXT NOT NULL,
+      httpStatus INTEGER,
+      errorCode TEXT,
+      errorMessage TEXT,
+      validatedAt INTEGER NOT NULL,
+      expiresAt INTEGER,
+      graceUntil INTEGER,
+      snapshotJson TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_license_validation_events_validatedAt
+      ON license_validation_events(validatedAt DESC);
+  `);
+}
+
 function ensureMultiBranchFoundationSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS organizations (
@@ -1108,6 +1165,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   ensureAdminSchema(db);
   ensureActivationState(db);
   ensureActivationTokenTables(db);
+  ensureOnlineLicenseSchema(db);
   ensureMultiBranchFoundationSchema(db);
 
   // ✅ Ensure optional note column exists for override calls
@@ -1588,11 +1646,204 @@ app.get("/static/js/:file", (req, res) => {
     for (const key of keys || []) map[String(key)] = isFeatureProvisioned(key);
     return map;
   }
+  function maskLicenseKey(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (raw.length <= 4) return "*".repeat(raw.length);
+    return `${"*".repeat(Math.max(0, raw.length - 4))}${raw.slice(-4)}`;
+  }
+  function normalizeLicenseValidationStatus(value) {
+    const normalized = String(value || "").trim().toUpperCase();
+    if ([
+      LICENSE_STATUS_ACTIVE,
+      LICENSE_STATUS_GRACE,
+      LICENSE_STATUS_EXPIRED,
+      LICENSE_STATUS_SUSPENDED,
+      LICENSE_STATUS_REVOKED,
+      LICENSE_STATUS_UNLICENSED,
+    ].includes(normalized)) return normalized;
+    return LICENSE_STATUS_UNLICENSED;
+  }
+  function mapValidationStatusToActivationStatus(status) {
+    const normalized = normalizeLicenseValidationStatus(status);
+    if ([LICENSE_STATUS_ACTIVE, LICENSE_STATUS_GRACE].includes(normalized)) return ACTIVATION_STATUS_ACTIVATED;
+    if (normalized === LICENSE_STATUS_EXPIRED) return ACTIVATION_STATUS_EXPIRED;
+    return ACTIVATION_STATUS_UNACTIVATED;
+  }
+  function parseEpochOrNull(value) {
+    const n = Number(value || 0);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  function getStoredLicenseValidateUrl() {
+    return String(getDbSetting("licensing.providerValidateUrl") || process.env.QSYS_LICENSE_VALIDATE_URL || "").trim();
+  }
+  function setStoredLicenseValidateUrl(value) {
+    const next = String(value || "").trim();
+    setDbSetting("licensing.providerValidateUrl", next);
+  }
+  function getLicenseValidationState() {
+    ensureActivationState(db);
+    ensureOnlineLicenseSchema(db);
+    const row = db.prepare(
+      `SELECT licenseKey, validationStatus, validationSource, lastValidatedAt, lastValidationAttemptAt, validationError,
+              graceUntil, providerAccountId, providerOrgId, providerLicenseId, licensePlanCode, licenseFeaturesJson,
+              licenseSnapshotJson
+       FROM installation_state WHERE id=1`
+    ).get() || {};
+    let features = {};
+    try {
+      features = row.licenseFeaturesJson ? JSON.parse(row.licenseFeaturesJson) : {};
+    } catch {
+      features = {};
+    }
+    let snapshot = null;
+    try {
+      snapshot = row.licenseSnapshotJson ? JSON.parse(row.licenseSnapshotJson) : null;
+    } catch {
+      snapshot = null;
+    }
+    return {
+      licenseKey: String(row.licenseKey || "").trim(),
+      validationStatus: normalizeLicenseValidationStatus(row.validationStatus),
+      validationSource: String(row.validationSource || "").trim(),
+      lastValidatedAt: parseEpochOrNull(row.lastValidatedAt),
+      lastValidationAttemptAt: parseEpochOrNull(row.lastValidationAttemptAt),
+      validationError: String(row.validationError || "").trim(),
+      graceUntil: parseEpochOrNull(row.graceUntil),
+      providerAccountId: String(row.providerAccountId || "").trim(),
+      providerOrgId: String(row.providerOrgId || "").trim(),
+      providerLicenseId: String(row.providerLicenseId || "").trim(),
+      licensePlanCode: String(row.licensePlanCode || "").trim(),
+      licenseFeatures: features && typeof features === "object" ? features : {},
+      licenseSnapshot: snapshot,
+    };
+  }
+  function recordLicenseValidationEvent(payload = {}) {
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO license_validation_events(
+        id, installId, licenseKeyMasked, requestType, resultStatus, httpStatus, errorCode, errorMessage,
+        validatedAt, expiresAt, graceUntil, snapshotJson
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(
+      randomUUID(),
+      String(payload.installId || "").trim(),
+      String(payload.licenseKeyMasked || "").trim(),
+      String(payload.requestType || "VALIDATE").trim().toUpperCase(),
+      String(payload.resultStatus || LICENSE_STATUS_UNLICENSED).trim().toUpperCase(),
+      Number(payload.httpStatus || 0) || null,
+      String(payload.errorCode || "").trim() || null,
+      String(payload.errorMessage || "").trim() || null,
+      Number(payload.validatedAt || now) || now,
+      Number(payload.expiresAt || 0) || null,
+      Number(payload.graceUntil || 0) || null,
+      payload.snapshotJson ? JSON.stringify(payload.snapshotJson) : null,
+    );
+  }
+  function syncProvisionedFeatures(features) {
+    if (!features || typeof features !== "object") return;
+    for (const entry of SUPER_ADMIN_FEATURE_CATALOG) {
+      const key = String(entry.key || "").trim();
+      if (!key) continue;
+      if (Object.prototype.hasOwnProperty.call(features, key)) {
+        setFeatureProvisioned(key, !!features[key]);
+      }
+    }
+  }
+  function upsertBranchLicenseCache(branch, payload = {}) {
+    const branchId = String(branch?.branchId || "").trim();
+    const branchCode = String(branch?.branchCode || payload.branchCode || "").trim().toUpperCase();
+    if (!branchId || !branchCode) return;
+    const now = Date.now();
+    const status = String(payload.status || ACTIVATION_STATUS_UNACTIVATED).trim().toUpperCase();
+    const licenseId = String(payload.licenseId || "").trim();
+    const entitled = payload.entitled == null ? [ACTIVATION_STATUS_ACTIVATED].includes(status) : !!payload.entitled;
+    const issuedAt = parseEpochOrNull(payload.issuedAt);
+    const expiresAt = parseEpochOrNull(payload.expiresAt);
+    const lastValidatedAt = parseEpochOrNull(payload.lastValidatedAt) || now;
+    const graceUntil = parseEpochOrNull(payload.graceUntil);
+    const source = String(payload.source || "").trim();
+    const snapshotJson = payload.snapshotJson ? JSON.stringify(payload.snapshotJson) : null;
+    db.prepare(
+      `INSERT INTO branch_license_state(
+        branchId, branchCode, status, licenseId, entitled, issuedAt, expiresAt,
+        lastValidatedAt, graceUntil, source, snapshotJson, updatedAt
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(branchId) DO UPDATE SET
+        branchCode=excluded.branchCode,
+        status=excluded.status,
+        licenseId=excluded.licenseId,
+        entitled=excluded.entitled,
+        issuedAt=excluded.issuedAt,
+        expiresAt=excluded.expiresAt,
+        lastValidatedAt=excluded.lastValidatedAt,
+        graceUntil=excluded.graceUntil,
+        source=excluded.source,
+        snapshotJson=excluded.snapshotJson,
+        updatedAt=excluded.updatedAt`
+    ).run(
+      branchId,
+      branchCode,
+      status,
+      licenseId || null,
+      entitled ? 1 : 0,
+      issuedAt,
+      expiresAt,
+      lastValidatedAt,
+      graceUntil,
+      source || null,
+      snapshotJson,
+      now
+    );
+  }
+  function getBranchLicenseCache(branchId) {
+    const id = String(branchId || "").trim();
+    if (!id) return null;
+    try {
+      return db.prepare(
+        `SELECT branchId, branchCode, status, licenseId, entitled, issuedAt, expiresAt, lastValidatedAt, graceUntil, source, snapshotJson, updatedAt
+         FROM branch_license_state WHERE branchId=? LIMIT 1`
+      ).get(id) || null;
+    } catch {
+      return null;
+    }
+  }
+  function syncValidatedBranchLicenses(branches, meta = {}) {
+    const rows = Array.isArray(branches) ? branches : [];
+    const validatedAt = parseEpochOrNull(meta.validatedAt) || Date.now();
+    for (const item of rows) {
+      const branchCode = String(item?.branchCode || "").trim().toUpperCase();
+      const branch = branchCode ? getBranchByCode(branchCode) : null;
+      if (!branch?.branchId) continue;
+      upsertBranchLicenseCache(branch, {
+        status: String(item.status || (item.entitled ? ACTIVATION_STATUS_ACTIVATED : ACTIVATION_STATUS_UNACTIVATED)).trim().toUpperCase(),
+        licenseId: String(item.licenseId || meta.licenseId || "").trim(),
+        entitled: item.entitled,
+        issuedAt: item.issuedAt,
+        expiresAt: item.expiresAt,
+        graceUntil: item.graceUntil || meta.graceUntil,
+        lastValidatedAt: validatedAt,
+        source: meta.source || "provider-api",
+        snapshotJson: item,
+      });
+      setBranchLicenseState(branch.branchId, {
+        status: String(item.status || (item.entitled ? ACTIVATION_STATUS_ACTIVATED : ACTIVATION_STATUS_UNACTIVATED)).trim().toUpperCase(),
+        licenseId: String(item.licenseId || meta.licenseId || "").trim(),
+        issuedAt: Number(item.issuedAt || 0),
+        expiresAt: Number(item.expiresAt || 0),
+        activatedAt: validatedAt,
+        activatedBy: String(meta.source || "provider-api").trim() || "provider-api",
+      });
+    }
+  }
   function getActivationState() {
     ensureActivationState(db);
     const row = db.prepare(
       `SELECT status, installId, activatedAt, activatedBy, activationLicenseId, licenseIssuedAt, licenseExpiresAt,
-              lastRenewedAt, activationBranchCode, activationTokenHash, activationPayload, updatedAt
+              lastRenewedAt, activationBranchCode, activationTokenHash, activationPayload, updatedAt,
+              licenseKey, validationStatus, validationSource, lastValidatedAt, lastValidationAttemptAt, validationError,
+              graceUntil, providerAccountId, providerOrgId, providerLicenseId, licensePlanCode, licenseFeaturesJson,
+              licenseSnapshotJson
        FROM installation_state WHERE id=1`
     ).get();
     return row || {
@@ -1607,6 +1858,19 @@ app.get("/static/js/:file", (req, res) => {
       activationBranchCode: null,
       activationTokenHash: null,
       activationPayload: null,
+      licenseKey: "",
+      validationStatus: LICENSE_STATUS_UNLICENSED,
+      validationSource: "",
+      lastValidatedAt: null,
+      lastValidationAttemptAt: null,
+      validationError: "",
+      graceUntil: null,
+      providerAccountId: "",
+      providerOrgId: "",
+      providerLicenseId: "",
+      licensePlanCode: "",
+      licenseFeaturesJson: "",
+      licenseSnapshotJson: "",
       updatedAt: Date.now(),
     };
   }
@@ -1615,14 +1879,44 @@ app.get("/static/js/:file", (req, res) => {
     const status = String(st.status || "").toUpperCase();
     if (status !== ACTIVATION_STATUS_ACTIVATED) return st;
     const exp = Number(st.licenseExpiresAt || 0);
-    if (!Number.isFinite(exp) || exp <= 0 || Date.now() <= exp) return st;
     const now = Date.now();
-    db.prepare(`UPDATE installation_state SET status=?, updatedAt=? WHERE id=1`).run(ACTIVATION_STATUS_EXPIRED, now);
-    return { ...st, status: ACTIVATION_STATUS_EXPIRED, updatedAt: now };
+    const validationStatus = normalizeLicenseValidationStatus(st.validationStatus);
+    const graceUntil = Number(st.graceUntil || 0) || 0;
+    if (!Number.isFinite(exp) || exp <= 0 || now <= exp) return st;
+    if (graceUntil && now <= graceUntil) {
+      if (validationStatus !== LICENSE_STATUS_GRACE) {
+        db.prepare(`UPDATE installation_state SET validationStatus=?, updatedAt=? WHERE id=1`).run(LICENSE_STATUS_GRACE, now);
+      }
+      return { ...st, validationStatus: LICENSE_STATUS_GRACE, updatedAt: now };
+    }
+    db.prepare(`UPDATE installation_state SET status=?, validationStatus=?, updatedAt=? WHERE id=1`).run(
+      ACTIVATION_STATUS_EXPIRED,
+      LICENSE_STATUS_EXPIRED,
+      now
+    );
+    return { ...st, status: ACTIVATION_STATUS_EXPIRED, validationStatus: LICENSE_STATUS_EXPIRED, updatedAt: now };
   }
   function getBranchLicenseState(branch) {
     const branchId = String(branch?.branchId || "").trim();
     if (!branchId) return { status: ACTIVATION_STATUS_UNACTIVATED, activated: false, licenseExpiresAt: null };
+    const cached = getBranchLicenseCache(branchId);
+    if (cached) {
+      const rawStatus = String(cached.status || "").trim().toUpperCase();
+      const exp = Number(cached.expiresAt || 0) || null;
+      const graceUntil = Number(cached.graceUntil || 0) || null;
+      const now = Date.now();
+      const expired = rawStatus === ACTIVATION_STATUS_ACTIVATED && exp && now > exp && (!graceUntil || now > graceUntil);
+      const inGrace = rawStatus === ACTIVATION_STATUS_ACTIVATED && exp && graceUntil && now > exp && now <= graceUntil;
+      return {
+        status: expired ? ACTIVATION_STATUS_EXPIRED : rawStatus || ACTIVATION_STATUS_UNACTIVATED,
+        activated: (rawStatus === ACTIVATION_STATUS_ACTIVATED && !expired) || inGrace,
+        licenseId: String(cached.licenseId || ""),
+        licenseIssuedAt: Number(cached.issuedAt || 0) || null,
+        licenseExpiresAt: exp,
+        activatedAt: Number(cached.lastValidatedAt || 0) || null,
+        activatedBy: String(cached.source || ""),
+      };
+    }
     const rawStatus = String(getBranchSetting(branchId, "license.status") || "").trim().toUpperCase();
     const status = rawStatus || (Number(branch?.isDefault || 0) === 1 ? ACTIVATION_STATUS_ACTIVATED : ACTIVATION_STATUS_UNACTIVATED);
     const exp = Number(getBranchSetting(branchId, "license.expiresAt") || 0) || null;
@@ -1640,12 +1934,26 @@ app.get("/static/js/:file", (req, res) => {
   function setBranchLicenseState(branchId, payload = {}) {
     const id = String(branchId || "").trim();
     if (!id) return;
-    setBranchSetting(id, "license.status", String(payload.status || ACTIVATION_STATUS_UNACTIVATED).trim().toUpperCase());
+    const status = String(payload.status || ACTIVATION_STATUS_UNACTIVATED).trim().toUpperCase();
+    setBranchSetting(id, "license.status", status);
     setBranchSetting(id, "license.licenseId", String(payload.licenseId || ""));
     setBranchSetting(id, "license.issuedAt", String(Number(payload.issuedAt || 0) || ""));
     setBranchSetting(id, "license.expiresAt", String(Number(payload.expiresAt || 0) || ""));
     setBranchSetting(id, "license.activatedAt", String(Number(payload.activatedAt || 0) || ""));
     setBranchSetting(id, "license.activatedBy", String(payload.activatedBy || ""));
+    const branch = getBranchById(id);
+    if (branch?.branchId) {
+      upsertBranchLicenseCache(branch, {
+        status,
+        licenseId: payload.licenseId,
+        entitled: status === ACTIVATION_STATUS_ACTIVATED,
+        issuedAt: payload.issuedAt,
+        expiresAt: payload.expiresAt,
+        lastValidatedAt: payload.activatedAt || Date.now(),
+        source: payload.activatedBy,
+        snapshotJson: payload.snapshotJson || null,
+      });
+    }
   }
   function ensureBranchLicenseInitialized(branch, status = ACTIVATION_STATUS_UNACTIVATED) {
     const branchId = String(branch?.branchId || "").trim();
@@ -1661,10 +1969,36 @@ app.get("/static/js/:file", (req, res) => {
          FROM branches
          WHERE upper(coalesce(status,'ACTIVE'))='ACTIVE'`
       ).all();
-      for (const row of rows) ensureBranchLicenseInitialized(row, ACTIVATION_STATUS_ACTIVATED);
+      for (const row of rows) {
+        ensureBranchLicenseInitialized(row, ACTIVATION_STATUS_ACTIVATED);
+        const legacy = {
+          status: String(getBranchSetting(row.branchId, "license.status") || "").trim().toUpperCase() || (Number(row.isDefault || 0) === 1 ? ACTIVATION_STATUS_ACTIVATED : ACTIVATION_STATUS_UNACTIVATED),
+          licenseId: String(getBranchSetting(row.branchId, "license.licenseId") || ""),
+          issuedAt: Number(getBranchSetting(row.branchId, "license.issuedAt") || 0) || null,
+          expiresAt: Number(getBranchSetting(row.branchId, "license.expiresAt") || 0) || null,
+          activatedAt: Number(getBranchSetting(row.branchId, "license.activatedAt") || 0) || null,
+          activatedBy: String(getBranchSetting(row.branchId, "license.activatedBy") || ""),
+        };
+        upsertBranchLicenseCache(row, {
+          ...legacy,
+          entitled: legacy.status === ACTIVATION_STATUS_ACTIVATED,
+          lastValidatedAt: legacy.activatedAt || Date.now(),
+          source: legacy.activatedBy || "migration",
+          snapshotJson: { migrated: true, ...legacy },
+        });
+      }
     } catch {
       const branch = getDefaultBranchRecord();
-      if (branch?.branchId) ensureBranchLicenseInitialized(branch, ACTIVATION_STATUS_ACTIVATED);
+      if (branch?.branchId) {
+        ensureBranchLicenseInitialized(branch, ACTIVATION_STATUS_ACTIVATED);
+        upsertBranchLicenseCache(branch, {
+          status: ACTIVATION_STATUS_ACTIVATED,
+          entitled: true,
+          lastValidatedAt: Date.now(),
+          source: "migration",
+          snapshotJson: { migrated: true, branchCode: branch.branchCode },
+        });
+      }
     }
   }
   function enrichBranchLicense(row) {
@@ -1775,6 +2109,8 @@ app.get("/static/js/:file", (req, res) => {
     if (p === "/provider-setup") return true;
     if (p === "/app-boot.js") return true;
     if (p === "/api/provider/install-info") return true;
+    if (p === "/api/provider/license/config") return true;
+    if (p === "/api/provider/license/validate") return true;
     if (p === "/api/provider/activate") return true;
     if (p === "/api/provider/renew") return true;
     if (p === "/api/health") return true;
@@ -1783,6 +2119,177 @@ app.get("/static/js/:file", (req, res) => {
     if (p === "/static/provider-setup.html") return true;
     if (p === "/static/js/provider-setup.js") return true;
     return false;
+  }
+
+  function getLicenseValidationRequestUrl(overrideUrl) {
+    const raw = String(overrideUrl || getStoredLicenseValidateUrl()).trim();
+    if (!raw) return "";
+    return raw;
+  }
+
+  function postJson(url, payload, extraHeaders = {}) {
+    return new Promise((resolve, reject) => {
+      let parsed;
+      try {
+        parsed = new URL(url);
+      } catch (error) {
+        reject(new Error("License validation URL is invalid."));
+        return;
+      }
+      const body = JSON.stringify(payload || {});
+      const isHttps = parsed.protocol === "https:";
+      const transport = isHttps ? https : http;
+      const timeoutMs = Math.max(1000, Number(process.env.QSYS_LICENSE_HTTP_TIMEOUT_MS || 15000) || 15000);
+      const req = transport.request({
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: `${parsed.pathname || "/"}${parsed.search || ""}`,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+          ...extraHeaders,
+        },
+      }, (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          let json = null;
+          try {
+            json = text ? JSON.parse(text) : null;
+          } catch {}
+          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: Number(res.statusCode || 0), json, text });
+        });
+      });
+      req.on("error", reject);
+      req.setTimeout(timeoutMs, () => req.destroy(new Error("License validation request timed out.")));
+      req.write(body);
+      req.end();
+    });
+  }
+
+  async function validateLicenseWithProvider({ licenseKey, validateUrl, requestType = "VALIDATE" }) {
+    const install = getActivationState();
+    const effectiveKey = String(licenseKey || install.licenseKey || "").trim();
+    if (!effectiveKey) throw activationError("licenseKey is required.", 400);
+    const requestUrl = getLicenseValidationRequestUrl(validateUrl);
+    if (!requestUrl) throw activationError("License validation URL is not configured.", 400);
+
+    const branches = listAllBranches().map((row) => ({
+      branchId: String(row.branchId || ""),
+      branchCode: String(row.branchCode || "").trim().toUpperCase(),
+      branchName: String(row.branchName || "").trim(),
+      status: String(row.status || "ACTIVE").trim().toUpperCase(),
+      isDefault: Number(row.isDefault || 0) === 1,
+    }));
+    const payload = {
+      licenseKey: effectiveKey,
+      installId: String(install.installId || getDbSetting("install.id") || "").trim(),
+      product: "qsys-standalone",
+      appVersion: String(require("../package.json").version || "").trim(),
+      hostname: os.hostname(),
+      timestamp: Date.now(),
+      branches,
+    };
+    const authToken = String(process.env.QSYS_LICENSE_API_TOKEN || "").trim();
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+    const attemptAt = Date.now();
+
+    db.prepare(
+      `UPDATE installation_state SET licenseKey=?, lastValidationAttemptAt=?, validationError=?, updatedAt=? WHERE id=1`
+    ).run(effectiveKey, attemptAt, "", attemptAt);
+    if (validateUrl != null) setStoredLicenseValidateUrl(validateUrl);
+
+    const response = await postJson(requestUrl, payload, headers);
+    const body = response.json && typeof response.json === "object" ? response.json : null;
+    if (!response.ok || !body) {
+      const message = body?.error || response.text || "License validation failed.";
+      db.prepare(
+        `UPDATE installation_state SET validationError=?, lastValidationAttemptAt=?, updatedAt=? WHERE id=1`
+      ).run(String(message || "License validation failed."), attemptAt, attemptAt);
+      recordLicenseValidationEvent({
+        installId: payload.installId,
+        licenseKeyMasked: maskLicenseKey(effectiveKey),
+        requestType,
+        resultStatus: LICENSE_STATUS_UNLICENSED,
+        httpStatus: response.status,
+        errorMessage: message,
+        validatedAt: attemptAt,
+        snapshotJson: body || { raw: response.text || "" },
+      });
+      throw activationError(message, response.status || 502);
+    }
+
+    const validationStatus = normalizeLicenseValidationStatus(body.status);
+    const validatedAt = parseEpochOrNull(body.checkedAt) || Date.now();
+    const graceUntil = parseEpochOrNull(body.graceUntil);
+    const expiresAt = parseEpochOrNull(body.expiresAt);
+    const issuedAt = parseEpochOrNull(body.issuedAt) || validatedAt;
+    const activationStatus = mapValidationStatusToActivationStatus(validationStatus);
+    const providerLicenseId = String(body.licenseId || "").trim();
+    const features = body.features && typeof body.features === "object" ? body.features : {};
+    db.prepare(
+      `UPDATE installation_state
+       SET status=?, activatedAt=coalesce(activatedAt, ?), activatedBy=?, activationLicenseId=?, licenseIssuedAt=?, licenseExpiresAt=?, lastRenewedAt=?, updatedAt=?,
+           licenseKey=?, validationStatus=?, validationSource=?, lastValidatedAt=?, lastValidationAttemptAt=?,
+           validationError=?, graceUntil=?, providerAccountId=?, providerOrgId=?, providerLicenseId=?,
+           licensePlanCode=?, licenseFeaturesJson=?, licenseSnapshotJson=?
+       WHERE id=1`
+    ).run(
+      activationStatus,
+      validatedAt,
+      "provider-api",
+      providerLicenseId,
+      issuedAt,
+      expiresAt,
+      validatedAt,
+      validatedAt,
+      effectiveKey,
+      validationStatus,
+      "provider-api",
+      validatedAt,
+      attemptAt,
+      "",
+      graceUntil,
+      String(body.accountId || "").trim(),
+      String(body.orgId || "").trim(),
+      providerLicenseId,
+      String(body.planCode || "").trim(),
+      JSON.stringify(features),
+      JSON.stringify(body)
+    );
+    syncProvisionedFeatures(features);
+    syncValidatedBranchLicenses(body.branches, {
+      validatedAt,
+      graceUntil,
+      source: "provider-api",
+      licenseId: providerLicenseId,
+    });
+    recordLicenseValidationEvent({
+      installId: payload.installId,
+      licenseKeyMasked: maskLicenseKey(effectiveKey),
+      requestType,
+      resultStatus: validationStatus,
+      httpStatus: response.status,
+      validatedAt,
+      expiresAt,
+      graceUntil,
+      snapshotJson: body,
+    });
+    return {
+      ok: true,
+      status: validationStatus,
+      installId: payload.installId,
+      providerLicenseId,
+      expiresAt,
+      graceUntil,
+      checkedAt: validatedAt,
+      branches: Array.isArray(body.branches) ? body.branches : [],
+      features,
+      providerUrl: requestUrl,
+    };
   }
 
   /* ===================== SECURITY ADDON: auth + perms ===================== */
@@ -3293,6 +3800,7 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
   app.get("/api/provider/install-info", (req, res) => {
     try {
       const st = refreshActivationState();
+      const license = getLicenseValidationState();
       const installId = String(st.installId || getDbSetting("install.id") || "").trim();
       const expiresAt = Number(st.licenseExpiresAt || 0) || null;
       const daysRemaining = expiresAt ? Math.floor((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)) : null;
@@ -3310,12 +3818,88 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
         licenseIssuedAt: Number(st.licenseIssuedAt || 0) || null,
         licenseExpiresAt: expiresAt,
         daysRemaining,
+        validationStatus: license.validationStatus,
+        validationSource: license.validationSource || null,
+        lastValidatedAt: license.lastValidatedAt,
+        lastValidationAttemptAt: license.lastValidationAttemptAt,
+        validationError: license.validationError || null,
+        graceUntil: license.graceUntil,
+        providerAccountId: license.providerAccountId || null,
+        providerOrgId: license.providerOrgId || null,
+        providerLicenseId: license.providerLicenseId || null,
+        licensePlanCode: license.licensePlanCode || null,
+        licenseKeyConfigured: !!license.licenseKey,
+        licenseKeyMasked: maskLicenseKey(license.licenseKey),
+        providerValidateUrl: getStoredLicenseValidateUrl() || null,
+        licenseFeatures: license.licenseFeatures,
         branches: listAllBranches(),
         activationPublicKeyLoaded: !!getActivationVerifier(baseDir),
         activationEnforced: isActivationEnforced(),
       });
     } catch (e) {
       console.error("[provider/install-info]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/provider/license/config", rateLimitAuthLogin, express.json(), (req, res) => {
+    try {
+      const licenseKey = String(req.body?.licenseKey || "").trim();
+      const providerValidateUrl = String(req.body?.providerValidateUrl || "").trim();
+      const now = Date.now();
+      db.prepare(
+        `UPDATE installation_state
+         SET licenseKey=?, updatedAt=?
+         WHERE id=1`
+      ).run(licenseKey, now);
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, "providerValidateUrl")) {
+        setStoredLicenseValidateUrl(providerValidateUrl);
+      }
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "PROVIDER_LICENSE_CONFIG_SAVED",
+        JSON.stringify({
+          actor: actorFromReq(req),
+          licenseKeyMasked: maskLicenseKey(licenseKey),
+          providerValidateUrl,
+        }),
+        now
+      );
+      return res.json({
+        ok: true,
+        licenseKeyConfigured: !!licenseKey,
+        licenseKeyMasked: maskLicenseKey(licenseKey),
+        providerValidateUrl: getStoredLicenseValidateUrl() || null,
+      });
+    } catch (e) {
+      console.error("[provider/license/config]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/provider/license/validate", rateLimitAuthLogin, express.json(), async (req, res) => {
+    try {
+      const result = await validateLicenseWithProvider({
+        licenseKey: req.body?.licenseKey,
+        validateUrl: req.body?.providerValidateUrl,
+        requestType: "VALIDATE",
+      });
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "PROVIDER_LICENSE_VALIDATED",
+        JSON.stringify({
+          actor: actorFromReq(req),
+          licenseKeyMasked: maskLicenseKey(String(req.body?.licenseKey || getActivationState().licenseKey || "")),
+          providerUrl: result.providerUrl,
+          status: result.status,
+          branchCount: Array.isArray(result.branches) ? result.branches.length : 0,
+        }),
+        Date.now()
+      );
+      return res.json(result);
+    } catch (e) {
+      if (e && typeof e.http === "number") {
+        return res.status(e.http).json({ ok: false, error: e.message || "License validation failed." });
+      }
+      console.error("[provider/license/validate]", e);
       return res.status(500).json({ ok: false, error: "Server error." });
     }
   });
