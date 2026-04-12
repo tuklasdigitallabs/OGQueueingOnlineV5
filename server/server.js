@@ -1366,9 +1366,9 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   if (!configuredSessionSecret) {
     console.warn("[SECURITY] SESSION_SECRET not set. Using ephemeral secret for this process.");
   }
-  app.use(
-    session({
-      name: "qsys.sid",
+  function createScopedSessionMiddleware(name) {
+    return session({
+      name,
       secret: sessionSecret,
       store: sessionStore,
       resave: false,
@@ -1377,10 +1377,53 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
         httpOnly: true,
         sameSite: "lax",
         secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
-        maxAge: 1000 * 60 * 60 * 12, // 12h
+        maxAge: 1000 * 60 * 60 * 12,
       },
-    })
-  );
+    });
+  }
+
+  const staffSessionMiddleware = createScopedSessionMiddleware("qsys_staff.sid");
+  const adminSessionMiddleware = createScopedSessionMiddleware("qsys_admin.sid");
+  const superAdminSessionMiddleware = createScopedSessionMiddleware("qsys_super.sid");
+  const legacySessionMiddleware = createScopedSessionMiddleware("qsys_legacy.sid");
+
+  function detectSessionScope(req) {
+    const rawUrl = String(req?.originalUrl || req?.url || "");
+    const p = stripBasePathFromUrl(rawUrl);
+    if (
+      p === "/super-admin" ||
+      p === "/super-admin-login" ||
+      p === "/super-admin-recover" ||
+      p === "/internal-tools" ||
+      p.startsWith("/api/super-admin/")
+    ) return "super-admin";
+    if (
+      p === "/admin" ||
+      p === "/admin-login" ||
+      /^\/b\/[^/]+\/admin(?:\/|$)/i.test(p) ||
+      /^\/b\/[^/]+\/admin-login(?:\/|$)/i.test(p) ||
+      p.startsWith("/api/admin/")
+    ) return "admin";
+    if (
+      p === "/staff" ||
+      p === "/staff-login" ||
+      /^\/b\/[^/]+\/staff(?:\/|$)/i.test(p) ||
+      /^\/b\/[^/]+\/staff-login(?:\/|$)/i.test(p) ||
+      p.startsWith("/api/staff/")
+    ) return "staff";
+    if (p.startsWith("/api/auth/")) return "legacy";
+    return "public";
+  }
+
+  app.use((req, res, next) => {
+    const scope = detectSessionScope(req);
+    req.qsysSessionScope = scope;
+    if (scope === "staff") return staffSessionMiddleware(req, res, next);
+    if (scope === "admin") return adminSessionMiddleware(req, res, next);
+    if (scope === "super-admin") return superAdminSessionMiddleware(req, res, next);
+    if (scope === "legacy") return legacySessionMiddleware(req, res, next);
+    return next();
+  });
 
   app.use(express.json({ limit: "256kb" }));
   app.use(express.urlencoded({ extended: true, limit: "256kb" }));
@@ -2546,10 +2589,16 @@ app.get("/static/js/:file", (req, res) => {
     if (scope === "super-admin") return req.session.superAdminUser || null;
     return req.session.user || null;
   }
-  function clearSessionCookie(res) {
+  function sessionCookieNameForScope(scope) {
+    if (scope === "staff") return "qsys_staff.sid";
+    if (scope === "admin") return "qsys_admin.sid";
+    if (scope === "super-admin") return "qsys_super.sid";
+    return "qsys_legacy.sid";
+  }
+  function clearSessionCookie(res, scope = "") {
     try {
       if (!res || typeof res.clearCookie !== "function") return;
-      res.clearCookie("qsys.sid", {
+      res.clearCookie(sessionCookieNameForScope(scope), {
         httpOnly: true,
         sameSite: "lax",
         secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
@@ -2561,9 +2610,10 @@ app.get("/static/js/:file", (req, res) => {
     return !!(session?.adminUser || session?.staffUser || session?.superAdminUser || session?.user);
   }
   function destroySessionAndRespond(req, res, { preserveRemainingUsers = false } = {}) {
+    const scope = String(req?.qsysSessionScope || "").trim();
     if (!req?.session || typeof req.session.destroy !== "function") {
       if (!preserveRemainingUsers || !hasAnyScopedSessionUser(req?.session)) {
-        clearSessionCookie(res);
+        clearSessionCookie(res, scope);
       }
       return res.json({ ok: true });
     }
@@ -2571,7 +2621,7 @@ app.get("/static/js/:file", (req, res) => {
       return req.session.save(() => res.json({ ok: true }));
     }
     return req.session.destroy(() => {
-      clearSessionCookie(res);
+      clearSessionCookie(res, scope);
       res.json({ ok: true });
     });
   }
