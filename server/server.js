@@ -2539,6 +2539,13 @@ app.get("/static/js/:file", (req, res) => {
     else if (scope === "super-admin") delete req.session.superAdminUser;
     else delete req.session.user;
   }
+  function getScopedSessionUser(req, scope) {
+    if (!req?.session) return null;
+    if (scope === "admin") return req.session.adminUser || null;
+    if (scope === "staff") return req.session.staffUser || null;
+    if (scope === "super-admin") return req.session.superAdminUser || null;
+    return req.session.user || null;
+  }
   function clearSessionCookie(res) {
     try {
       if (!res || typeof res.clearCookie !== "function") return;
@@ -2703,7 +2710,7 @@ function requireStaffApi(req, res, next) {
   }
 
   function requireSuperAdminApi(req, res, next) {
-    const u = getSessionUser(req);
+    const u = getScopedSessionUser(req, "super-admin");
     if (!u) return res.status(401).json({ ok: false, error: "Not authenticated" });
     if (!isSuperAdmin(u)) return res.status(403).json({ ok: false, error: "Super admin only" });
     next();
@@ -2728,17 +2735,17 @@ function requirePermPage(permKey) {
 }
 
 function requireStaffPage(req, res, next) {
-  const u = getSessionUser(req);
+  const u = getScopedSessionUser(req, "staff");
   if (!u) return res.redirect(buildStaffLoginPath(req?.params?.branchCode));
   next();
 }
 
   function requireAdminPage(req, res, next) {
-  const u = getSessionUser(req);
+  const u = getScopedSessionUser(req, "admin");
   if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (!["ADMIN", "SUPER_ADMIN"].includes(roleId)) return res.redirect(buildStaffEntryPath(req?.params?.branchCode)); // or res.status(403).send("Forbidden");
+  if (roleId !== "ADMIN") return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
   next();
 }
 
@@ -2754,14 +2761,14 @@ function requireOperationalBranch(req, res, next) {
 }
 
 function requireSuperAdminPage(req, res, next) {
-  const u = getSessionUser(req);
+  const u = getScopedSessionUser(req, "super-admin");
   if (!u) return res.redirect(pathWithBase("/super-admin-login"));
   if (!isSuperAdmin(u)) return res.status(403).send("Forbidden");
   next();
 }
 
 function getCanonicalBranchCodeForScope(req, scope) {
-  const u = ensureSessionBranchContext(getSessionUser(req));
+  const u = ensureSessionBranchContext(getScopedSessionUser(req, scope));
   if (!u?.userId) return "";
   if (scope === "admin") setSessionUser(req, "admin", u);
   if (scope === "staff") setSessionUser(req, "staff", u);
@@ -3041,7 +3048,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
   // "me" endpoints are separated to prevent cross-app session bleed.
   app.get("/api/staff/auth/me", requireAuth, (req, res) => {
-    const u = ensureSessionBranchContext(getSessionUser(req));
+    const rawUser = getScopedSessionUser(req, "staff");
+    if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "staff", u);
     const allowedBranches = listAccessibleBranchesForUser(u?.userId, u?.roleId);
     if (!allowedBranches.length) {
@@ -3053,7 +3062,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   });
 
   app.get("/api/admin/auth/me", requireAuth, (req, res) => {
-    const u = ensureSessionBranchContext(getSessionUser(req));
+    const rawUser = getScopedSessionUser(req, "admin");
+    if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "admin", u);
     const allowedBranches = listAccessibleBranchesForUser(u?.userId, u?.roleId);
     if (!allowedBranches.length) {
@@ -3075,7 +3086,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   });
 
   app.get("/api/super-admin/auth/me", requireSuperAdminApi, (req, res) => {
-    const u = getSessionUser(req);
+    const u = getScopedSessionUser(req, "super-admin");
     res.json({ ok: true, user: u, branch: getRequestBranch(req) });
   });
 
@@ -3132,7 +3143,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   });
 
   app.get("/api/staff/branches", requireAuth, (req, res) => {
-    const u = ensureSessionBranchContext(getSessionUser(req));
+    const rawUser = getScopedSessionUser(req, "staff");
+    if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "staff", u);
     return res.json({
       ok: true,
@@ -3142,7 +3155,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   });
 
   app.post("/api/staff/select-branch", requireAuth, express.json(), (req, res) => {
-    const u = ensureSessionBranchContext(getSessionUser(req));
+    const rawUser = getScopedSessionUser(req, "staff");
+    if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    const u = ensureSessionBranchContext(rawUser);
     const branchId = String(req.body?.branchId || "").trim();
     const allowed = new Set((u?.allowedBranchIds || []).map((id) => String(id || "").trim()));
     if (!branchId || !allowed.has(branchId)) {
@@ -3170,7 +3185,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   });
 
   app.get("/api/admin/branches", requireAuth, (req, res) => {
-    const u = ensureSessionBranchContext(getSessionUser(req));
+    const rawUser = getScopedSessionUser(req, "admin");
+    if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "admin", u);
     return res.json({
       ok: true,
