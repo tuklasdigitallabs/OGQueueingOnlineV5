@@ -7369,18 +7369,34 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     return parts
       .map((part) => {
         const n = Number(part);
-        if (!Number.isFinite(n) || n <= 0) return "";
-        try {
-          return new Date(n).toLocaleTimeString("en-PH", {
-            timeZone: "Asia/Manila",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: true,
-          });
-        } catch {
-          return "";
+        if (Number.isFinite(n) && n > 0) {
+          try {
+            return new Date(n).toLocaleTimeString("en-PH", {
+              timeZone: "Asia/Manila",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            });
+          } catch {
+            return "";
+          }
         }
+        const parsed = Date.parse(part);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          try {
+            return new Date(parsed).toLocaleTimeString("en-PH", {
+              timeZone: "Asia/Manila",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            });
+          } catch {
+            return "";
+          }
+        }
+        return part;
       })
       .filter(Boolean)
       .join(" | ");
@@ -7595,7 +7611,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
           createdAtLocalHuman: fmtTs(r.createdAtLocal),
           calledAtHuman: fmtTs(r.calledAt),
           timesCalled: timesCalled(r),
-          nextCalls: formatReCallTimes(r.next_calls),
+          nextCalls: r.calledAt ? formatReCallTimes(r.next_calls) : "",
           seatedAtHuman: fmtTs(r.seatedAt),
           skippedAtHuman: fmtTs(r.skippedAt),
           calledNote: r.calledNote ?? "",
@@ -7704,7 +7720,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
         fmtTs(r.createdAtLocal),
         fmtTs(r.calledAt),
         timesCalled(r),
-        formatReCallTimes(r.next_calls),
+        r.calledAt ? formatReCallTimes(r.next_calls) : "",
         fmtTs(r.seatedAt),
         fmtTs(r.skippedAt),
         r.calledNote ?? "",
@@ -8861,7 +8877,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       fmtTs(r.createdAtLocal),
       fmtTs(r.calledAt),
       timesCalled(r),
-      formatReCallTimes(r.next_calls),
+      r.calledAt ? formatReCallTimes(r.next_calls) : "",
       fmtTs(r.seatedAt),
       fmtTs(r.skippedAt),
       r.calledNote || "",
@@ -10048,23 +10064,15 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       if (!called) return res.json({ ok: false, error: "No CALLED ticket to clear." });
 
-      // Preserve call history: move current calledAt into next_calls before clearing.
-      const currentCalledAt = Number(called.calledAt || 0);
-      const prevNextCalls = String(called.next_calls || "").trim();
-      const parts = prevNextCalls ? prevNextCalls.split(",").map((s) => s.trim()).filter(Boolean) : [];
-      if (Number.isFinite(currentCalledAt) && currentCalledAt > 0) {
-        parts.push(String(currentCalledAt));
-      }
-      const mergedNextCalls = parts.join(",");
       const now = Date.now();
 
       db.prepare(
         `
       UPDATE queue_items
-      SET status='WAITING', calledAt=NULL, next_calls=?, calledNote=NULL
+      SET status='WAITING', calledNote=NULL
       WHERE id=?
     `
-      ).run(mergedNextCalls, called.id);
+      ).run(called.id);
 
       const undoExpiresAt = now + 30 * 1000;
       setStaffUndo(req, {
