@@ -25,6 +25,10 @@ git pull --ff-only origin main
 bash scripts/deploy_qsys_vps.sh
 curl -s https://onegourmetph.com/qsys/api/health
 
+GitHub Actions CI/CD:
+- workflow files: `.github/workflows/ci.yml` and `.github/workflows/deploy-vps.yml`
+- setup guide: `CI_CD_VPS_SETUP.md`
+
 Important 2026-04-07 updates:
 - Business date auto-rollover now advances stale persisted dates on request.
 - Guest ticket page shows the current waiting position within the ticket's pax group.

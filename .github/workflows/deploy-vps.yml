@@ -1,44 +1,90 @@
 name: Deploy VPS
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref to deploy
+        required: false
+        default: main
+      reload_nginx:
+        description: Reload the VPS Nginx container after deploy
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
 
 concurrency:
-  group: deploy-vps-main
+  group: deploy-vps
   cancel-in-progress: false
 
 jobs:
   deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    env:
+      DEPLOY_GIT_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.event.workflow_run.head_branch }}
+      DEPLOY_RELOAD_NGINX: ${{ github.event_name == 'workflow_dispatch' && (inputs.reload_nginx == 'true' && '1' || '0') || '1' }}
 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - name: Validate deploy secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
 
-      - name: Verify deployment image builds
-        run: docker build -t qsys-deploy-check:${{ github.sha }} -f Dockerfile.qsys .
-
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      - name: Install SSH key
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
 
       - name: Trust VPS host key
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "${VPS_PORT:-22}" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        run: ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
-      - name: Deploy application on VPS
+      - name: Run VPS deploy
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR || '/opt/og-qsys/app' }}
+          VPS_ENV_FILE: ${{ secrets.VPS_ENV_FILE || '/opt/og-qsys/.env.qsys' }}
+          VPS_DATA_DIR: ${{ secrets.VPS_DATA_DIR || '/opt/og-qsys/data' }}
+          VPS_DOCKER_NETWORK: ${{ secrets.VPS_DOCKER_NETWORK || 'og-qsys-net' }}
+          VPS_IMAGE_NAME: ${{ secrets.VPS_IMAGE_NAME || 'og-qsys-app:latest' }}
+          VPS_CONTAINER_NAME: ${{ secrets.VPS_CONTAINER_NAME || 'og-qsys-app' }}
+          VPS_HEALTH_URL: ${{ secrets.VPS_HEALTH_URL || 'https://onegourmetph.com/qsys/api/health' }}
+          VPS_NGINX_CONTAINER: ${{ secrets.VPS_NGINX_CONTAINER || 'og_nginx' }}
         run: |
-          ssh -p "${VPS_PORT:-22}" "${VPS_USER}@${VPS_HOST}" "cd '${APP_DIR:-/opt/og-qsys/app}' && bash scripts/deploy_qsys_vps.sh"
+          ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "APP_DIR='$VPS_APP_DIR' \
+            ENV_FILE='$VPS_ENV_FILE' \
+            DATA_DIR='$VPS_DATA_DIR' \
+            DOCKER_NETWORK='$VPS_DOCKER_NETWORK' \
+            IMAGE_NAME='$VPS_IMAGE_NAME' \
+            CONTAINER_NAME='$VPS_CONTAINER_NAME' \
+            HEALTH_URL='$VPS_HEALTH_URL' \
+            NGINX_CONTAINER='$VPS_NGINX_CONTAINER' \
+            GIT_REF='$DEPLOY_GIT_REF' \
+            RELOAD_NGINX='$DEPLOY_RELOAD_NGINX' \
+            bash '$VPS_APP_DIR/scripts/deploy_qsys_vps.sh'"
