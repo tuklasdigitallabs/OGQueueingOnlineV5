@@ -664,6 +664,11 @@ margin:0;
     gap:8px;
     flex-wrap:wrap;
     align-items:center;
+    justify-content:flex-start;
+  }
+  .usersHeader{
+    display:grid;
+    gap:10px;
   }
   th{ color: rgba(60,40,20,.88); font-weight: 950; }
   td{ color: rgba(60,40,20,.86); }
@@ -957,42 +962,21 @@ tr.is-collapsed + tr.subrow + tr.subrow{
           <div class="grid">
             <div class="card" style="grid-column: span 12;">
               <div class="setup-pills" id="setupPills">
-                <button type="button" class="setup-pill-btn active" data-setup-pane="branch">Branch Setup</button>
+                <button type="button" class="setup-pill-btn active" data-setup-pane="queue">Queue Settings</button>
                 <button type="button" class="setup-pill-btn" data-setup-pane="display">Display Setup</button>
                 <button type="button" class="setup-pill-btn" data-setup-pane="auth">Authentications</button>
-                <button type="button" class="setup-pill-btn" data-setup-pane="qr">QR Setup</button>
               </div>
 
-              <div class="setup-pane" id="setup-pane-branch">
-                <div class="two">
-                  <div>
-                    <label class="muted2">Branch Name</label>
-                    <input id="branchName" placeholder="e.g., Yakiniku Like - MOA" />
-                  </div>
-                  <div>
-                    <label class="muted2">Branch Code (read-only)</label>
-                    <input id="branchCode" placeholder="e.g., MOA" disabled />
-                    <div class="help">
-                      Branch Code is tied to ticket partitioning. Changing it can "lose" tickets (they remain in DB under the old code).
-                    </div>
-                    <div class="row" style="margin-top:10px;">
-                      <button class="btn small danger" id="btnUnlockBranchCode">Change Branch Code (Admin Only)</button>
-                    </div>
-                  </div>
+              <div class="setup-pane" id="setup-pane-queue">
+                <div class="help" style="margin-bottom:12px;">
+                  Branch records such as branch code, branch name, timezone, guest QR, and activation are now managed from the Branches tab.
                 </div>
 
                 <div class="two" style="margin-top:10px;">
-                  <div>
-                    <label class="muted2">Timezone</label>
-                    <input id="timezone" value="Asia/Manila" />
-                  </div>
                   <div>
                     <label class="muted2">Max Pax</label>
                     <input id="maxPax" type="number" value="50" />
                   </div>
-                </div>
-
-                <div class="two" style="margin-top:10px;">
                   <div>
                     <label class="muted2">Auto Close Day (Midnight Manila)</label>
                     <select id="autoCloseDay">
@@ -1000,12 +984,22 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <option value="false">OFF</option>
                     </select>
                   </div>
+                </div>
+
+                <div class="two" style="margin-top:10px;">
                   <div>
                     <label class="muted2">Allow Override Call (global)</label>
                     <select id="allowOverride">
                       <option value="true">ON</option>
                       <option value="false">OFF</option>
                     </select>
+                  </div>
+                  <div>
+                    <label class="muted2">Current Branch</label>
+                    <input id="setupBranchLabel" disabled placeholder="Loading branch..." />
+                    <div class="help">
+                      This section changes queue behavior for the branch currently selected in Admin.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1019,7 +1013,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <option value="true">Video Mode</option>
                     </select>
                     <div class="muted2" style="margin-top:6px;">
-                      Saved per branch and used by the branch display screen.
+                      Saved per branch and shared with the local Display Agent for this branch.
                     </div>
                   </div>
 
@@ -1030,9 +1024,12 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <option value="portrait">Portrait</option>
                     </select>
                     <div class="muted2" style="margin-top:6px;">
-                      Saved per branch and used by the branch display screen.
+                      Saved per branch and shared with the local Display Agent for this branch.
                     </div>
                   </div>
+                </div>
+                <div class="help" style="margin-top:12px;">
+                  Changes saved here update the branch display settings in the database. The local Display Agent reads and writes the same shared display settings, while device-only settings like monitor choice stay on the local machine.
                 </div>
               </div>
 
@@ -1093,100 +1090,9 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 </div>
               </div>
 
-              <div class="setup-pane hidden" id="setup-pane-qr">
-                <div class="qr-setup-shell">
-                  <div class="qr-setup-top">
-                    <div class="qr-setup-kicker">Wi-Fi + Queue QR Configuration</div>
-                  </div>
-                  <div class="qr-setup-global-actions">
-                    <button class="btn" id="btnDownloadWifiQr">Download Wi-Fi QR</button>
-                    <button class="btn" id="btnDownloadQueueQr">Download Queue QR</button>
-                    <button class="btn" id="btnPrintQrPair">Print (Wi-Fi + Queue)</button>
-                  </div>
-
-                  <div class="qr-setup-grid">
-                    <section class="qr-card">
-                      <h3>Wi-Fi QR</h3>
-                      <div class="qr-card-sub">Configure guest Wi-Fi payload and generate a scannable QR.</div>
-
-                      <div class="qr-form">
-                        <div class="qr-form-row">
-                          <div>
-                            <label class="muted2">Security</label>
-                            <select id="wifiSec">
-                              <option value="WPA">WPA/WPA2/WPA3</option>
-                              <option value="WEP">WEP</option>
-                              <option value="nopass">Open (No password)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label class="muted2">Hidden SSID</label>
-                            <div class="qr-radio-group">
-                              <label class="qr-radio-chip"><input type="radio" name="wifiHidden" id="wifiHiddenNo" value="false" checked />No</label>
-                              <label class="qr-radio-chip"><input type="radio" name="wifiHidden" id="wifiHiddenYes" value="true" />Yes</label>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div class="qr-form-row">
-                          <div>
-                            <label class="muted2">SSID (Network Name)</label>
-                            <input id="wifiSsid" placeholder="e.g. Restaurant_WiFi" />
-                          </div>
-                          <div>
-                            <label class="muted2">Password</label>
-                            <input id="wifiPass" placeholder="e.g. password123" />
-                          </div>
-                        </div>
-
-                        <div class="qr-actions">
-                          <button class="btn primary" id="btnSaveWifi">Save Wi-Fi Settings</button>
-                        </div>
-
-                        <div>
-                          <label class="muted2">Wi-Fi QR Source</label>
-                          <input id="wifiQrUrlText" disabled />
-                        </div>
-                      </div>
-
-                      <div class="qr-preview">
-                        <div class="qr-preview-box">
-                          <img id="wifiQrPreview" alt="Wi-Fi QR" />
-                        </div>
-                        <div class="qr-note" id="wifiQrHint">Loading Wi-Fi QR...</div>
-                      </div>
-                    </section>
-
-                    <section class="qr-card">
-                      <h3>Queue QR</h3>
-                      <div class="qr-card-sub">Use this QR to open the hosted guest queue page for this branch.</div>
-
-                      <div class="qr-form">
-                        <div>
-                          <label class="muted2">Queue QR Source</label>
-                          <input id="queueQrUrlText" disabled />
-                          <div class="qr-note">
-                            Reprint this QR only if the public guest URL for the branch changes.
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="qr-preview">
-                        <div class="qr-preview-box">
-                          <img id="queueQrPreview" alt="Queue QR" />
-                        </div>
-                        <div class="qr-note" id="queueQrHint">Loading Queue QR...</div>
-                      </div>
-                    </section>
-                  </div>
-                </div>
-              </div>
-
               <div id="setupSaveRow" style="margin-top:12px;">
                 <button class="btn primary" id="btnSaveSetup">Save Setup</button>
               </div>
-
-              <!-- QR Preview + Actions -->
             </div>
           </div>
         </section>
@@ -1364,7 +1270,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         <section id="page-users" class="hidden">
           <div class="grid">
             <div class="card" style="grid-column: span 7;">
-              <div class="row" style="justify-content: space-between; align-items:center;">
+              <div class="usersHeader">
                 <div>
                   <h3 style="margin:0;">Users</h3>
                   <div class="muted2" id="usersSelectionHint" style="margin-top:6px;">Select a user to edit, enable or disable, reset PIN, or delete.</div>
@@ -2125,7 +2031,7 @@ async function jpost(url, body) {
       let REPORT_INSIGHTS_CACHE = null;
       let REPORT_SCHEDULE_CACHE = null;
       let REPORT_ACTIVE_PRESET = "";
-      let SETUP_ACTIVE_PANE = "branch";
+      let SETUP_ACTIVE_PANE = "queue";
       let CURRENT_PAGE = "dashboard";
       let META_BRANCH_LABEL = "-";
       let META_BUSINESS_DATE_LABEL = "";
@@ -2331,8 +2237,6 @@ async function jpost(url, body) {
       function applyInternalAdminVisibility() {
         const authBtn = document.querySelector('[data-setup-pane="auth"]');
         if (authBtn) authBtn.style.display = canUseInternal("integrations") ? "" : "none";
-        const branchUnlock = $("btnUnlockBranchCode");
-        if (branchUnlock) branchUnlock.style.display = canUseInternal("branch") ? "" : "none";
         updateUserBranchPickerMode();
       }
 
@@ -2601,8 +2505,7 @@ async function jpost(url, body) {
       async function refreshCurrentPage() {
         await loadBasic();
         if (CURRENT_PAGE === "setup") {
-          if (SETUP_ACTIVE_PANE === "qr") await loadQrSetup();
-          else await loadSetup();
+          await loadSetup();
           return;
         }
         if (CURRENT_PAGE === "media") return loadMediaManager();
@@ -2633,22 +2536,19 @@ async function jpost(url, body) {
       }
 
       function setActiveSetupPane(pane) {
-        let target = String(pane || "branch");
+        let target = String(pane || "queue");
         if (target === "auth" && !canUseInternal("integrations")) {
-          target = "branch";
+          target = "queue";
         }
         SETUP_ACTIVE_PANE = target;
         document.querySelectorAll("[data-setup-pane]").forEach(btn => {
           btn.classList.toggle("active", btn.getAttribute("data-setup-pane") === target);
         });
-        ["branch", "display", "auth", "qr"].forEach(key => {
+        ["queue", "display", "auth"].forEach(key => {
           const paneEl = $("setup-pane-" + key);
           if (!paneEl) return;
           paneEl.classList.toggle("hidden", key !== target);
         });
-        const saveRow = $("setupSaveRow");
-        if (saveRow) saveRow.classList.toggle("hidden", target === "qr");
-        if (target === "qr") loadQrSetup();
       }
 
       // ---------- dashboard renderer ----------
@@ -2856,28 +2756,6 @@ function getGuestEntryUrl(branchCode) {
   return window.appAbsoluteUrl(`/b/${encodeURIComponent(code)}/guest`);
 }
 
-function refreshQrPreview() {
-  const code = String(BRANCH_CACHE?.branchCode || $("branchCode")?.value || "").trim();
-  const img = $("qrPreview");
-  const hint = $("qrHint");
-  const txt = $("qrUrlText");
-
-  if (!img || !hint || !txt) return;
-
-  if (!code) {
-    img.removeAttribute("src");
-    txt.value = "";
-    hint.textContent = "Branch Code not loaded yet. Open Setup tab first.";
-    return;
-  }
-
-  const url = getQrPngUrl(code);
-  img.src = url;
-  txt.value = getGuestEntryUrl(code);
-
-  hint.textContent = "Tip: If on-screen scan fails, use Print QR for a larger code.";
-}
-
 function openPrintWindowForQr(imgSrc, branchName, branchCode) {
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
@@ -2934,180 +2812,6 @@ function openPrintWindowForQr(imgSrc, branchName, branchCode) {
   w.document.close();
 }
 
-/* ---------- QR Setup (Wi-Fi + Queue) ---------- */
-
-function getWifiQrPngUrl() {
-  return window.appAbsoluteUrl(`/api/admin/wifi-qrcode.png?t=${Date.now()}`);
-}
-
-function refreshWifiQrPreview() {
-  const img = $("wifiQrPreview");
-  const hint = $("wifiQrHint");
-  const txt = $("wifiQrUrlText");
-  if (!img || !hint || !txt) return;
-
-  const ssid = String($("wifiSsid")?.value || "").trim();
-  if (!ssid) {
-    img.removeAttribute("src");
-    txt.value = "";
-    hint.textContent = "Enter SSID to generate Wi-Fi QR.";
-    return;
-  }
-
-  const url = getWifiQrPngUrl();
-  img.src = url;
-  txt.value = url;
-  hint.textContent = "Scan to connect to Wi-Fi. (iPhone behavior may vary by iOS.)";
-}
-
-function refreshQueueQrPreview2() {
-  const img = $("queueQrPreview");
-  const hint = $("queueQrHint");
-  const txt = $("queueQrUrlText");
-  if (!img || !hint || !txt) return;
-
-  const code = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
-  if (!code) {
-    img.removeAttribute("src");
-    txt.value = "";
-    hint.textContent = "Branch Code not loaded yet.";
-    return;
-  }
-  const guestUrl = window.appAbsoluteUrl(`/b/${encodeURIComponent(code)}/guest`);
-  const qrUrl = window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`);
-  img.src = qrUrl;
-  txt.value = guestUrl;
-  hint.textContent = `Scan to open the ${code} guest queue page.`;
-}
-
-async function loadQrSetup() {
-  try {
-    // Ensure branch + settings caches exist
-    if (!BRANCH_CACHE) {
-      const b = await jget("/api/admin/branch");
-      if (b.ok) BRANCH_CACHE = b.branch || null;
-    }
-    const s = await jget("/api/admin/settings");
-    if (s.ok) SETTINGS_CACHE = s.settings || {};
-
-    // Populate Wi-Fi fields
-    const sec = String(SETTINGS_CACHE?.wifi_security || "WPA");
-    const ssid = String(SETTINGS_CACHE?.wifi_ssid || "");
-    const pass = String(SETTINGS_CACHE?.wifi_password || "");
-    const hidden = String(SETTINGS_CACHE?.wifi_hidden || "false").toLowerCase() === "true";
-
-    if ($("wifiSec")) $("wifiSec").value = ["WPA","WEP","nopass"].includes(sec) ? sec : "WPA";
-    if ($("wifiSsid")) $("wifiSsid").value = ssid;
-    if ($("wifiPass")) $("wifiPass").value = pass;
-    if ($("wifiHiddenYes")) $("wifiHiddenYes").checked = hidden;
-    if ($("wifiHiddenNo")) $("wifiHiddenNo").checked = !hidden;
-
-    refreshWifiQrPreview();
-    refreshQueueQrPreview2();
-  } catch (e) {
-    console.error("[qrsetup]", e);
-    toast("QR Setup", "Failed to load QR setup.", "err");
-  }
-}
-
-async function saveWifiSettings() {
-  const sec = String($("wifiSec")?.value || "WPA");
-  const ssid = String($("wifiSsid")?.value || "").trim();
-  const pass = String($("wifiPass")?.value || "");
-  const hidden = (document.querySelector('input[name="wifiHidden"]:checked')?.value || "false");
-
-  if (!ssid) {
-    toast("Wi-Fi", "SSID is required.", "warn");
-    return;
-  }
-  if (sec !== "nopass" && !pass) {
-    toast("Wi-Fi", "Password is required for WPA/WEP.", "warn");
-    return;
-  }
-
-  const payload = {
-    wifi_security: sec,
-    wifi_ssid: ssid,
-    wifi_password: sec === "nopass" ? "" : pass,
-    wifi_hidden: String(hidden),
-  };
-
-  const r = await jpost("/api/admin/settings", payload);
-  if (!r.ok) {
-    toast("Wi-Fi", r.error || "Failed to save.", "err");
-    return;
-  }
-  SETTINGS_CACHE = { ...(SETTINGS_CACHE || {}), ...payload };
-  toast("Wi-Fi", "Saved.", "ok");
-  refreshWifiQrPreview();
-}
-
-function openPrintWindowForQrPair(wifiImgSrc, queueImgSrc, ssid) {
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    toast("Print", "Popup blocked. Allow popups for this site.", "err");
-    return;
-  }
-
-  const safeSsid = escapeHtml(String(ssid || "").trim());
-
-  const html =
-    "<!doctype html>" +
-    "<html><head>" +
-    "<meta charset='utf-8' />" +
-    "<title>QSys QR Print</title>" +
-    "<meta name='viewport' content='width=device-width, initial-scale=1' />" +
-    "<style>" +
-      "html,body{height:100%;}" +
-      "body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;color:#000;}" +
-      "*{box-sizing:border-box;}" +
-      ".wrap{width:100%;max-width:none;padding:6mm;height:100%;}" +
-      ".grid{display:grid;grid-template-columns:1fr;grid-template-rows:1fr 1fr;gap:6mm;height:100%;}" +
-      ".panel{border:1.5px solid #000;border-radius:12px;padding:8px;margin:0;display:grid;grid-template-rows:auto auto 1fr auto;min-height:0;}" +
-      ".title{font-size:14px;font-weight:800;margin:0 0 4px 0;line-height:1.2;}" +
-      ".sub{font-size:12px;margin:0 0 6px 0;line-height:1.25;}" +
-      ".qr{display:flex;justify-content:center;align-items:center;background:#fff;padding:6px;border:1px solid #000;border-radius:10px;min-height:0;}" +
-      "img{max-width:100%;max-height:100%;width:auto;height:auto;aspect-ratio:1/1;object-fit:contain;image-rendering:pixelated;}" +
-      ".steps{font-size:12px;margin-top:6px;line-height:1.3;}" +
-      ".steps b{display:inline-block;width:16px;}" +
-      "@page{size:A4 portrait;margin:8mm;}" +
-      "@media screen and (max-width:900px){.wrap{height:auto;}.grid{height:auto;grid-template-rows:auto auto;} .panel{min-height:340px;} img{max-width:70vw;max-height:70vw;}}" +
-      "@media print{body{margin:0;}.wrap{padding:0;height:100%;}.grid{height:100%;}.panel{break-inside:avoid-page;page-break-inside:avoid;}}" +
-    "</style>" +
-    "</head><body>" +
-    "<div class='wrap'>" +
-      "<div class='grid'>" +
-
-      "<div class='panel'>" +
-        "<div class='title'>STEP 1 - CONNECT TO WI-FI</div>" +
-        "<div class='sub'>Wi-Fi: <b>" + safeSsid + "</b></div>" +
-        "<div class='qr'><img src='" + wifiImgSrc + "' alt='Wi-Fi QR' /></div>" +
-        "<div class='steps'>" +
-          "<div><b>1)</b> Scan this QR</div>" +
-          "<div><b>2)</b> Tap &quot;Join&quot; / &quot;Connect&quot;</div>" +
-        "</div>" +
-      "</div>" +
-
-      "<div class='panel'>" +
-        "<div class='title'>STEP 2 - SCAN TO GET QUEUE NUMBER</div>" +
-        "<div class='sub'>After you are connected to Wi-Fi, scan the QR below.</div>" +
-        "<div class='qr'><img src='" + queueImgSrc + "' alt='Queue QR' /></div>" +
-        "<div class='steps'>" +
-          "<div><b>3)</b> Scan this QR</div>" +
-          "<div><b>4)</b> Enter your details to get your number</div>" +
-        "</div>" +
-      "</div>" +
-      "</div>" +
-
-      "<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>" +
-    "</div>" +
-    "</body></html>";
-
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-}
-
 function downloadImage(url, filename) {
   const a = document.createElement("a");
   a.href = url;
@@ -3117,35 +2821,17 @@ function downloadImage(url, filename) {
   a.remove();
 }
 
-function printQrNow() {
-  const code = String(BRANCH_CACHE?.branchCode || $("branchCode")?.value || "").trim();
-  if (!code) return toast("QR", "Branch Code not loaded.", "warn");
-
-  const name = String(BRANCH_CACHE?.branchName || $("branchName")?.value || "").trim();
-  const url = getQrPngUrl(code);
-
-  openPrintWindowForQr(url, name, code);
-}
-
-function downloadQrNow() {
-  const code = String(BRANCH_CACHE?.branchCode || $("branchCode")?.value || "").trim();
-  if (!code) return toast("QR", "Branch Code not loaded.", "warn");
-
-  // Force download by navigating to the PNG endpoint.
-  // If your server sets Content-Disposition attachment, it will download cleanly.
-  downloadViaUrl(getQrPngUrl(code));
-}
-
 
       async function loadSetup() {
         try {
           const b = await jget("/api/admin/branch");
           if (!b.ok) throw new Error(b.error || "branch");
           BRANCH_CACHE = b.branch || null;
-
-          $("branchName").value = BRANCH_CACHE?.branchName || "";
-          $("branchCode").value = BRANCH_CACHE?.branchCode || "";
-          $("timezone").value = BRANCH_CACHE?.timezone || "Asia/Manila";
+          if ($("setupBranchLabel")) {
+            const branchLabel = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
+            const branchName = String(BRANCH_CACHE?.branchName || "").trim();
+            $("setupBranchLabel").value = branchLabel && branchName ? `${branchLabel} - ${branchName}` : (branchName || branchLabel || "");
+          }
         } catch (e) {
           toast("Setup", "Failed to load branch config.", "err");
         }
@@ -3186,8 +2872,6 @@ function downloadQrNow() {
         } catch {
           toast("Setup", "Failed to load branch display settings.", "warn");
         }
-        if (SETUP_ACTIVE_PANE === "qr") loadQrSetup();
-        refreshQrPreview();
 
       }
 
@@ -3426,25 +3110,8 @@ async function clearGdriveOAuth() {
 
 
       async function saveSetup() {
-        const branchName = ($("branchName").value || "").trim();
-        const timezone = ($("timezone").value || "").trim() || "Asia/Manila";
-
-        if (!branchName) return toast("Setup", "Branch Name is required.", "warn");
-
-        // IMPORTANT: Your current server.js defaults branchCode to the server start variable if you omit it.
-        // So we ALWAYS send the existing stored branchCode to avoid reverting to DEV.
-        const branchCodeKeep = String(BRANCH_CACHE?.branchCode || $("branchCode").value || "").trim();
-        if (!branchCodeKeep) return toast("Setup", "Branch Code missing. Reload Setup page.", "err");
-
         const ok = confirm("Save setup changes now?");
         if (!ok) return;
-
-        try {
-          const j1 = await jpost("/api/admin/branch", { branchName, branchCode: branchCodeKeep, timezone });
-          if (!j1.ok) return toast("Setup", j1.error || "Failed saving branch.", "err");
-        } catch {
-          return toast("Setup", "Failed saving branch config.", "err");
-        }
 
         // settings
         const maxPax = Number(($("maxPax").value || "50").trim());
@@ -3481,51 +3148,6 @@ async function clearGdriveOAuth() {
         toast("Setup", "Saved successfully.", "ok");
         await loadBasic();
         await loadSetup();
-        refreshQrPreview();
-      }
-
-      async function unlockAndChangeBranchCode() {
-        // UI gate only (server must enforce admin-only in server.js later)
-        if (!BRANCH_CACHE?.branchCode) {
-          toast("Setup", "Branch config not loaded yet. Open Setup page first.", "warn");
-          return;
-        }
-
-        const warnText =
-          "Changing Branch Code can cause existing tickets to disappear from the live screens because tickets are partitioned by branchCode.\n\n" +
-          "If you proceed, you must accept that:\n" +
-          "- Existing tickets under the old code will not show under the new code\n" +
-          "- Reports will split between old/new codes\n\n" +
-          "Type CHANGE to continue:";
-        const v = prompt(warnText, "");
-        if (String(v || "").trim().toUpperCase() !== "CHANGE") {
-          toast("Setup", "Cancelled.", "warn");
-          return;
-        }
-
-        const newCode = prompt("Enter NEW Branch Code (e.g., MOA). This must match your intended partition key:", BRANCH_CACHE.branchCode);
-        const code = String(newCode || "").trim().toUpperCase();
-        if (!code) return toast("Setup", "No branch code entered.", "warn");
-
-        const confirm2 = confirm(`FINAL CONFIRM:\nChange Branch Code from ${BRANCH_CACHE.branchCode} -> ${code}\n\nProceed?`);
-        if (!confirm2) return;
-
-        try {
-          const j = await jpost("/api/admin/branch", {
-              branchName: String(BRANCH_CACHE.branchName || $("branchName").value || "").trim(),
-              branchCode: code,
-              timezone: String(BRANCH_CACHE.timezone || $("timezone").value || "Asia/Manila").trim(),
-              confirmLoss: true, // REQUIRED by server.js when changing branchCode
-            });
-
-          if (!j.ok) return toast("Setup", j.error || "Server rejected branch code change.", "err");
-
-          toast("Setup", "Branch code updated. Expect tickets to reset for the new code.", "ok");
-          await loadBasic();
-          await loadSetup();
-        } catch {
-          toast("Setup", "Request failed.", "err");
-        }
       }
 
       function resetBranchForm() {
@@ -5450,9 +5072,7 @@ function renderDailySummaryPage(){
       $("btnRunSelfTest")?.addEventListener("click", runSelfTestNow);
       $("btnRevokeToken")?.addEventListener("click", revokeLicensingToken);
       $("btnTransferRelease")?.addEventListener("click", releaseBranchTransfer);
-
       $("btnSaveSetup").addEventListener("click", saveSetup);
-      $("btnUnlockBranchCode").addEventListener("click", unlockAndChangeBranchCode);
       document.querySelectorAll("[data-setup-pane]").forEach(btn => {
         btn.addEventListener("click", () => setActiveSetupPane(btn.getAttribute("data-setup-pane")));
       });
@@ -5507,35 +5127,6 @@ function renderDailySummaryPage(){
       $("btnReportScheduleSave")?.addEventListener("click", saveReportSchedule);
       $("btnReportScheduleRun")?.addEventListener("click", runReportSchedule);
       $("btnReportSchedulePickFolder")?.addEventListener("click", pickReportScheduleFolder);
-      
-      $("btnPrintQr")?.addEventListener("click", printQrNow);
-      $("btnDownloadQr")?.addEventListener("click", downloadQrNow);
-
-      // QR Setup
-      $("btnSaveWifi")?.addEventListener("click", saveWifiSettings);
-      $("btnDownloadWifiQr")?.addEventListener("click", () => downloadImage(getWifiQrPngUrl(), "wifi-qr.png"));
-      $("btnDownloadQueueQr")?.addEventListener("click", () => {
-        const code = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
-        if (!code) return toast("QR", "Branch Code not loaded.", "warn");
-        downloadImage(window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`), `${code.toLowerCase()}-guest-qr.png`);
-      });
-      $("btnPrintQrPair")?.addEventListener("click", () => {
-        const ssid = String($("wifiSsid")?.value || "").trim();
-        const wifiUrl = getWifiQrPngUrl();
-        const code = String(BRANCH_CACHE?.branchCode || "").trim().toUpperCase();
-        if (!code) return toast("QR", "Branch Code not loaded.", "warn");
-        const queueUrl = window.appAbsoluteUrl(`/api/admin/qrcode.png?branchCode=${encodeURIComponent(code)}&t=${Date.now()}`);
-        openPrintWindowForQrPair(wifiUrl, queueUrl, ssid);
-      });
-
-      // Live preview updates on change
-      ["wifiSec","wifiSsid","wifiPass","wifiHiddenNo","wifiHiddenYes"].forEach(id => {
-        const el = $(id);
-        if (!el) return;
-        el.addEventListener("input", () => setTimeout(refreshWifiQrPreview, 50));
-        el.addEventListener("change", () => setTimeout(refreshWifiQrPreview, 50));
-      });
-
       // ---------- realtime SSE (Dashboard only) ----------
       (function () {
         try {
