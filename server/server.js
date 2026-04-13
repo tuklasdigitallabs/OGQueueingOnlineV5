@@ -6291,12 +6291,25 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     setAppSetting("ops.autoBackup.lastResult", JSON.stringify(payload || {}));
   }
 
+  function getRestoreStateFilePath() {
+    return path.join(baseDir, "restore-state.json");
+  }
+
   function getLastRestoreState() {
+    try {
+      const filePath = getRestoreStateFilePath();
+      if (fs.existsSync(filePath)) {
+        return safeParseJson(fs.readFileSync(filePath, "utf8"), null);
+      }
+    } catch {}
     return safeParseJson(getAppSetting("ops.lastRestore"), null);
   }
 
   function saveLastRestoreState(payload) {
     setAppSetting("ops.lastRestore", JSON.stringify(payload || {}));
+    try {
+      fs.writeFileSync(getRestoreStateFilePath(), JSON.stringify(payload || {}, null, 2), "utf8");
+    } catch {}
   }
 
   function getIntegrityCheckState() {
