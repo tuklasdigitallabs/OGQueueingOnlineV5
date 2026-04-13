@@ -9895,8 +9895,12 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       const name = String(req.body.name || "").trim();
       const pax = Number(req.body.pax || 1);
       const priorityType = normalizePriority(req.body.priorityType);
+      const website = String(req.body.website || "").trim();
       const requestedBranchCode = String(req.query.branchCode || "").trim().toUpperCase();
 
+      if (website) {
+        return res.status(400).json({ ok: false, error: "Invalid request." });
+      }
       if (!name) return res.status(400).json({ ok: false, error: "Name is required." });
       if (!Number.isFinite(pax) || pax < 1 || pax > 50)
         return res.status(400).json({ ok: false, error: "Pax must be 1–50." });

@@ -218,6 +218,15 @@
         line-height: 1.35;
       }
 
+      .hpTrap{
+        position: absolute;
+        left: -10000px;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+
       @media (max-width: 520px){
         .row2{ grid-template-columns: 1fr; }
         h1{ font-size: 24px; }
@@ -277,6 +286,11 @@
               </div>
             </div>
 
+            <div class="hpTrap" aria-hidden="true">
+              <label for="website">Website</label>
+              <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+
             <button id="btnSubmit" class="btn" type="button">Get Number</button>
           </form>
         </div>
@@ -298,6 +312,7 @@
       const nameEl = document.getElementById("name");
       const paxEl = document.getElementById("pax");
       const prioEl = document.getElementById("priorityType");
+      const websiteEl = document.getElementById("website");
       const branchFieldEl = document.getElementById("branchField");
       const branchDisplayEl = document.getElementById("branchDisplay");
       const branchHelpEl = document.getElementById("branchHelp");
@@ -416,7 +431,8 @@
         const payload = {
           name: nameEl.value.trim(),
           pax: Number(paxEl.value || 1),
-          priorityType: prioEl.value
+          priorityType: prioEl.value,
+          website: websiteEl ? String(websiteEl.value || "") : ""
         };
 
         if (!payload.name) return showErr("Please enter your name.");
