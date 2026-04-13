@@ -40,7 +40,7 @@
     "appId": "com.onegourmet.qsysonline",
     "productName": "QSys Online",
     "copyright": "Copyright © One Gourmet Foods Inc.",
-    "artifactName": "QSys Online Setup ${version}.${ext}",
+    "artifactName": "QSys Display Agent Setup ${version}.${ext}",
     "asar": true,
     "files": [
       "electron/**/*",
