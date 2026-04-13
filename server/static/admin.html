@@ -1757,6 +1757,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                         <th>Created</th>
                         <th>Called</th>
                         <th>Times Called</th>
+                        <th>Re-Call Times</th>
                         <th>Seated</th>
                         <th>Skipped</th>
                         <th>Wait to Called (mins)</th>
@@ -1764,7 +1765,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       </tr>
                     </thead>
                     <tbody id="tblRawTickets">
-                      <tr><td colspan="14" class="muted">No data loaded</td></tr>
+                      <tr><td colspan="15" class="muted">No data loaded</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -5151,14 +5152,14 @@ function renderRawTicketsPage(){
   const start = (RAW_TICKETS_PAGE - 1) * size;
   const pageRows = RAW_TICKETS_CACHE.slice(start, start + size);
 
-  if (tb){
-    tb.innerHTML = "";
-    if (!total){
-      tb.innerHTML = `<tr><td colspan="14" class="muted">No data in selected range</td></tr>`;
-    } else {
-      for (const r of pageRows){
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
+    if (tb){
+      tb.innerHTML = "";
+      if (!total){
+        tb.innerHTML = `<tr><td colspan="15" class="muted">No data in selected range</td></tr>`;
+      } else {
+        for (const r of pageRows){
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
           <td>${escapeHtml(r.businessDate ?? "")}</td>
           <td>${escapeHtml(r.groupCode ?? "")}</td>
           <td>${escapeHtml(r.queueNum ?? "")}</td>
@@ -5169,6 +5170,7 @@ function renderRawTicketsPage(){
           <td>${escapeHtml(r.createdAtLocalHuman ?? "")}</td>
           <td>${escapeHtml(r.calledAtHuman ?? "")}</td>
           <td>${escapeHtml(r.timesCalled ?? 0)}</td>
+          <td>${escapeHtml(r.nextCalls ?? "")}</td>
           <td>${escapeHtml(r.seatedAtHuman ?? "")}</td>
           <td>${escapeHtml(r.skippedAtHuman ?? "")}</td>
           <td>${escapeHtml(r.waitMinsToCalled ?? "")}</td>

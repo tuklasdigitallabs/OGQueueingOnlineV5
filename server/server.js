@@ -7363,6 +7363,29 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     return `${bc}_${rk}_${dateRange}.${ext}`;
   }
 
+  function formatReCallTimes(value) {
+    const parts = String(value || "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) return "";
+    return parts
+      .map((part) => {
+        const n = Number(part);
+        if (!Number.isFinite(n) || n <= 0) return "";
+        try {
+          return new Date(n).toLocaleTimeString("en-PH", {
+            timeZone: "Asia/Manila",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          });
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean)
+      .join(" | ");
+  }
+
   function getDailySummaryRowsWithFallback(branchCode, from, to, sinceMs) {
     let effectiveFrom = from;
     if (sinceMs) {
@@ -7572,7 +7595,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
           createdAtLocalHuman: fmtTs(r.createdAtLocal),
           calledAtHuman: fmtTs(r.calledAt),
           timesCalled: timesCalled(r),
-          nextCalls: String(r.next_calls || "").trim(),
+          nextCalls: formatReCallTimes(r.next_calls),
           seatedAtHuman: fmtTs(r.seatedAt),
           skippedAtHuman: fmtTs(r.skippedAt),
           calledNote: r.calledNote ?? "",
@@ -7681,7 +7704,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
         fmtTs(r.createdAtLocal),
         fmtTs(r.calledAt),
         timesCalled(r),
-        String(r.next_calls || "").trim(),
+        formatReCallTimes(r.next_calls),
         fmtTs(r.seatedAt),
         fmtTs(r.skippedAt),
         r.calledNote ?? "",
@@ -8838,7 +8861,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       fmtTs(r.createdAtLocal),
       fmtTs(r.calledAt),
       timesCalled(r),
-      String(r.next_calls || "").trim(),
+      formatReCallTimes(r.next_calls),
       fmtTs(r.seatedAt),
       fmtTs(r.skippedAt),
       r.calledNote || "",
