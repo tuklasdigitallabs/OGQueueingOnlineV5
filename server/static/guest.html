@@ -445,6 +445,9 @@
           if (!j.ok) {
             btnSubmit.disabled = false;
             btnSubmit.textContent = "Get Number";
+            if (r.status === 429 && j.retryAfterSeconds) {
+              return showErr((j.error || "Too many requests.") + " Please try again in about " + String(j.retryAfterSeconds) + " seconds.");
+            }
             return showErr(j.error || "Failed.");
           }
 

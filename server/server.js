@@ -2642,8 +2642,30 @@ app.get("/static/js/:file", (req, res) => {
     return nextUser;
   }
 
-  // In-memory IP throttling to reduce brute force/spam pressure.
-  function createIpRateLimiter({ windowMs, max, name }) {
+  function getRequestIp(req) {
+    return String(
+      req.headers["x-forwarded-for"] ||
+        req.socket?.remoteAddress ||
+        req.ip ||
+        "unknown",
+    )
+      .split(",")[0]
+      .trim();
+  }
+
+  function getRateLimitBranchCode(req) {
+    try {
+      const requestedBranchCode = String(req.query.branchCode || "").trim().toUpperCase();
+      if (requestedBranchCode) return requestedBranchCode;
+      const branch = getRequestBranch(req);
+      return String(branch?.branchCode || getBranchCode() || "default").trim().toUpperCase() || "default";
+    } catch {
+      return "default";
+    }
+  }
+
+  // In-memory request throttling to reduce brute force/spam pressure.
+  function createRateLimiter({ windowMs, max, name, keyFn, errorMessage }) {
     const buckets = new Map();
     const win = Math.max(1000, Number(windowMs) || 60000);
     const lim = Math.max(1, Number(max) || 60);
@@ -2655,15 +2677,8 @@ app.get("/static/js/:file", (req, res) => {
     }, Math.min(win, 60000)).unref?.();
 
     return (req, res, next) => {
-      const ip = String(
-        req.headers["x-forwarded-for"] ||
-          req.socket?.remoteAddress ||
-          req.ip ||
-          "unknown",
-      )
-        .split(",")[0]
-        .trim();
-      const key = `${name || "rl"}:${ip}`;
+      const rawKey = typeof keyFn === "function" ? keyFn(req) : getRequestIp(req);
+      const key = `${name || "rl"}:${String(rawKey || "unknown")}`;
       const now = Date.now();
       const cur = buckets.get(key);
       if (!cur || Number(cur.resetAt || 0) <= now) {
@@ -2675,15 +2690,32 @@ app.get("/static/js/:file", (req, res) => {
       if (cur.count > lim) {
         const retryAfter = Math.max(1, Math.ceil((Number(cur.resetAt || now) - now) / 1000));
         res.setHeader("Retry-After", String(retryAfter));
-        return res.status(429).json({ ok: false, error: "Too many requests. Please try again shortly." });
+        return res.status(429).json({
+          ok: false,
+          error: errorMessage || "Too many requests. Please try again shortly.",
+          retryAfterSeconds: retryAfter,
+        });
       }
       return next();
     };
   }
 
-  const rateLimitAuthLogin = createIpRateLimiter({ windowMs: 5 * 60 * 1000, max: 20, name: "auth_login" });
-  const rateLimitQueueCreate = createIpRateLimiter({ windowMs: 60 * 1000, max: 3, name: "queue_create" });
-  const rateLimitDisplayPair = createIpRateLimiter({ windowMs: 5 * 60 * 1000, max: 25, name: "display_pair" });
+  const rateLimitAuthLogin = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 20, name: "auth_login" });
+  const rateLimitQueueCreateSessionBurst = createRateLimiter({
+    windowMs: 30 * 1000,
+    max: 1,
+    name: "queue_create_session_burst",
+    keyFn: (req) => `${getRateLimitBranchCode(req)}:${String(req.sessionID || "anon")}`,
+    errorMessage: "Please wait a few seconds before requesting another ticket.",
+  });
+  const rateLimitQueueCreateIpBranch = createRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    max: 8,
+    name: "queue_create_ip_branch",
+    keyFn: (req) => `${getRateLimitBranchCode(req)}:${getRequestIp(req)}`,
+    errorMessage: "Too many ticket requests from this connection. Please try again shortly or ask staff for help.",
+  });
+  const rateLimitDisplayPair = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 25, name: "display_pair" });
 
   function getRoleId(u) {
     return String(u?.roleId || "").toUpperCase();
@@ -9858,7 +9890,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
   });
 
   /* ---------- GUEST: CREATE QUEUE ---------- */
-  app.post("/api/queue/create", rateLimitQueueCreate, (req, res) => {
+  app.post("/api/queue/create", rateLimitQueueCreateSessionBurst, rateLimitQueueCreateIpBranch, (req, res) => {
     try {
       const name = String(req.body.name || "").trim();
       const pax = Number(req.body.pax || 1);
