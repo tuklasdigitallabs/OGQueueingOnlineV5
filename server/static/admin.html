@@ -5129,6 +5129,13 @@ async function loadRawTicketsPreview(){
     if(!j?.ok) return toast("Reports", j?.error || "Failed to load raw tickets.", "err");
 
     RAW_TICKETS_CACHE = Array.isArray(j.rows) ? j.rows : [];
+    const paxOverall = RAW_TICKETS_CACHE.reduce((sum, row) => sum + (Number(row?.pax || 0) || 0), 0);
+    const priorityTotal = RAW_TICKETS_CACHE.reduce((sum, row) => {
+      const priority = String(row?.priorityType || "").trim().toUpperCase();
+      return sum + (priority && priority !== "NONE" ? 1 : 0);
+    }, 0);
+    if ($("sumPaxOverall")) $("sumPaxOverall").textContent = String(paxOverall);
+    if ($("sumPriOverall")) $("sumPriOverall").textContent = String(priorityTotal);
     RAW_TICKETS_PAGE = 1;
     renderRawTicketsPage();
     REPORT_HAS_OUTPUT = true;
