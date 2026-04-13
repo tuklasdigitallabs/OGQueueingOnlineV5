@@ -4519,7 +4519,7 @@ async function clearGdriveOAuth() {
 
       function downloadViaUrl(url) {
         const a = document.createElement("a");
-        a.href = url;
+        a.href = window.appUrl(url);
         a.download = "";
         document.body.appendChild(a);
         a.click();

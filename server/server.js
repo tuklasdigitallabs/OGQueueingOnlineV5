@@ -7358,11 +7358,9 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     const rk = safeFilePart(reportKey || "report");
     const f = safeFilePart(from || "");
     const t = safeFilePart(to || "");
-    const explicitScope = safeFilePart(o.scopeLabel || "");
-    const scope = explicitScope || (f && t ? (f === t ? f : `${f}_to_${t}`) : (f || t || "scope"));
-    const stamp = safeFilePart(o.stamp || "") || fileStampNow();
     const ext = safeFilePart(o.ext || "csv") || "csv";
-    return `${bc}_${scope}_${rk}_${stamp}.${ext}`;
+    const dateRange = f && t ? (f === t ? f : `${f}_to_${t}`) : (f || t || safeFilePart(o.scopeLabel || "") || "daterange");
+    return `${bc}_${rk}_${dateRange}.${ext}`;
   }
 
   function getDailySummaryRowsWithFallback(branchCode, from, to, sinceMs) {
