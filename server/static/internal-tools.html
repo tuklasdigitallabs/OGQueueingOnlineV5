@@ -151,7 +151,7 @@
         <div>
           <p class="eyebrow">Hidden Internal Surface</p>
           <h1>Internal Tools</h1>
-          <p class="sub">Restricted tools for internal support and platform administration. This page uses the super-admin session and owns controls removed from the client-facing admin UI.</p>
+          <p class="sub">Restricted tools for internal support and platform administration. This page uses the super-admin session for support-only controls that still need a separate surface.</p>
         </div>
         <div class="actions">
           <button id="btnSuperAdmin" type="button">Super Admin</button>
@@ -171,128 +171,19 @@
           <div id="contextMeta" class="meta">Loading environment...</div>
         </div>
 
-        <div class="grid2">
-          <div class="card">
-            <h2>Branch Code Tool</h2>
-            <div id="branchMeta" class="meta">Loading branch config...</div>
-            <label for="branchName">Branch Name</label>
-            <input id="branchName" />
-            <label for="branchTimezone">Timezone</label>
-            <input id="branchTimezone" />
-            <div class="actions" style="margin-top:12px;">
-              <button id="btnSaveBranch" type="button">Save Name / Timezone</button>
-              <button id="btnChangeBranchCode" class="danger" type="button">Change Branch Code</button>
-            </div>
-            <div id="branchStatus" class="status"></div>
-          </div>
-
-          <div class="card">
-            <h2>Device Maintenance</h2>
-            <div id="deviceMeta" class="meta">Loading display state...</div>
-            <div class="actions" style="margin-top:12px;">
-              <button id="btnGeneratePair" type="button">Generate Pair Code</button>
-              <button id="btnRevokeAllDevices" class="danger" type="button">Revoke All Pairing</button>
-            </div>
-            <div id="deviceStatus" class="status"></div>
-            <table>
-              <thead>
-                <tr><th>Label</th><th>Branch</th><th>Last Seen</th><th>Status</th></tr>
-              </thead>
-              <tbody id="deviceTable"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="grid2">
-          <div class="card">
-            <h2>Elevated User Roles</h2>
-            <div class="muted">Create or manage elevated users without exposing those controls in normal admin.</div>
-            <label for="adminName">Admin Name</label>
-            <input id="adminName" placeholder="e.g. Branch Admin" />
-            <div class="grid2" style="margin-top:10px;">
-              <div>
-                <label for="adminRole">Role</label>
-                <select id="adminRole">
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="SUPERVISOR">SUPERVISOR</option>
-                  <option value="STAFF">STAFF</option>
-                </select>
-              </div>
-              <div>
-                <label for="adminPin">PIN</label>
-                <input id="adminPin" inputmode="numeric" maxlength="6" />
-              </div>
-            </div>
-            <div class="actions" style="margin-top:12px;">
-              <button id="btnCreateElevatedUser" type="button">Create / Add User</button>
-              <button id="btnReloadElevatedUsers" type="button">Reload Users</button>
-            </div>
-            <div id="userStatus" class="status"></div>
-            <table>
-              <thead>
-                <tr><th>Name</th><th>Role</th><th>Active</th><th>Actions</th></tr>
-              </thead>
-              <tbody id="userTable"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
-            </table>
-          </div>
-
-          <div class="card">
-            <h2>Permissions Matrix</h2>
-            <div class="muted">Direct role-permission editing for platform support only.</div>
-            <div class="actions" style="margin-top:12px;">
-              <button id="btnReloadPerms" type="button">Reload Matrix</button>
-              <button id="btnSavePerms" class="primary" type="button">Save Matrix</button>
-            </div>
-            <div id="permStatus" class="status"></div>
-            <div style="overflow:auto;">
-              <table id="permMatrixTable">
-                <thead><tr><th>Permission</th><th>STAFF</th><th>SUPERVISOR</th><th>ADMIN</th></tr></thead>
-                <tbody><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
         <div class="card">
-          <h2>Integration Credentials</h2>
-          <div id="integrationMeta" class="meta">Loading Google Drive configuration...</div>
-          <div class="grid2">
-            <div>
-              <label for="gdriveFolderId">Google Drive Folder ID</label>
-              <input id="gdriveFolderId" />
-              <label for="gdriveAuthMode">Auth Mode</label>
-              <select id="gdriveAuthMode">
-                <option value="oauth">OAuth</option>
-                <option value="service_account">Service Account</option>
-              </select>
-              <label for="gdriveOauthClientId">OAuth Client ID</label>
-              <input id="gdriveOauthClientId" />
-              <label for="gdriveOauthClientSecret">OAuth Client Secret</label>
-              <input id="gdriveOauthClientSecret" type="password" />
-              <label for="gdriveOauthRedirectUri">OAuth Redirect URI</label>
-              <input id="gdriveOauthRedirectUri" />
-              <div class="actions" style="margin-top:12px;">
-                <button id="btnSaveGdriveSettings" type="button">Save Config</button>
-                <button id="btnStartOauth" type="button">Start OAuth</button>
-                <button id="btnClearOauth" class="danger" type="button">Clear OAuth Token</button>
-              </div>
-            </div>
-            <div>
-              <label>OAuth Client JSON</label>
-              <input id="gdriveOauthClientFile" disabled />
-              <div class="actions" style="margin-top:10px;">
-                <button id="btnPickOauthFile" type="button">Choose OAuth JSON</button>
-                <button id="btnClearOauthFile" class="danger" type="button">Clear OAuth JSON</button>
-              </div>
-              <label style="margin-top:14px;">Service Account JSON</label>
-              <input id="gdriveServiceAccountFile" disabled />
-              <div class="actions" style="margin-top:10px;">
-                <button id="btnPickServiceFile" type="button">Choose Service Account</button>
-                <button id="btnClearServiceFile" class="danger" type="button">Clear Service Account</button>
-                <button id="btnTestGdrive" type="button">Test Connection</button>
-              </div>
-              <div id="integrationStatus" class="status"></div>
-            </div>
+          <h2>Permissions Matrix</h2>
+          <div class="muted">Direct role-permission editing for platform support only.</div>
+          <div class="actions" style="margin-top:12px;">
+            <button id="btnReloadPerms" type="button">Reload Matrix</button>
+            <button id="btnSavePerms" class="primary" type="button">Save Matrix</button>
+          </div>
+          <div id="permStatus" class="status"></div>
+          <div style="overflow:auto;">
+            <table id="permMatrixTable">
+              <thead><tr><th>Permission</th><th>STAFF</th><th>SUPERVISOR</th><th>ADMIN</th></tr></thead>
+              <tbody><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+            </table>
           </div>
         </div>
 
@@ -326,7 +217,7 @@
 
     <script src="./app-boot.js"></script>
     <script>
-      const state = { me: null, health: null, branch: null, users: [], perms: null, devices: null, settings: {} };
+      const state = { me: null, health: null, perms: null };
       const $ = (id) => document.getElementById(id);
 
       function setStatus(id, text, ok) {
@@ -410,145 +301,6 @@
           `License Expires: ${expiryText}`;
       }
 
-      async function loadBranch() {
-        const j = await jget("/api/admin/branch");
-        if (!j?.ok) throw new Error(j?.error || "Failed to load branch");
-        state.branch = j.branch || {};
-        $("branchName").value = state.branch.branchName || "";
-        $("branchTimezone").value = state.branch.timezone || "Asia/Manila";
-        $("branchMeta").textContent =
-          `Current Code: ${state.branch.branchCode || "-"}\n` +
-          `Current Name: ${state.branch.branchName || "-"}\n` +
-          `Timezone: ${state.branch.timezone || "-"}`;
-      }
-
-      async function saveBranchBasics() {
-        const payload = {
-          branchName: String($("branchName").value || "").trim(),
-          branchCode: String(state.branch?.branchCode || "").trim(),
-          timezone: String($("branchTimezone").value || "").trim() || "Asia/Manila",
-        };
-        const j = await jpost("/api/admin/branch", payload);
-        if (!j?.ok) return setStatus("branchStatus", j.error || "Save failed");
-        setStatus("branchStatus", "Branch settings updated.", true);
-        await loadBranch();
-      }
-
-      async function changeBranchCode() {
-        const current = String(state.branch?.branchCode || "").trim().toUpperCase();
-        const code = prompt("Enter new Branch Code:", current);
-        if (code === null) return;
-        const nextCode = String(code || "").trim().toUpperCase();
-        if (!nextCode) return setStatus("branchStatus", "No branch code entered.");
-        const confirmLoss = prompt("Type CHANGE to confirm branch code migration:", "");
-        if (String(confirmLoss || "").trim().toUpperCase() !== "CHANGE") return setStatus("branchStatus", "Cancelled.");
-        const j = await jpost("/api/admin/branch", {
-          branchName: String($("branchName").value || "").trim() || state.branch?.branchName || "",
-          branchCode: nextCode,
-          timezone: String($("branchTimezone").value || "").trim() || state.branch?.timezone || "Asia/Manila",
-          confirmLoss: true,
-        });
-        if (!j?.ok) return setStatus("branchStatus", j.error || "Branch code change failed.");
-        setStatus("branchStatus", `Branch code changed to ${nextCode}.`, true);
-        await loadBranch();
-      }
-
-      async function loadDevices() {
-        const j = await jget("/api/admin/display/devices");
-        if (!j?.ok) throw new Error(j?.error || "Failed to load devices");
-        state.devices = j;
-        $("deviceMeta").textContent =
-          `Last Pair Code: ${j.lastPairCode?.code || "-"}\n` +
-          `Created: ${j.lastPairCode?.createdAt ? fmtTime(j.lastPairCode.createdAt) : "-"}`;
-        const tb = $("deviceTable");
-        tb.innerHTML = "";
-        const rows = Array.isArray(j.devices) ? j.devices : [];
-        if (!rows.length) {
-          tb.innerHTML = `<tr><td colspan="4" class="muted">No paired devices.</td></tr>`;
-          return;
-        }
-        for (const d of rows) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${escapeHtml(d.label || "-")}</td><td>${escapeHtml(d.branchCode || "-")}</td><td>${escapeHtml(fmtTime(d.lastSeenAt))}</td><td>${d.revokedAt ? "Revoked" : "Active"}</td>`;
-          tb.appendChild(tr);
-        }
-      }
-
-      async function generatePairCode() {
-        const j = await jpost("/api/admin/display/pair-code", {});
-        if (!j?.ok) return setStatus("deviceStatus", j.error || "Failed to generate pair code.");
-        setStatus("deviceStatus", `Pair code generated: ${j.code}`, true);
-        await loadDevices();
-      }
-
-      async function revokeAllDevices() {
-        if (!confirm("Revoke all paired displays?")) return;
-        const j = await jpost("/api/admin/display/devices/revoke-all", {});
-        if (!j?.ok) return setStatus("deviceStatus", j.error || "Failed to revoke pairing.");
-        setStatus("deviceStatus", `Revoked ${Number(j.revoked || 0)} device(s).`, true);
-        await loadDevices();
-      }
-
-      async function loadUsers() {
-        const j = await jget("/api/admin/users");
-        if (!j?.ok) throw new Error(j?.error || "Failed to load users");
-        state.users = Array.isArray(j.users) ? j.users : [];
-        const tb = $("userTable");
-        tb.innerHTML = "";
-        const rows = state.users.filter((u) => ["ADMIN", "SUPERVISOR"].includes(String(u.roleId || "").toUpperCase()));
-        if (!rows.length) {
-          tb.innerHTML = `<tr><td colspan="4" class="muted">No elevated users.</td></tr>`;
-          return;
-        }
-        for (const u of rows) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${escapeHtml(u.fullName || "-")}</td>
-            <td>${escapeHtml(u.roleId || "-")}</td>
-            <td>${u.isActive ? "Yes" : "No"}</td>
-            <td>
-              <button type="button" data-edit="${escapeHtml(u.userId)}">Edit</button>
-              <button type="button" data-pin="${escapeHtml(u.userId)}">Reset PIN</button>
-            </td>
-          `;
-          tb.appendChild(tr);
-        }
-        tb.querySelectorAll("[data-edit]").forEach((btn) => btn.addEventListener("click", async () => {
-          const user = state.users.find((u) => u.userId === btn.getAttribute("data-edit"));
-          if (!user) return;
-          const name = prompt("Full name:", user.fullName || "");
-          if (name === null) return;
-          const role = prompt("Role (STAFF / SUPERVISOR / ADMIN):", user.roleId || "SUPERVISOR");
-          if (role === null) return;
-          const active = confirm(`Set ${name} as active? Click Cancel to disable.`);
-          const j2 = await jpost("/api/admin/users/update", { userId: user.userId, fullName: name, roleId: String(role || "").trim().toUpperCase(), isActive: active });
-          if (!j2?.ok) return setStatus("userStatus", j2.error || "Update failed.");
-          setStatus("userStatus", "User updated.", true);
-          await loadUsers();
-        }));
-        tb.querySelectorAll("[data-pin]").forEach((btn) => btn.addEventListener("click", async () => {
-          const user = state.users.find((u) => u.userId === btn.getAttribute("data-pin"));
-          if (!user) return;
-          const pin = prompt(`New 6-digit PIN for ${user.fullName}:`, "");
-          if (pin === null) return;
-          const j2 = await jpost("/api/admin/users/reset-pin", { userId: user.userId, pin });
-          if (!j2?.ok) return setStatus("userStatus", j2.error || "PIN reset failed.");
-          setStatus("userStatus", "PIN reset.", true);
-        }));
-      }
-
-      async function createElevatedUser() {
-        const fullName = String($("adminName").value || "").trim();
-        const roleId = String($("adminRole").value || "ADMIN").trim().toUpperCase();
-        const pin = String($("adminPin").value || "").trim();
-        const j = await jpost("/api/admin/users/create", { fullName, roleId, pin });
-        if (!j?.ok) return setStatus("userStatus", j.error || "Create failed.");
-        setStatus("userStatus", "Elevated user created.", true);
-        $("adminName").value = "";
-        $("adminPin").value = "";
-        await loadUsers();
-      }
-
       async function loadPerms() {
         const j = await jget("/api/admin/permissions");
         if (!j?.ok) throw new Error(j?.error || "Failed to load permissions");
@@ -579,101 +331,6 @@
         setStatus("permStatus", "Permissions saved.", true);
       }
 
-      async function loadIntegrations() {
-        const j = await jget("/api/admin/settings");
-        if (!j?.ok) throw new Error(j?.error || "Failed to load settings");
-        state.settings = j.settings || {};
-        $("gdriveFolderId").value = state.settings["gdrive.folderId"] || "";
-        $("gdriveAuthMode").value = state.settings["gdrive.authMode"] || "oauth";
-        $("gdriveOauthClientId").value = state.settings["gdrive.oauthClientId"] || "";
-        $("gdriveOauthClientSecret").value = state.settings["gdrive.oauthClientSecret"] || "";
-        $("gdriveOauthRedirectUri").value = state.settings["gdrive.oauthRedirectUri"] || `${window.location.origin}${window.appUrl("/api/admin/gdrive/oauth/callback")}`;
-        $("gdriveOauthClientFile").value = state.settings["gdrive.oauthClientFile"] || "";
-        $("gdriveServiceAccountFile").value = state.settings["gdrive.serviceAccountFile"] || "";
-        $("integrationMeta").textContent =
-          `Auth Mode: ${state.settings["gdrive.authMode"] || "oauth"}\n` +
-          `Folder ID: ${state.settings["gdrive.folderId"] || "-"}\n` +
-          `OAuth Refresh Token: ${state.settings["gdrive.oauthRefreshToken"] ? "Configured" : "Not configured"}`;
-      }
-
-      async function saveGdriveSettings() {
-        const updates = {
-          "gdrive.authMode": $("gdriveAuthMode").value,
-          "gdrive.folderId": String($("gdriveFolderId").value || "").trim(),
-          "gdrive.oauthClientId": String($("gdriveOauthClientId").value || "").trim(),
-          "gdrive.oauthClientSecret": String($("gdriveOauthClientSecret").value || "").trim(),
-          "gdrive.oauthRedirectUri": String($("gdriveOauthRedirectUri").value || "").trim(),
-        };
-        const j = await jpost("/api/admin/settings", updates);
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Save failed.");
-        setStatus("integrationStatus", "Integration settings saved.", true);
-        await loadIntegrations();
-      }
-
-      async function pickOauthFile() {
-        const j = await jpost("/api/admin/gdrive/oauth-client/select", {});
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to pick OAuth JSON.");
-        setStatus("integrationStatus", "OAuth JSON loaded.", true);
-        await loadIntegrations();
-      }
-
-      async function clearOauthFile() {
-        const j = await jpost("/api/admin/gdrive/oauth-client/clear", {});
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to clear OAuth JSON.");
-        setStatus("integrationStatus", "OAuth JSON cleared.", true);
-        await loadIntegrations();
-      }
-
-      async function pickServiceFile() {
-        const j = await jpost("/api/admin/gdrive/service-account/select", {});
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to pick service account.");
-        setStatus("integrationStatus", "Service account JSON loaded.", true);
-        await loadIntegrations();
-      }
-
-      async function clearServiceFile() {
-        const j = await jpost("/api/admin/gdrive/service-account/clear", {});
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to clear service account.");
-        setStatus("integrationStatus", "Service account cleared.", true);
-        await loadIntegrations();
-      }
-
-      async function startOauth() {
-        const payload = {
-          authMode: $("gdriveAuthMode").value,
-          folderId: $("gdriveFolderId").value,
-          oauthClientId: $("gdriveOauthClientId").value,
-          oauthClientSecret: $("gdriveOauthClientSecret").value,
-          oauthRedirectUri: $("gdriveOauthRedirectUri").value,
-        };
-        const j = await jpost("/api/admin/gdrive/oauth/start", payload);
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to start OAuth.");
-        window.open(j.authUrl, "_blank");
-        setStatus("integrationStatus", "OAuth window opened.", true);
-      }
-
-      async function clearOauth() {
-        const j = await jpost("/api/admin/gdrive/oauth/clear", {});
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Failed to clear OAuth token.");
-        setStatus("integrationStatus", "OAuth token cleared.", true);
-        await loadIntegrations();
-      }
-
-      async function testGdrive() {
-        const payload = {
-          authMode: $("gdriveAuthMode").value,
-          folderId: $("gdriveFolderId").value,
-          oauthClientId: $("gdriveOauthClientId").value,
-          oauthClientSecret: $("gdriveOauthClientSecret").value,
-          oauthRedirectUri: $("gdriveOauthRedirectUri").value,
-          oauthRefreshToken: state.settings["gdrive.oauthRefreshToken"] || "",
-          serviceAccountFile: $("gdriveServiceAccountFile").value,
-        };
-        const j = await jpost("/api/admin/upload/test", payload);
-        if (!j?.ok) return setStatus("integrationStatus", j.error || "Connection test failed.");
-        setStatus("integrationStatus", "Google Drive connection test succeeded.", true);
-      }
-
       async function seedTodayData() {
         const months = Math.max(1, Math.min(3, Number($("seedMonths").value || 1) || 1));
         const label = getSeedRangeLabel(months);
@@ -686,7 +343,7 @@
       async function boot() {
         try {
           await loadContext();
-          await Promise.all([loadBranch(), loadDevices(), loadUsers(), loadPerms(), loadIntegrations()]);
+          await loadPerms();
         } catch (err) {
           setStatus("seedStatus", err.message || "Failed to load internal tools.");
         }
@@ -697,22 +354,8 @@
         finally { window.location.assign(window.appUrl("/super-admin-login")); }
       });
       $("btnSuperAdmin").addEventListener("click", () => { window.location.assign(window.appUrl("/super-admin")); });
-      $("btnSaveBranch").addEventListener("click", saveBranchBasics);
-      $("btnChangeBranchCode").addEventListener("click", changeBranchCode);
-      $("btnGeneratePair").addEventListener("click", generatePairCode);
-      $("btnRevokeAllDevices").addEventListener("click", revokeAllDevices);
-      $("btnCreateElevatedUser").addEventListener("click", createElevatedUser);
-      $("btnReloadElevatedUsers").addEventListener("click", loadUsers);
       $("btnReloadPerms").addEventListener("click", loadPerms);
       $("btnSavePerms").addEventListener("click", savePerms);
-      $("btnSaveGdriveSettings").addEventListener("click", saveGdriveSettings);
-      $("btnPickOauthFile").addEventListener("click", pickOauthFile);
-      $("btnClearOauthFile").addEventListener("click", clearOauthFile);
-      $("btnPickServiceFile").addEventListener("click", pickServiceFile);
-      $("btnClearServiceFile").addEventListener("click", clearServiceFile);
-      $("btnStartOauth").addEventListener("click", startOauth);
-      $("btnClearOauth").addEventListener("click", clearOauth);
-      $("btnTestGdrive").addEventListener("click", testGdrive);
       $("btnSeed").addEventListener("click", seedTodayData);
       $("seedMonths").addEventListener("change", updateSeedSummary);
 

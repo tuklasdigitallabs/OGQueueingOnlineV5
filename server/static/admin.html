@@ -2307,16 +2307,6 @@ async function jpost(url, body) {
         if (authBtn) authBtn.style.display = canUseInternal("integrations") ? "" : "none";
         const branchUnlock = $("btnUnlockBranchCode");
         if (branchUnlock) branchUnlock.style.display = canUseInternal("branch") ? "" : "none";
-        const createRole = $("newUserRole");
-        if (createRole) {
-          Array.from(createRole.options || []).forEach((opt) => {
-            const isAdminOpt = String(opt.value || "").toUpperCase() === "ADMIN";
-            opt.hidden = isAdminOpt && !canUseInternal("users");
-          });
-          if (!canUseInternal("users") && String(createRole.value || "").toUpperCase() === "ADMIN") {
-            createRole.value = "STAFF";
-          }
-        }
         updateUserBranchPickerMode();
       }
 
@@ -3966,7 +3956,6 @@ async function clearGdriveOAuth() {
 
           for (const u of users) {
             const roleCode = String(u.roleId || u.role || "-").trim().toUpperCase();
-            if (roleCode === "ADMIN" && !canUseInternal("users")) continue;
             const tr = document.createElement("tr");
 
             const name = escapeHtml(u.fullName || u.name || "-");
@@ -4021,7 +4010,7 @@ async function clearGdriveOAuth() {
         const name = ($("newUserName").value || "").trim();
         const role = $("newUserRole").value;
         const branchIds = roleUsesBranchAssignment(role) ? getSelectedBranchIds("newUserBranches") : [];
-        const allowedRoles = canUseInternal("users") ? ["STAFF","SUPERVISOR","ADMIN"] : ["STAFF","SUPERVISOR"];
+        const allowedRoles = ["STAFF","SUPERVISOR","ADMIN"];
         const isEdit = USER_FORM_MODE.mode === "edit";
 
         if (!allowedRoles.includes(String(role || "").toUpperCase())) return toast("Users", "Invalid role.", "warn");
