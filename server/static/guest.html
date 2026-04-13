@@ -257,12 +257,6 @@
           </div>
 
           <form id="f" autocomplete="on">
-            <div class="field" id="branchField">
-              <label>Branch</label>
-              <input id="branchDisplay" value="Loading branch..." readonly />
-              <div class="help" id="branchHelp">This guest link is tied to a specific branch.</div>
-            </div>
-
             <div class="field">
               <label for="name">Name</label>
               <input id="name" required placeholder="Your name" inputmode="text" />
@@ -295,13 +289,6 @@
           </form>
         </div>
 
-        <!-- (Kept for compatibility, though you redirect to ticket.html) -->
-        <div id="result" class="msgCard" style="display:none;">
-          <p class="msgTitle">Your Ticket</p>
-          <p class="msgBody"><span id="code" style="font-weight:900;font-size:28px;"></span></p>
-          <p class="msgBody" id="meta"></p>
-        </div>
-
         <div id="err" class="msgCard err" style="display:none;"></div>
       </div>
     </div>
@@ -313,14 +300,8 @@
       const paxEl = document.getElementById("pax");
       const prioEl = document.getElementById("priorityType");
       const websiteEl = document.getElementById("website");
-      const branchFieldEl = document.getElementById("branchField");
-      const branchDisplayEl = document.getElementById("branchDisplay");
-      const branchHelpEl = document.getElementById("branchHelp");
       const guestSubEl = document.getElementById("guestSub");
       const guestBranchBadgeTextEl = document.getElementById("guestBranchBadgeText");
-      const result = document.getElementById("result");
-      const code = document.getElementById("code");
-      const meta = document.getElementById("meta");
       const err = document.getElementById("err");
       const btnSubmit = document.getElementById("btnSubmit");
       let resolvedBranch = null;
@@ -381,21 +362,13 @@
         const code = String(resolvedBranch?.branchCode || activeCode || "").trim().toUpperCase();
         if (guestSubEl) guestSubEl.textContent = `Register for ${name}${code ? ` (${code})` : ""}.`;
         if (guestBranchBadgeTextEl) guestBranchBadgeTextEl.textContent = code || activeCode || name || "Branch";
-        if (branchDisplayEl) {
-          branchDisplayEl.value = code
-            ? `${name} • ${code}`
-            : activeCode
-              ? `${name} • ${activeCode}`
-              : "Guest link missing branch";
-        }
       }
 
       async function loadBranch() {
         try {
           const activeCode = currentBranchCode();
           if (!activeCode) {
-            if (branchHelpEl) branchHelpEl.textContent = "This guest link is missing a branch code. Please use the branch QR code.";
-            if (branchDisplayEl) branchDisplayEl.value = "Invalid guest link";
+            showErr("This guest link is missing a branch. Please use the branch QR code.");
             btnSubmit.disabled = true;
             renderBranchMeta();
             return;
@@ -410,16 +383,12 @@
             branchName: String(j.branchName || activeCode).trim(),
             timezone: String(j.timezone || "Asia/Manila").trim() || "Asia/Manila",
           };
-          if (branchFieldEl) {
-            if (branchHelpEl) branchHelpEl.textContent = "This guest link is tied to a specific branch.";
-            btnSubmit.disabled = false;
-          }
+          btnSubmit.disabled = false;
           renderBranchMeta();
         } catch {
           resolvedBranch = null;
           btnSubmit.disabled = true;
-          if (branchDisplayEl) branchDisplayEl.value = pathBranchCode || "Unable to load branch";
-          if (branchHelpEl) branchHelpEl.textContent = `Branch link ${currentBranchCode() || pathBranchCode || ""} is unavailable right now. Please ask staff for the latest QR code.`;
+          showErr(`Branch link ${currentBranchCode() || pathBranchCode || ""} is unavailable right now. Please ask staff for the latest QR code.`);
           renderBranchMeta();
         }
       }

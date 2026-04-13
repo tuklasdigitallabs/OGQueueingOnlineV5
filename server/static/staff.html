@@ -780,13 +780,13 @@
           </div>
 
           <div class="actions" style="margin-top:12px;">
-            <button class="btn primary" id="callNextBtn">Call Again</button>
-            <button class="btn" id="callPriorityBtn">Call Priority Next</button>
-            <button class="btn" id="callRegularBtn">Call Regular Next</button>
-            <button class="btn" id="seatBtn">Seat Called</button>
+            <button class="btn primary" id="callNextBtn">Re-Call Current</button>
+            <button class="btn" id="callPriorityBtn">Call Next Priority</button>
+            <button class="btn" id="callRegularBtn">Call Next Regular</button>
+            <button class="btn" id="seatBtn">Mark Seated</button>
             <button class="btn" id="skipBtn">Skip</button>
-            <button class="btn" id="clearBtn">Clear Called</button>
-            <button class="btn" id="overrideBtn">Override Call (Specific)</button>
+            <button class="btn" id="clearBtn">Return to Waiting</button>
+            <button class="btn" id="overrideBtn">Call Specific Ticket</button>
           </div>
 
           <div class="hint" id="permHint">—</div>
@@ -835,7 +835,7 @@
             <input id="supPin" type="password" inputmode="numeric" placeholder="PIN" />
           </div>
           <div style="margin-top:8px; color:var(--muted); font-size:12px; line-height:1.45;">
-            This will log-in as supervisor for now (simple approach). If you want one-shot approval instead, we’ll add a verify endpoint.
+            Enter a supervisor account to approve this action. The approval is used only to authorize the call override.
           </div>
         </div>
       </div>

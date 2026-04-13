@@ -1004,7 +1004,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <option value="true">Video Mode</option>
                     </select>
                     <div class="muted2" style="margin-top:6px;">
-                      Saved per branch and shared with the Electron launcher.
+                      Saved per branch and used by the branch display screen.
                     </div>
                   </div>
 
@@ -1015,7 +1015,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <option value="portrait">Portrait</option>
                     </select>
                     <div class="muted2" style="margin-top:6px;">
-                      Saved per branch and shared with the Electron launcher.
+                      Saved per branch and used by the branch display screen.
                     </div>
                   </div>
                 </div>
@@ -1052,7 +1052,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <button class="btn small" type="button" id="btnToggleOauthSecret">Show</button>
                   </div>
                   <label style="margin-top:8px;">OAuth Redirect URI</label>
-                  <input id="gdriveOauthRedirectUri" placeholder="http://127.0.0.1:3000/api/admin/gdrive/oauth/callback" />
+                  <input id="gdriveOauthRedirectUri" placeholder="https://your-domain/qsys/api/admin/gdrive/oauth/callback" />
                   <label style="margin-top:8px;">OAuth Refresh Token</label>
                   <input id="gdriveOauthRefreshToken" disabled placeholder="Not connected yet" />
                   <div class="row" style="margin-top:8px; gap:10px;">
@@ -1144,14 +1144,14 @@ tr.is-collapsed + tr.subrow + tr.subrow{
 
                     <section class="qr-card">
                       <h3>Queue QR</h3>
-                      <div class="qr-card-sub">Use this QR to open the guest queue page on the local network.</div>
+                      <div class="qr-card-sub">Use this QR to open the hosted guest queue page for this branch.</div>
 
                       <div class="qr-form">
                         <div>
                           <label class="muted2">Queue QR Source</label>
                           <input id="queueQrUrlText" disabled />
                           <div class="qr-note">
-                            If the LAN IP changes, regenerate and reprint the queue QR unless using static IP.
+                            Reprint this QR only if the public guest URL for the branch changes.
                           </div>
                         </div>
                       </div>
@@ -1613,7 +1613,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
                 <div>
                   <h3 style="margin:0;">Scheduled CSV Export</h3>
-                  <div class="muted2" id="reportScheduleNotes" style="margin-top:6px;">Save a recurring local export for the selected report set.</div>
+                  <div class="muted2" id="reportScheduleNotes" style="margin-top:6px;">Save a recurring export schedule for the selected report set.</div>
                 </div>
                 <button class="btn" id="btnReportScheduleRun" type="button">Run Now</button>
               </div>
@@ -4829,7 +4829,7 @@ async function clearGdriveOAuth() {
         if ($("reportScheduleSummaryLastRun")) $("reportScheduleSummaryLastRun").textContent = fmtTime(lastResult?.startedAt || 0);
         if ($("reportScheduleSummaryFolder")) $("reportScheduleSummaryFolder").textContent = folderLabel;
         if ($("reportScheduleNotes")) {
-          $("reportScheduleNotes").textContent = "Use this scheduler for unattended CSV exports to a stable local folder.";
+          $("reportScheduleNotes").textContent = "Use this scheduler for unattended CSV exports to a stable server folder.";
         }
       }
 
@@ -4882,7 +4882,7 @@ async function clearGdriveOAuth() {
         if (!j?.ok) {
           const raw = String(j?.error || "");
           const msg = raw.includes("Cannot POST") || raw.includes("<!DOCTYPE")
-            ? "Folder picker is unavailable right now. Restart the app in Electron, or enter the export path manually."
+            ? "Folder picker is unavailable right now. Enter the export path manually."
             : (raw || "Failed to open folder picker.");
           return toast("Reports", msg, "err");
         }
