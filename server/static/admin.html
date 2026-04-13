@@ -650,6 +650,21 @@ margin:0;
     backdrop-filter: blur(8px);
     z-index: 2;
   }
+  .clickRow{
+    cursor:pointer;
+  }
+  .clickRow:hover{
+    background: rgba(225,6,0,.04);
+  }
+  .clickRow.selected{
+    background: rgba(225,6,0,.08);
+  }
+  .usersToolbar{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
   th{ color: rgba(60,40,20,.88); font-weight: 950; }
   td{ color: rgba(60,40,20,.86); }
 
@@ -1350,8 +1365,17 @@ tr.is-collapsed + tr.subrow + tr.subrow{
           <div class="grid">
             <div class="card" style="grid-column: span 7;">
               <div class="row" style="justify-content: space-between; align-items:center;">
-                <h3 style="margin:0;">Users</h3>
-                <button class="btn small" id="btnReloadUsers">Reload</button>
+                <div>
+                  <h3 style="margin:0;">Users</h3>
+                  <div class="muted2" id="usersSelectionHint" style="margin-top:6px;">Select a user to edit, enable or disable, reset PIN, or delete.</div>
+                </div>
+                <div class="usersToolbar">
+                  <button class="btn small" id="btnReloadUsers">Reload</button>
+                  <button class="btn small" id="btnEditSelectedUser" type="button" disabled>Edit Selected</button>
+                  <button class="btn small" id="btnToggleSelectedUser" type="button" disabled>Enable / Disable</button>
+                  <button class="btn small" id="btnResetPinSelectedUser" type="button" disabled>Reset PIN</button>
+                  <button class="btn small danger" id="btnDeleteSelectedUser" type="button" disabled>Delete User</button>
+                </div>
               </div>
 
               <div style="overflow:auto; margin-top:10px;">
@@ -1363,11 +1387,10 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <th>Branches</th>
                       <th>Active</th>
                       <th>Last Login</th>
-                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="usersTable">
-                    <tr><td colspan="6" class="muted">Load users...</td></tr>
+                    <tr><td colspan="5" class="muted">Load users...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -2116,6 +2139,8 @@ async function jpost(url, body) {
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
       let USER_FORM_MODE = { mode: "create", userId: "", originalName: "" };
+      let USERS_CACHE = [];
+      let USER_SELECTED_ID = "";
       const QS = new URLSearchParams(window.location.search);
       const INTERNAL_MODE = QS.get("internal") || "";
       const INITIAL_PAGE = String(QS.get("page") || "dashboard").trim().toLowerCase();
@@ -2181,13 +2206,40 @@ async function jpost(url, body) {
         updateUserBranchPickerMode();
       }
 
+      function getSelectedUser() {
+        return USERS_CACHE.find((user) => String(user.userId || "") === String(USER_SELECTED_ID || "")) || null;
+      }
+
+      function renderUserSelectionState() {
+        const selectedUser = getSelectedUser();
+        document.querySelectorAll("#usersTable tr[data-user-id]").forEach((row) => {
+          row.classList.toggle("selected", String(row.getAttribute("data-user-id") || "") === String(USER_SELECTED_ID || ""));
+        });
+        if ($("btnEditSelectedUser")) $("btnEditSelectedUser").disabled = !selectedUser;
+        if ($("btnToggleSelectedUser")) {
+          $("btnToggleSelectedUser").disabled = !selectedUser;
+          $("btnToggleSelectedUser").textContent = selectedUser
+            ? ((selectedUser.isActive === 0 || selectedUser.isActive === false) ? "Enable User" : "Disable User")
+            : "Enable / Disable";
+        }
+        if ($("btnResetPinSelectedUser")) $("btnResetPinSelectedUser").disabled = !selectedUser;
+        if ($("btnDeleteSelectedUser")) $("btnDeleteSelectedUser").disabled = !selectedUser;
+        if ($("usersSelectionHint")) {
+          $("usersSelectionHint").textContent = selectedUser
+            ? `Selected: ${selectedUser.fullName || "-"} (${selectedUser.roleId || "-"})`
+            : "Select a user to edit, enable or disable, reset PIN, or delete.";
+        }
+      }
+
       function beginEditUser(user) {
         if (!user?.userId) return;
+        USER_SELECTED_ID = String(user.userId || "");
         setUserFormMode("edit", user);
         if ($("newUserName")) $("newUserName").value = String(user.fullName || "").trim();
         if ($("newUserRole")) $("newUserRole").value = String(user.roleId || "STAFF").trim().toUpperCase();
         renderUserBranchPicker("newUserBranches", Array.isArray(user.branchIds) ? user.branchIds : []);
         updateUserBranchPickerMode();
+        renderUserSelectionState();
         $("newUserRole")?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
 
@@ -3922,15 +3974,21 @@ async function clearGdriveOAuth() {
           const tb = $("usersTable");
           tb.innerHTML = "";
           const users = j.users || [];
+          USERS_CACHE = users;
+          if (USER_SELECTED_ID && !users.some((user) => String(user.userId || "") === String(USER_SELECTED_ID))) {
+            USER_SELECTED_ID = "";
+          }
 
           if (!users.length) {
-            tb.innerHTML = `<tr><td colspan="6" class="muted">No users found.</td></tr>`;
+            tb.innerHTML = `<tr><td colspan="5" class="muted">No users found.</td></tr>`;
+            renderUserSelectionState();
             return;
           }
 
           for (const u of users) {
-            const roleCode = String(u.roleId || u.role || "-").trim().toUpperCase();
             const tr = document.createElement("tr");
+            tr.className = "clickRow";
+            tr.setAttribute("data-user-id", String(u.userId || ""));
 
             const name = escapeHtml(u.fullName || u.name || "-");
             const role = escapeHtml(u.roleId || u.role || "-");
@@ -3943,40 +4001,29 @@ async function clearGdriveOAuth() {
               <td>${roleUsesBranchAssignment(u.roleId) ? branchLabelList(u.branchAccess) : `<span class="muted2">All branches</span>`}</td>
               <td>${active}</td>
               <td>${escapeHtml(fmtTime(last))}</td>
-              <td>
-                <div class="row" style="gap:8px; flex-wrap:nowrap;">
-                  <button class="btn small" data-act="edit" data-id="${escapeHtml(u.userId)}">Edit</button>
-                  <button class="btn small" data-act="toggle" data-id="${escapeHtml(u.userId)}">${active === "Yes" ? "Disable" : "Enable"}</button>
-                  <button class="btn small danger" data-act="pin" data-id="${escapeHtml(u.userId)}">Reset PIN</button>
-                </div>
-              </td>
             `;
+            tr.addEventListener("click", () => {
+              USER_SELECTED_ID = String(u.userId || "");
+              renderUserSelectionState();
+            });
+            tr.addEventListener("dblclick", () => beginEditUser(u));
             tb.appendChild(tr);
           }
 
           if (!tb.children.length) {
-            tb.innerHTML = `<tr><td colspan="6" class="muted">No users available in this mode.</td></tr>`;
+            tb.innerHTML = `<tr><td colspan="5" class="muted">No users available in this mode.</td></tr>`;
+            renderUserSelectionState();
             return;
           }
-
-          // actions
-          tb.querySelectorAll("button[data-act]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-              const act = btn.getAttribute("data-act");
-              const id = btn.getAttribute("data-id");
-              const user = users.find(x => x.userId === id);
-              if (!user) return;
-
-              if (act === "edit") return beginEditUser(user);
-              if (act === "toggle") return toggleUser(user);
-              if (act === "pin") return resetPin(user);
-            });
-          });
+          renderUserSelectionState();
 
         } catch (e) {
           toast("Users", "Failed to load users.", "err");
           const tb = $("usersTable");
-          tb.innerHTML = `<tr><td colspan="6" class="muted">Failed to load.</td></tr>`;
+          USERS_CACHE = [];
+          USER_SELECTED_ID = "";
+          tb.innerHTML = `<tr><td colspan="5" class="muted">Failed to load.</td></tr>`;
+          renderUserSelectionState();
         }
       }
 
@@ -4058,6 +4105,22 @@ async function clearGdriveOAuth() {
           const j = await jpost("/api/admin/users/reset-pin", { userId: user.userId, pin: p });
           if (!j.ok) return toast("Users", j.error || "Reset failed", "err");
           toast("Users", "PIN reset.", "ok");
+        } catch {
+          toast("Users", "Request failed.", "err");
+        }
+      }
+
+      async function deleteUser(user) {
+        if (!user?.userId) return;
+        if (!confirm(`Delete this user?\n\n${user.fullName}\n\nThis will deactivate the user account.`)) return;
+
+        try {
+          const j = await jpost("/api/admin/users/delete", { userId: user.userId });
+          if (!j.ok) return toast("Users", j.error || "Delete failed", "err");
+          toast("Users", "User deleted.", "ok");
+          if (String(USER_SELECTED_ID || "") === String(user.userId || "")) USER_SELECTED_ID = "";
+          if (USER_FORM_MODE.userId && String(USER_FORM_MODE.userId) === String(user.userId)) resetUserForm();
+          await loadUsers();
         } catch {
           toast("Users", "Request failed.", "err");
         }
@@ -5419,6 +5482,22 @@ function renderDailySummaryPage(){
       $("btnCreateUser").addEventListener("click", saveUserForm);
       $("btnCancelUserEdit")?.addEventListener("click", resetUserForm);
       $("btnReloadUsers").addEventListener("click", loadUsers);
+      $("btnEditSelectedUser")?.addEventListener("click", () => {
+        const user = getSelectedUser();
+        if (user) beginEditUser(user);
+      });
+      $("btnToggleSelectedUser")?.addEventListener("click", () => {
+        const user = getSelectedUser();
+        if (user) toggleUser(user);
+      });
+      $("btnResetPinSelectedUser")?.addEventListener("click", () => {
+        const user = getSelectedUser();
+        if (user) resetPin(user);
+      });
+      $("btnDeleteSelectedUser")?.addEventListener("click", () => {
+        const user = getSelectedUser();
+        if (user) deleteUser(user);
+      });
 
       $("btnSavePerms").addEventListener("click", savePerms);
 
