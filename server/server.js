@@ -2039,8 +2039,6 @@ app.get("/static/js/:file", (req, res) => {
     });
   }
   function buildSuperAdminConsolePayload() {
-    const install = refreshActivationState();
-    const validation = getLicenseValidationState();
     return {
       features: SUPER_ADMIN_FEATURE_CATALOG.map((item) => ({
         ...item,
@@ -2049,22 +2047,7 @@ app.get("/static/js/:file", (req, res) => {
       branches: listAllBranches(),
       licenses: listSuperAdminLicenses(),
       licenseEvents: listSuperAdminLicenseEvents(150),
-      validation: {
-        installId: String(install.installId || ""),
-        activationStatus: String(install.status || ACTIVATION_STATUS_UNACTIVATED).toUpperCase(),
-        validationStatus: validation.validationStatus,
-        providerValidateUrl: getStoredLicenseValidateUrl() || "",
-        licenseKeyMasked: maskLicenseKey(validation.licenseKey),
-        licenseKeyConfigured: !!validation.licenseKey,
-        lastValidatedAt: validation.lastValidatedAt,
-        lastValidationAttemptAt: validation.lastValidationAttemptAt,
-        validationError: validation.validationError,
-        graceUntil: validation.graceUntil,
-        providerLicenseId: validation.providerLicenseId,
-        providerOrgId: validation.providerOrgId,
-        providerAccountId: validation.providerAccountId,
-        licensePlanCode: validation.licensePlanCode,
-      },
+      backup: getBackupManagementPayload({ limit: 20 }),
     };
   }
   function getActivationState() {
@@ -5102,6 +5085,70 @@ app.get("/api/super-admin/console", requireSuperAdminApi, (_req, res) => {
   }
 });
 
+app.get("/api/super-admin/backups", requireSuperAdminApi, (_req, res) => {
+  try {
+    return res.json({ ok: true, ...getBackupManagementPayload({ limit: 50 }) });
+  } catch (e) {
+    console.error("[super-admin/backups:get]", e);
+    return res.status(500).json({ ok: false, error: "Failed to load backup status." });
+  }
+});
+
+app.get("/api/super-admin/backups/download", requireSuperAdminApi, (req, res) => {
+  try {
+    const file = getBackupFileByName(req.query?.name);
+    if (!file?.full) return res.status(404).json({ ok: false, error: "Backup file not found." });
+    return res.download(file.full, file.name);
+  } catch (e) {
+    console.error("[super-admin/backups/download]", e);
+    return res.status(500).json({ ok: false, error: "Failed to download backup." });
+  }
+});
+
+app.post("/api/super-admin/backups/config", requireSuperAdminApi, express.json(), (req, res) => {
+  try {
+    const enabled = !!req.body?.enabled;
+    const intervalHours = Math.max(1, Math.min(24 * 30, Number(req.body?.intervalHours) || 24));
+    const retentionCount = Math.max(1, Math.min(100, Number(req.body?.retentionCount) || 14));
+    setAppSetting("ops.autoBackup.enabled", enabled ? "1" : "0");
+    setAppSetting("ops.autoBackup.intervalHours", String(intervalHours));
+    setAppSetting("ops.autoBackup.retentionCount", String(retentionCount));
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      "SUPER_ADMIN_BACKUP_CONFIG",
+      JSON.stringify({ actor: actorFromReq(req), enabled, intervalHours, retentionCount }),
+      Date.now()
+    );
+    return res.json({ ok: true, ...getBackupManagementPayload({ limit: 50 }) });
+  } catch (e) {
+    console.error("[super-admin/backups/config]", e);
+    return res.status(500).json({ ok: false, error: "Failed to save backup settings." });
+  }
+});
+
+app.post("/api/super-admin/backups/run", requireSuperAdminApi, (_req, res) => {
+  try {
+    const result = maybeRunAutoBackup("manual");
+    return res.json({ ok: true, result, ...getBackupManagementPayload({ limit: 50 }) });
+  } catch (e) {
+    console.error("[super-admin/backups/run]", e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e || "Backup failed.") });
+  }
+});
+
+app.post("/api/super-admin/backups/restore-latest", requireSuperAdminApi, express.json(), (req, res) => {
+  try {
+    const confirmText = String(req.body?.confirmText || "").trim().toUpperCase();
+    if (confirmText !== "RESTORE") {
+      return res.status(400).json({ ok: false, error: "Type RESTORE to confirm." });
+    }
+    const result = restoreLatestBackup({ actor: actorFromReq(req), auditAction: "SUPER_ADMIN_DB_RESTORE" });
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error("[super-admin/backups/restore-latest]", e);
+    return res.status(Number(e?.http || 500)).json({ ok: false, error: String(e?.message || "Restore failed.") });
+  }
+});
+
 app.post("/api/super-admin/licenses/generate", requireSuperAdminApi, express.json(), (req, res) => {
   try {
     const branchId = String(req.body?.branchId || "").trim();
@@ -6228,10 +6275,11 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
   }
 
   function getAutoBackupConfig() {
+    const enabledRaw = String(getAppSetting("ops.autoBackup.enabled") || "").trim();
     return {
-      enabled: getAppSetting("ops.autoBackup.enabled") === "1",
+      enabled: enabledRaw ? enabledRaw === "1" : true,
       intervalHours: Math.max(1, Math.min(24 * 30, Number(getAppSetting("ops.autoBackup.intervalHours") || 24) || 24)),
-      retentionCount: Math.max(1, Math.min(100, Number(getAppSetting("ops.autoBackup.retentionCount") || 10) || 10)),
+      retentionCount: Math.max(1, Math.min(100, Number(getAppSetting("ops.autoBackup.retentionCount") || 14) || 14)),
     };
   }
 
@@ -6263,6 +6311,41 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     return safeParseJson(getAppSetting("ops.selfTest.lastResult"), null);
   }
 
+  function getBackupManagementPayload({ limit = 20 } = {}) {
+    const config = getAutoBackupConfig();
+    const backups = listBackupFiles();
+    const lastResult = getAutoBackupState();
+    const lastRestore = getLastRestoreState();
+    const latestBackup = backups[0] || null;
+    let nextDueAt = null;
+    if (config.enabled) {
+      const baseTs = Number(lastResult?.lastRunAt || latestBackup?.mtime || 0);
+      if (Number.isFinite(baseTs) && baseTs > 0) {
+        nextDueAt = baseTs + config.intervalHours * 60 * 60 * 1000;
+      }
+    }
+    return {
+      config,
+      backupDir: getBackupsDir(),
+      backupCount: backups.length,
+      latestBackup: latestBackup
+        ? {
+            name: latestBackup.name,
+            mtime: latestBackup.mtime,
+            sizeBytes: latestBackup.sizeBytes,
+          }
+        : null,
+      lastResult,
+      lastRestore,
+      nextDueAt,
+      backups: backups.slice(0, Math.max(1, Math.min(100, Number(limit) || 20))).map((file) => ({
+        name: file.name,
+        mtime: file.mtime,
+        sizeBytes: file.sizeBytes,
+      })),
+    };
+  }
+
   function saveSelfTestState(payload) {
     setAppSetting("ops.selfTest.lastResult", JSON.stringify(payload || {}));
   }
@@ -6287,7 +6370,6 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
   let autoBackupInProgress = false;
   function maybeRunAutoBackup(trigger = "timer") {
     if (autoBackupInProgress) return { ok: false, skipped: true, reason: "in_progress" };
-    if (!isFeatureProvisioned("operations.auto_backup")) return { ok: false, skipped: true, reason: "feature_disabled" };
     const cfg = getAutoBackupConfig();
     if (!cfg.enabled && trigger !== "manual") return { ok: false, skipped: true, reason: "config_disabled" };
 
@@ -6654,6 +6736,15 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
+  app.get("/api/admin/system/backup-status", requirePerm("SETTINGS_MANAGE"), (_req, res) => {
+    try {
+      return res.json({ ok: true, ...getBackupManagementPayload({ limit: 5 }) });
+    } catch (e) {
+      console.error("[admin/system/backup-status]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load backup status." });
+    }
+  });
+
   app.post("/api/admin/ops/auto-backup/config", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("operations.auto_backup"), express.json(), (req, res) => {
     try {
       const enabled = !!req.body?.enabled;
@@ -6770,6 +6861,77 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     db.exec(`VACUUM INTO '${escapedOutPath}'`);
 
     return { fileName, filePath: outPath, sizeBytes: fs.statSync(outPath).size };
+  }
+
+  function getBackupFileByName(name) {
+    const target = String(name || "").trim();
+    if (!target || !/^qsys-backup-.*\.db$/i.test(target)) return null;
+    return listBackupFiles().find((file) => file.name === target) || null;
+  }
+
+  function restoreLatestBackup({ actor, auditAction = "SYSTEM_DB_RESTORE" } = {}) {
+    const candidates = listBackupFiles();
+    if (!candidates.length) {
+      const err = new Error("No backup files found.");
+      err.http = 400;
+      throw err;
+    }
+
+    const latest = candidates[0];
+    const dbPath = path.join(baseDir, "data", "qsys.db");
+    const walPath = `${dbPath}-wal`;
+    const shmPath = `${dbPath}-shm`;
+    const now = Date.now();
+
+    db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+      auditAction,
+      JSON.stringify({
+        actor: actor || "SYSTEM",
+        sourceFile: latest.name,
+        sourcePath: latest.full,
+      }),
+      now
+    );
+    saveLastRestoreState({
+      restoredAt: now,
+      sourceFile: latest.name,
+      sourcePath: latest.full,
+      actor: actor || "SYSTEM",
+    });
+
+    db.close();
+    fs.copyFileSync(latest.full, dbPath);
+    try { if (fs.existsSync(walPath)) fs.unlinkSync(walPath); } catch {}
+    try { if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath); } catch {}
+
+    let restartPlanned = false;
+    try {
+      const electron = require("electron");
+      if (electron && electron.app) {
+        restartPlanned = true;
+        setTimeout(() => {
+          try {
+            electron.app.relaunch();
+            electron.app.exit(0);
+          } catch {}
+        }, 1200);
+      }
+    } catch {}
+
+    if (!restartPlanned) {
+      setTimeout(() => {
+        try {
+          process.exit(0);
+        } catch {}
+      }, 1200).unref?.();
+    }
+
+    return {
+      restoredFrom: latest.name,
+      restoredAt: now,
+      restartPlanned: true,
+      message: "Database restored. QSys will restart now.",
+    };
   }
 
   let seedTodayInProgress = false;
@@ -6982,73 +7144,11 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
   // Restore latest backup and relaunch app so all processes reopen the restored DB.
   app.post("/api/admin/system/restore", requirePerm("SETTINGS_MANAGE"), (req, res) => {
     try {
-      const backupsDir = path.join(baseDir, "backups");
-      if (!fs.existsSync(backupsDir)) {
-        return res.status(400).json({ ok: false, error: "No backups directory found." });
-      }
-
-      const candidates = fs
-        .readdirSync(backupsDir)
-        .filter((f) => /^qsys-backup-.*\.db$/i.test(f))
-        .map((f) => ({
-          name: f,
-          full: path.join(backupsDir, f),
-          mtime: fs.statSync(path.join(backupsDir, f)).mtimeMs,
-        }))
-        .sort((a, b) => b.mtime - a.mtime);
-
-      if (!candidates.length) {
-        return res.status(400).json({ ok: false, error: "No backup files found." });
-      }
-
-      const latest = candidates[0];
-      const dbPath = path.join(baseDir, "data", "qsys.db");
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-      const now = Date.now();
-
-      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
-        "ADMIN_DB_RESTORE",
-        JSON.stringify({
-          actor: actorFromReq(req),
-          sourceFile: latest.name,
-          sourcePath: latest.full,
-        }),
-        now
-      );
-      saveLastRestoreState({
-        restoredAt: now,
-        sourceFile: latest.name,
-        sourcePath: latest.full,
-        actor: actorFromReq(req),
-      });
-
-      db.close();
-      fs.copyFileSync(latest.full, dbPath);
-      try { if (fs.existsSync(walPath)) fs.unlinkSync(walPath); } catch {}
-      try { if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath); } catch {}
-
-      // Relaunch app so server/db reopen cleanly with the restored file.
-      try {
-        const electron = require("electron");
-        if (electron && electron.app) {
-          setTimeout(() => {
-            try {
-              electron.app.relaunch();
-              electron.app.exit(0);
-            } catch {}
-          }, 1200);
-        }
-      } catch {}
-
-      return res.json({
-        ok: true,
-        restoredFrom: latest.name,
-        message: "Database restored. QSys will restart now.",
-      });
+      const result = restoreLatestBackup({ actor: actorFromReq(req), auditAction: "ADMIN_DB_RESTORE" });
+      return res.json({ ok: true, ...result });
     } catch (e) {
       console.error("[admin/system/restore]", e);
-      return res.status(500).json({ ok: false, error: "Restore failed." });
+      return res.status(Number(e?.http || 500)).json({ ok: false, error: String(e?.message || "Restore failed.") });
     }
   });
   

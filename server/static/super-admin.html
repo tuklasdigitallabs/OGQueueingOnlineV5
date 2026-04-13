@@ -199,6 +199,7 @@
       .subtle{
         color:var(--muted);
         line-height:1.45;
+        white-space:pre-line;
       }
       .grid2{
         display:grid;
@@ -335,6 +336,14 @@
         gap:10px;
         align-items:center;
       }
+      .backupTableWrap{
+        overflow:auto;
+      }
+      .backupConfigGrid{
+        display:grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap:12px;
+      }
       pre{
         margin:0;
         padding:12px;
@@ -346,7 +355,7 @@
         overflow:auto;
       }
       @media (max-width: 980px){
-        .hero, .grid2, .grid3{ grid-template-columns:1fr; }
+        .hero, .grid2, .grid3, .backupConfigGrid{ grid-template-columns:1fr; }
       }
     </style>
   </head>
@@ -357,8 +366,8 @@
           <p class="eyebrow">Platform Control Surface</p>
           <h1>Super Admin Console</h1>
           <p>
-            This is the control room for licensing, validation, feature provisioning, and internal operations.
-            Branch licenses are issued here, tracked here, and audited here so the platform has one authoritative super-admin workflow.
+            This is the control room for branch licensing, backup recovery, feature provisioning, and internal operations.
+            Platform-wide changes are managed here so the hosted QSys system has one authoritative super-admin workflow.
           </p>
         </div>
         <div class="heroActions">
@@ -393,6 +402,7 @@
 
       <div class="tabs">
         <button class="tab active" data-tab="licensing" type="button">Branch Licensing</button>
+        <button class="tab" data-tab="backups" type="button">Backup & Restore</button>
         <button class="tab" data-tab="provisioning" type="button">Feature Provisioning</button>
         <button class="tab" data-tab="internal" type="button">Internal Tools</button>
       </div>
@@ -473,6 +483,71 @@
         </div>
       </section>
 
+      <section id="panel-backups" class="panel">
+        <div class="grid2">
+          <div class="card">
+            <div class="sectionHead">
+              <div>
+                <h2>Backup Policy</h2>
+                <div class="subtle">Daily automatic backups with retention control live here. Restore is restricted to super admin because it affects the whole hosted platform.</div>
+              </div>
+              <button id="saveBackupConfigBtn" class="primary" type="button">Save Backup Policy</button>
+            </div>
+            <div class="backupConfigGrid" style="margin-bottom:12px;">
+              <div class="field">
+                <label for="backupEnabled">Automatic Backup</label>
+                <select id="backupEnabled">
+                  <option value="1">Enabled</option>
+                  <option value="0">Disabled</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="backupIntervalHours">Interval Hours</label>
+                <input id="backupIntervalHours" type="number" min="1" max="720" />
+              </div>
+              <div class="field">
+                <label for="backupRetentionCount">Retention Count</label>
+                <input id="backupRetentionCount" type="number" min="1" max="100" />
+              </div>
+            </div>
+            <div id="backupSummaryText" class="hint">Loading backup policy...</div>
+            <div class="rowActions" style="margin-top:14px;">
+              <button id="runBackupNowBtn" class="good" type="button">Run Backup Now</button>
+              <button id="restoreLatestBackupBtn" class="danger" type="button">Restore Latest Backup</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Backup Status</h2>
+            <div id="backupStatusText" class="subtle">Loading...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sectionHead">
+            <div>
+              <h2>Recent Backups</h2>
+              <div class="subtle">Download any stored snapshot. The latest one is used for restore.</div>
+            </div>
+          </div>
+          <div class="backupTableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Created</th>
+                  <th>Size</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="backupTable">
+                <tr><td colspan="4" class="small">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="panel-provisioning" class="panel">
         <div class="card">
           <div class="sectionHead">
@@ -517,6 +592,7 @@
         branches: [],
         licenses: [],
         licenseEvents: [],
+        backup: null,
         dirtyFeatures: false,
         activeTab: "licensing",
       };
@@ -530,6 +606,7 @@
       const licenseTableEl = document.getElementById("licenseTable");
       const licenseEventsEl = document.getElementById("licenseEvents");
       const consoleJsonEl = document.getElementById("consoleJson");
+      const backupTableEl = document.getElementById("backupTable");
 
       function setStatus(msg) {
         statusEl.textContent = msg || "";
@@ -703,10 +780,74 @@
         });
       }
 
+      function fmtSize(bytes) {
+        const n = Number(bytes || 0);
+        if (!Number.isFinite(n) || n <= 0) return "-";
+        if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+        if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+        if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+        return `${n} B`;
+      }
+
+      function renderBackupManagement() {
+        const backup = state.backup || {};
+        const config = backup.config || {};
+        const lastResult = backup.lastResult || {};
+        const lastRestore = backup.lastRestore || {};
+        const backups = Array.isArray(backup.backups) ? backup.backups : [];
+
+        if (document.getElementById("backupEnabled")) document.getElementById("backupEnabled").value = config.enabled ? "1" : "0";
+        if (document.getElementById("backupIntervalHours")) document.getElementById("backupIntervalHours").value = Number(config.intervalHours || 24);
+        if (document.getElementById("backupRetentionCount")) document.getElementById("backupRetentionCount").value = Number(config.retentionCount || 14);
+
+        const summaryLines = [
+          `Automatic backup is ${config.enabled ? "enabled" : "disabled"}.`,
+          `Runs every ${Number(config.intervalHours || 24)} hour(s).`,
+          `Keeps the latest ${Number(config.retentionCount || 14)} backup(s).`,
+        ];
+        document.getElementById("backupSummaryText").textContent = summaryLines.join(" ");
+
+        document.getElementById("backupStatusText").textContent = [
+          `Stored backups: ${backup.backupCount ?? 0}`,
+          `Latest backup: ${backup.latestBackup?.name || "-"}`,
+          `Latest backup time: ${fmtTime(backup.latestBackup?.mtime)}`,
+          `Latest backup size: ${fmtSize(backup.latestBackup?.sizeBytes)}`,
+          `Last auto backup run: ${fmtTime(lastResult?.lastRunAt)}`,
+          `Next due: ${fmtTime(backup.nextDueAt)}`,
+          `Last restore: ${fmtTime(lastRestore?.restoredAt)}`,
+        ].join("\n");
+
+        if (!backups.length) {
+          backupTableEl.innerHTML = `<tr><td colspan="4" class="small">No backup files stored yet.</td></tr>`;
+          return;
+        }
+        backupTableEl.innerHTML = backups.map((file) => `
+          <tr>
+            <td><span class="mono">${escapeHtml(file.name)}</span></td>
+            <td>${escapeHtml(fmtTime(file.mtime))}</td>
+            <td>${escapeHtml(fmtSize(file.sizeBytes))}</td>
+            <td><button type="button" data-backup-download="${escapeHtml(file.name)}">Download</button></td>
+          </tr>
+        `).join("");
+
+        document.querySelectorAll("[data-backup-download]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const name = btn.getAttribute("data-backup-download");
+            if (!name) return;
+            window.location.assign(window.appUrl(`/api/super-admin/backups/download?name=${encodeURIComponent(name)}`));
+          });
+        });
+      }
+
       function renderConsoleJson() {
         consoleJsonEl.textContent = JSON.stringify({
           licenses: state.licenses.slice(0, 6),
           recentEvents: state.licenseEvents.slice(0, 6),
+          backup: state.backup ? {
+            backupCount: state.backup.backupCount,
+            latestBackup: state.backup.latestBackup,
+            nextDueAt: state.backup.nextDueAt,
+          } : null,
         }, null, 2);
       }
 
@@ -715,6 +856,7 @@
         renderLicenseForm();
         renderLicenseTable();
         renderLicenseEvents();
+        renderBackupManagement();
         renderFeatureProvisioning();
         renderConsoleJson();
       }
@@ -748,6 +890,7 @@
         state.branches = Array.isArray(j.branches) ? j.branches : [];
         state.licenses = Array.isArray(j.licenses) ? j.licenses : [];
         state.licenseEvents = Array.isArray(j.licenseEvents) ? j.licenseEvents : [];
+        state.backup = j.backup || null;
       }
 
       async function refresh() {
@@ -781,6 +924,53 @@
         await postJson("/api/super-admin/features", { features });
         await refresh();
         setStatus("Feature provisioning updated.");
+      }
+
+      async function saveBackupConfig() {
+        const enabled = String(document.getElementById("backupEnabled")?.value || "0") === "1";
+        const intervalHours = Math.max(1, Math.min(720, Number(document.getElementById("backupIntervalHours")?.value || 24) || 24));
+        const retentionCount = Math.max(1, Math.min(100, Number(document.getElementById("backupRetentionCount")?.value || 14) || 14));
+        setStatus("Saving backup policy...");
+        const j = await postJson("/api/super-admin/backups/config", { enabled, intervalHours, retentionCount });
+        state.backup = {
+          config: j.config,
+          backupDir: j.backupDir,
+          backupCount: j.backupCount,
+          latestBackup: j.latestBackup,
+          lastResult: j.lastResult,
+          lastRestore: j.lastRestore,
+          nextDueAt: j.nextDueAt,
+          backups: Array.isArray(j.backups) ? j.backups : [],
+        };
+        renderBackupManagement();
+        renderConsoleJson();
+        setStatus("Backup policy saved.");
+      }
+
+      async function runBackupNow() {
+        setStatus("Creating backup snapshot...");
+        const j = await postJson("/api/super-admin/backups/run", {});
+        state.backup = {
+          config: j.config,
+          backupDir: j.backupDir,
+          backupCount: j.backupCount,
+          latestBackup: j.latestBackup,
+          lastResult: j.lastResult,
+          lastRestore: j.lastRestore,
+          nextDueAt: j.nextDueAt,
+          backups: Array.isArray(j.backups) ? j.backups : [],
+        };
+        renderBackupManagement();
+        renderConsoleJson();
+        setStatus(`Backup created: ${j.result?.fileName || j.latestBackup?.name || "latest snapshot"}`);
+      }
+
+      async function restoreLatestBackup() {
+        const confirmText = window.prompt("Type RESTORE to confirm restoring the latest backup:", "");
+        if (confirmText === null) return;
+        setStatus("Restoring latest backup...");
+        await postJson("/api/super-admin/backups/restore-latest", { confirmText });
+        setStatus("Restore started. QSys will restart now.");
       }
 
       async function generateLicenseDraft() {
@@ -835,6 +1025,15 @@
         btn.addEventListener("click", () => setTab(btn.getAttribute("data-tab")));
       });
       document.getElementById("reloadBtn").addEventListener("click", refresh);
+      document.getElementById("saveBackupConfigBtn").addEventListener("click", () => {
+        saveBackupConfig().catch((err) => setStatus(err.message || "Failed to save backup policy."));
+      });
+      document.getElementById("runBackupNowBtn").addEventListener("click", () => {
+        runBackupNow().catch((err) => setStatus(err.message || "Failed to run backup."));
+      });
+      document.getElementById("restoreLatestBackupBtn").addEventListener("click", () => {
+        restoreLatestBackup().catch((err) => setStatus(err.message || "Failed to restore backup."));
+      });
       document.getElementById("saveFeaturesBtn").addEventListener("click", () => {
         saveFeatures().catch((err) => setStatus(err.message || "Failed to save features."));
       });

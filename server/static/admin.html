@@ -1857,17 +1857,14 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               <div class="muted" id="sysInfo">-</div>
             </div>
             <div class="card" style="grid-column: span 6;">
-              <h3>Backups</h3>
-              <div class="row">
-                <button class="btn" id="btnBackup">Backup DB</button>
-                <button class="btn" id="btnBackupExport">Export Backup...</button>
-                <button class="btn" id="btnOpenBackupFolder">Open Backup Folder</button>
-                <button class="btn danger" id="btnRestore">Restore DB</button>
+              <h3>Backup Status</h3>
+              <div class="muted" id="backupStatusInfo" style="white-space:pre-line;">-</div>
+              <div class="row" style="margin-top:12px;">
                 <button class="btn" id="btnSeedToday">Seed Test Data (Month To Date)</button>
               </div>
               <div class="help">
-                Backup creates a timestamped DB snapshot in local storage. Export Backup lets you choose where to copy it.
-                Restore loads the latest local backup and restarts QSys.
+                Backup and restore are now managed from Super Admin because they affect the full hosted platform.
+                This page shows read-only backup status for branch admins.
                 Seed Test Data wipes month-to-date queue rows for the current branch and inserts month-to-date demo data for testing (including EMA14/MTD reports).
               </div>
               <div class="seedLoader" id="seedLoader">
@@ -1883,33 +1880,9 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               </div>
             </div>
             <div class="card" id="cardOpsAutomation" style="grid-column: span 6; display:none;">
-              <h3>Automation Tools</h3>
-              <div class="muted" id="opsAutomationInfo">-</div>
-              <div id="autoBackupConfigBlock" style="margin-top:12px; display:none;">
-                <div class="three" style="margin-top:12px;">
-                  <div>
-                    <label class="muted2">Auto Backup</label>
-                    <select id="autoBackupEnabled">
-                      <option value="1">Enabled</option>
-                      <option value="0">Disabled</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="muted2">Interval Hours</label>
-                    <input id="autoBackupIntervalHours" type="number" min="1" max="720" />
-                  </div>
-                  <div>
-                    <label class="muted2">Retention Count</label>
-                    <input id="autoBackupRetentionCount" type="number" min="1" max="100" />
-                  </div>
-                </div>
-                <div class="help" id="autoBackupCurrentSetting" style="margin-top:8px;">Current setting: -</div>
-                <div class="row" style="margin-top:10px;">
-                  <button class="btn" id="btnSaveAutoBackupConfig">Save Auto Backup Schedule</button>
-                </div>
-              </div>
+              <h3>Diagnostics</h3>
+              <div class="muted" id="opsAutomationInfo" style="white-space:pre-line;">-</div>
               <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
-                <button class="btn" id="btnRunAutoBackup">Run Auto Backup</button>
                 <button class="btn" id="btnRunIntegrityCheck">Run Integrity Check</button>
                 <button class="btn" id="btnRunSelfTest">Run Startup Self-Test</button>
               </div>
@@ -4234,7 +4207,7 @@ async function clearGdriveOAuth() {
 
       async function loadAdvancedSystemInfo() {
         const opsHealthOn = hasFeature("operations.system_health") || hasFeature("operations.support_bundle");
-        const automationOn = hasFeature(["operations.auto_backup", "operations.integrity_check", "operations.startup_self_test"]);
+        const automationOn = hasFeature(["operations.integrity_check", "operations.startup_self_test"]);
         const licensingOn = hasFeature([
           "licensing.advanced_dashboard",
           "licensing.renewal_reminders",
@@ -4273,20 +4246,9 @@ async function clearGdriveOAuth() {
           try {
             const j = await jget("/api/admin/ops/automation/status");
             if (j?.ok) {
-              const ab = j.autoBackup || {};
               const ic = j.integrityCheck || {};
               const st = j.selfTest || {};
-              if ($("autoBackupConfigBlock")) $("autoBackupConfigBlock").style.display = hasFeature("operations.auto_backup") ? "" : "none";
-              if ($("autoBackupEnabled")) $("autoBackupEnabled").value = ab.enabled ? "1" : "0";
-              if ($("autoBackupIntervalHours")) $("autoBackupIntervalHours").value = Number(ab.intervalHours || 24);
-              if ($("autoBackupRetentionCount")) $("autoBackupRetentionCount").value = Number(ab.retentionCount || 10);
-              if ($("autoBackupCurrentSetting")) {
-                $("autoBackupCurrentSetting").textContent =
-                  `Current setting: ${ab.enabled ? "Enabled" : "Disabled"}, every ${Number(ab.intervalHours || 24)} hour(s), keep ${Number(ab.retentionCount || 10)} backup(s).`;
-              }
               $("opsAutomationInfo").textContent =
-                `Auto Backup: ${ab.enabled ? "Enabled" : "Disabled"}${ab.intervalHours ? ` every ${ab.intervalHours}h` : ""}\n` +
-                `Last Auto Backup: ${fmtTime(ab.lastResult?.completedAt || ab.lastResult?.endedAt || 0)}\n` +
                 `Integrity Check: ${(typeof ic.ok === "boolean") ? (ic.ok ? "PASS" : "FAIL") : (ic.status || "-")} @ ${fmtTime(ic.checkedAt || ic.completedAt || ic.endedAt || 0)}\n` +
                 `Startup Self-Test: ${(typeof st.ok === "boolean") ? (st.ok ? "PASS" : "FAIL") : (st.status || "-")} @ ${fmtTime(st.checkedAt || st.completedAt || st.endedAt || 0)}`;
             } else {
@@ -4319,82 +4281,26 @@ async function clearGdriveOAuth() {
             $("licensingInfo").textContent = "Failed to load licensing status.";
           }
         }
-      }
 
-      // System backups: create a local snapshot in ProgramData backups folder.
-      async function backupDb() {
-        const btn = $("btnBackup");
-        if (!btn) return;
-        btn.disabled = true;
-        const prev = btn.textContent;
-        btn.textContent = "Backing up...";
         try {
-          const j = await jpost("/api/admin/system/backup", {});
-          if (!j.ok) return toast("Backup DB", j.error || "Backup failed.", "err");
-          toast("Backup DB", `Created ${j.fileName || "backup file"}`, "ok");
-        } catch {
-          toast("Backup DB", "Request failed.", "err");
-        } finally {
-          btn.disabled = false;
-          btn.textContent = prev;
-        }
-      }
-
-      // System backups: create local snapshot then export a copy to a chosen folder.
-      async function exportBackupDb() {
-        const btn = $("btnBackupExport");
-        if (!btn) return;
-        btn.disabled = true;
-        const prev = btn.textContent;
-        btn.textContent = "Exporting...";
-        try {
-          const j = await jpost("/api/admin/system/backup/export", {});
-          if (!j.ok) return toast("Export Backup", j.error || "Export failed.", "err");
-          if (j.canceled) return toast("Export Backup", "Export canceled.", "warn");
-          toast("Export Backup", `Exported to ${j.exportPath || "selected folder"}`, "ok");
-        } catch {
-          toast("Export Backup", "Request failed.", "err");
-        } finally {
-          btn.disabled = false;
-          btn.textContent = prev;
-        }
-      }
-
-      // System restore: restores latest local backup and triggers app relaunch.
-      async function restoreDb() {
-        const ok = window.confirm(
-          "Restore latest backup?\n\nThis will replace the current database and restart QSys."
-        );
-        if (!ok) return;
-
-        const btn = $("btnRestore");
-        if (!btn) return;
-        btn.disabled = true;
-        const prev = btn.textContent;
-        btn.textContent = "Restoring...";
-        try {
-          const j = await jpost("/api/admin/system/restore", {});
-          if (!j.ok) {
-            btn.disabled = false;
-            btn.textContent = prev;
-            return toast("Restore DB", j.error || "Restore failed.", "err");
+          const j = await jget("/api/admin/system/backup-status");
+          if (j?.ok) {
+            const cfg = j.config || {};
+            const lastResult = j.lastResult || {};
+            const lastRestore = j.lastRestore || {};
+            $("backupStatusInfo").textContent =
+              `Automatic backup: ${cfg.enabled ? "Enabled" : "Disabled"} every ${Number(cfg.intervalHours || 24)} hour(s)\n` +
+              `Retention: keep ${Number(cfg.retentionCount || 14)} backup(s)\n` +
+              `Stored backups: ${j.backupCount ?? 0}\n` +
+              `Latest backup: ${j.latestBackup?.name || "-"} @ ${fmtTime(j.latestBackup?.mtime)}\n` +
+              `Last auto backup run: ${fmtTime(lastResult?.lastRunAt)}\n` +
+              `Next due: ${fmtTime(j.nextDueAt)}\n` +
+              `Last restore: ${fmtTime(lastRestore?.restoredAt)}`;
+          } else {
+            $("backupStatusInfo").textContent = j?.error || "Failed to load backup status.";
           }
-          toast("Restore DB", j.message || "Restore started. App will restart.", "ok");
         } catch {
-          btn.disabled = false;
-          btn.textContent = prev;
-          toast("Restore DB", "Request failed.", "err");
-        }
-      }
-
-      // Utility action: open local backups folder in file explorer.
-      async function openBackupFolder() {
-        try {
-          const j = await jpost("/api/admin/system/backup/open-folder", {});
-          if (!j.ok) return toast("Backups", j.error || "Failed to open backup folder.", "err");
-          toast("Backups", "Opened backup folder.", "ok");
-        } catch {
-          toast("Backups", "Request failed.", "err");
+          $("backupStatusInfo").textContent = "Failed to load backup status.";
         }
       }
 
@@ -4447,27 +4353,6 @@ async function clearGdriveOAuth() {
         } catch {
           toast("System", "Failed to start support bundle download.", "err");
         }
-      }
-
-      async function runAutoBackupNow() {
-        const j = await jpost("/api/admin/ops/auto-backup/run", {});
-        if (!j?.ok) return toast("System", j?.error || "Auto backup failed.", "err");
-        toast("System", "Auto backup finished.", "ok");
-        await loadAdvancedSystemInfo();
-      }
-
-      async function saveAutoBackupConfig() {
-        const enabled = String($("autoBackupEnabled")?.value || "0") === "1";
-        const intervalHours = Math.max(1, Math.min(720, Number($("autoBackupIntervalHours")?.value || 24) || 24));
-        const retentionCount = Math.max(1, Math.min(100, Number($("autoBackupRetentionCount")?.value || 10) || 10));
-        const j = await jpost("/api/admin/ops/auto-backup/config", {
-          enabled,
-          intervalHours,
-          retentionCount,
-        });
-        if (!j?.ok) return toast("System", j?.error || "Failed to save auto-backup schedule.", "err");
-        toast("System", "Auto-backup schedule saved.", "ok");
-        await loadAdvancedSystemInfo();
       }
 
       async function runIntegrityCheckNow() {
@@ -5496,14 +5381,8 @@ function renderDailySummaryPage(){
       });
 
 
-      $("btnBackup")?.addEventListener("click", backupDb);
-      $("btnBackupExport")?.addEventListener("click", exportBackupDb);
-      $("btnOpenBackupFolder")?.addEventListener("click", openBackupFolder);
-      $("btnRestore")?.addEventListener("click", restoreDb);
       $("btnSeedToday")?.addEventListener("click", seedTodayData);
       $("btnSupportBundle")?.addEventListener("click", downloadSupportBundle);
-      $("btnSaveAutoBackupConfig")?.addEventListener("click", saveAutoBackupConfig);
-      $("btnRunAutoBackup")?.addEventListener("click", runAutoBackupNow);
       $("btnRunIntegrityCheck")?.addEventListener("click", runIntegrityCheckNow);
       $("btnRunSelfTest")?.addEventListener("click", runSelfTestNow);
       $("btnRevokeToken")?.addEventListener("click", revokeLicensingToken);
