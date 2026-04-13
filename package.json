@@ -44,8 +44,14 @@
     "asar": true,
     "files": [
       "electron/**/*",
-      "vendor/ffmpeg/**/*",
-      "server/**/*",
+      "vendor/ffmpeg/win/**/*",
+      "server/**/*.js",
+      "server/**/*.sql",
+      "server/static/**/*",
+      "server/public/assets/icons/**/*",
+      "!server/docs{,/**/*}",
+      "!server/data{,/**/*}",
+      "!server/static/admin_working counters",
       "package.json",
       "node_modules/**/*"
     ],
