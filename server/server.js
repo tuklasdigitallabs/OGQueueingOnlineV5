@@ -3446,6 +3446,44 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const sessionRow = sid
         ? db.prepare(`SELECT sid, expiresAt, updatedAt FROM http_sessions WHERE sid=? LIMIT 1`).get(sid)
         : null;
+      const rawAdminUser = getScopedSessionUser(req, "admin");
+      let adminAuthProbe = null;
+      try {
+        if (!rawAdminUser) {
+          adminAuthProbe = { ok: false, error: "Not authenticated" };
+        } else {
+          const normalizedUser = ensureSessionBranchContext(rawAdminUser);
+          const allowedBranches = listAccessibleBranchesForUser(normalizedUser?.userId, normalizedUser?.roleId);
+          const branch = getRequestBranch(req);
+          adminAuthProbe = {
+            ok: allowedBranches.length > 0,
+            error: allowedBranches.length ? "" : "No active branches are available.",
+            user: normalizedUser ? {
+              userId: String(normalizedUser.userId || ""),
+              fullName: String(normalizedUser.fullName || ""),
+              roleId: String(normalizedUser.roleId || ""),
+              selectedBranchId: String(normalizedUser.selectedBranchId || ""),
+              allowedBranchIds: Array.isArray(normalizedUser.allowedBranchIds) ? normalizedUser.allowedBranchIds.map((v) => String(v || "")) : [],
+            } : null,
+            branch: branch ? {
+              branchId: String(branch.branchId || ""),
+              branchCode: String(branch.branchCode || ""),
+              branchName: String(branch.branchName || ""),
+              status: String(branch.status || ""),
+            } : null,
+            allowedBranches: allowedBranches.map((item) => ({
+              branchId: String(item.branchId || ""),
+              branchCode: String(item.branchCode || ""),
+              branchName: String(item.branchName || ""),
+              status: String(item.status || ""),
+              licenseStatus: String(item.licenseStatus || ""),
+              licenseActivated: !!item.licenseActivated,
+            })),
+          };
+        }
+      } catch (probeError) {
+        adminAuthProbe = { ok: false, error: String(probeError?.message || probeError || "Probe failed.") };
+      }
       return res.json({
         ok: true,
         scope: String(req.qsysSessionScope || ""),
@@ -3483,6 +3521,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
               updatedAt: Number(sessionRow.updatedAt || 0) || 0,
             }
           : null,
+        adminAuthProbe,
       });
     } catch (e) {
       console.error("[admin/session-diagnostics]", e);
