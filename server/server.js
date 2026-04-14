@@ -1400,7 +1400,9 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
     if (
       p === "/admin" ||
       p === "/admin-login" ||
+      p === "/admin-diagnostics" ||
       /^\/b\/[^/]+\/admin(?:\/|$)/i.test(p) ||
+      /^\/b\/[^/]+\/admin-diagnostics(?:\/|$)/i.test(p) ||
       /^\/b\/[^/]+\/admin-login(?:\/|$)/i.test(p) ||
       p.startsWith("/api/admin/")
     ) return "admin";
