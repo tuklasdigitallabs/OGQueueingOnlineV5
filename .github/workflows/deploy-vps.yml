@@ -38,6 +38,7 @@ jobs:
       DEPLOY_RELOAD_NGINX: ${{ github.event_name == 'workflow_dispatch' && (inputs.reload_nginx == 'true' && '1' || '0') || '1' }}
 
     steps:
+      # Small workflow touch to force a fresh deploy run after SSH host-key scan hardening.
       - name: Validate deploy secrets
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
