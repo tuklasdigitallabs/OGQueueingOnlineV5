@@ -5880,7 +5880,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   function normalizeRequestedUserBranchIds(input, fallbackBranchId, roleScope = "") {
     const values = Array.isArray(input) ? input : [];
-    const valid = new Set(listActiveBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
+    const valid = new Set(listAllBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
     const unique = [];
     for (const raw of values) {
       const branchId = String(raw || "").trim();
@@ -5926,7 +5926,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
             branchAccess,
           };
         });
-      res.json({ ok: true, users: rows, branches: listActiveBranches() });
+      res.json({ ok: true, users: rows, branches: listAllBranches() });
     } catch (e) {
       console.error("[admin/users:get]", e);
       res.status(500).json({ ok: false, error: "Server error." });
