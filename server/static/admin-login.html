@@ -184,6 +184,19 @@
         return "";
       }
     }
+    function getLoginReason() {
+      try {
+        const url = new URL(window.location.href);
+        return String(url.searchParams.get("reason") || "").trim().toUpperCase();
+      } catch {
+        return "";
+      }
+    }
+    function describeLoginReason(reason) {
+      if (reason === "ADMIN_PAGE_NO_SESSION") return "Admin page redirect reason: no admin session was visible to the page route.";
+      if (reason === "ADMIN_PAGE_ROLE_MISMATCH") return "Admin page redirect reason: the session user was not ADMIN for the page route.";
+      return "";
+    }
     function showLastAdminAuthFailure() {
       try {
         const raw = sessionStorage.getItem("qsys_admin_auth_failure");
@@ -199,6 +212,10 @@
         if (note) parts.push(note);
         $e.textContent = parts.join(" ");
       } catch {}
+    }
+    function showLoginReason() {
+      const message = describeLoginReason(getLoginReason());
+      if (message) $e.textContent = message;
     }
 
     async function refreshHealth() {
@@ -270,6 +287,7 @@
     });
 
     showLastAdminAuthFailure();
+    if (!$e.textContent) showLoginReason();
     refreshHealth();
     setInterval(refreshHealth, 5000);
   </script>

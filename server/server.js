@@ -2921,12 +2921,12 @@ function requireStaffPage(req, res, next) {
   next();
 }
 
-  function requireAdminPage(req, res, next) {
+function requireAdminPage(req, res, next) {
   const u = getScopedSessionUser(req, "admin");
-  if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
+  if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode, { reason: "ADMIN_PAGE_NO_SESSION" }));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (roleId !== "ADMIN") return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
+  if (roleId !== "ADMIN") return res.redirect(buildAdminLoginPath(req?.params?.branchCode, { reason: "ADMIN_PAGE_ROLE_MISMATCH" }));
   next();
 }
 
@@ -4144,10 +4144,15 @@ function buildStaffEntryPath(branchCodeInput = "") {
   return pathWithBase(`/b/${encodeURIComponent(code)}/staff`);
 }
 
-function buildAdminLoginPath(branchCodeInput = "") {
+function buildAdminLoginPath(branchCodeInput = "", options = {}) {
   const code = String(branchCodeInput || "").trim().toUpperCase();
-  return code
-    ? pathWithBase(`/admin-login?branchCode=${encodeURIComponent(code)}`)
+  const query = new URLSearchParams();
+  if (code) query.set("branchCode", code);
+  const reason = String(options?.reason || "").trim().toUpperCase();
+  if (reason) query.set("reason", reason);
+  const suffix = query.toString();
+  return suffix
+    ? pathWithBase(`/admin-login?${suffix}`)
     : pathWithBase("/admin-login");
 }
 
