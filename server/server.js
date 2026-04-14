@@ -3099,13 +3099,41 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         return res.status(403).json({ ok: false, error: "Not allowed for Staff app" });
       }
 
-      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
-      if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
-
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
       const access = getUserBranchAccessSummary(u.userId, role, "staff login");
+      if (access.assignedBranches.length !== 1) {
+        return res.status(409).json({
+          ok: false,
+          error: "Staff users must have exactly one branch assignment.",
+          assignedBranches: access.assignedBranches.map((branch) => ({
+            branchId: String(branch.branchId || ""),
+            branchCode: String(branch.branchCode || ""),
+            branchName: String(branch.branchName || ""),
+            status: String(branch.status || ""),
+            licenseStatus: String(branch.licenseStatus || ""),
+            licenseActivated: !!branch.licenseActivated,
+          })),
+        });
+      }
+
+      const requestedBranchCode = getRequestedLoginBranchCode(req);
+      const assignedBranch = access.assignedBranches[0] || null;
+      if (requestedBranchCode) {
+        if (String(assignedBranch?.branchCode || "").trim().toUpperCase() !== requestedBranchCode) {
+          return res.status(403).json({
+            ok: false,
+            error: "This branch is not assigned to this user.",
+            assignedBranches: [describeBlockedBranch(assignedBranch, "staff login")],
+          });
+        }
+        const requestedBlocked = access.blockedBranches.find((branch) => String(branch.branchCode || "").trim().toUpperCase() === requestedBranchCode);
+        if (requestedBlocked) {
+          return res.status(403).json({ ok: false, error: requestedBlocked.accessMessage || "This branch is not available for staff login.", assignedBranches: [requestedBlocked] });
+        }
+      }
+
       if (!access.allowedBranches.length) {
         if (!access.assignedBranches.length) {
           return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
@@ -3117,12 +3145,16 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         });
       }
 
-      const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId, role);
+      const selectedBranchId = String(
+        requestedBranchCode
+          ? assignedBranch?.branchId || ""
+          : access.allowedBranches[0]?.branchId || assignedBranch?.branchId || ""
+      ).trim();
       const sessUser = ensureSessionBranchContext({
         userId: u.userId,
         fullName: u.fullName,
         roleId: role,
-        ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
+        ...(selectedBranchId ? { selectedBranchId } : {}),
       });
       await finalizeLoginSession(req, "staff", sessUser);
 
@@ -3256,6 +3288,22 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "staff", u);
     const access = getUserBranchAccessSummary(u?.userId, u?.roleId, "staff access");
+    if (access.assignedBranches.length !== 1) {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearStaffUndo(req); } catch {}
+      return res.status(409).json({
+        ok: false,
+        error: "Staff users must have exactly one branch assignment.",
+        assignedBranches: access.assignedBranches.map((branch) => ({
+          branchId: String(branch.branchId || ""),
+          branchCode: String(branch.branchCode || ""),
+          branchName: String(branch.branchName || ""),
+          status: String(branch.status || ""),
+          licenseStatus: String(branch.licenseStatus || ""),
+          licenseActivated: !!branch.licenseActivated,
+        })),
+      });
+    }
     if (!access.allowedBranches.length) {
       try { clearSessionUser(req, "staff"); } catch {}
       try { clearStaffUndo(req); } catch {}
@@ -3360,6 +3408,22 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "staff", u);
     const access = getUserBranchAccessSummary(u?.userId, u?.roleId, "staff access");
+    if (access.assignedBranches.length !== 1) {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearStaffUndo(req); } catch {}
+      return res.status(409).json({
+        ok: false,
+        error: "Staff users must have exactly one branch assignment.",
+        assignedBranches: access.assignedBranches.map((branch) => ({
+          branchId: String(branch.branchId || ""),
+          branchCode: String(branch.branchCode || ""),
+          branchName: String(branch.branchName || ""),
+          status: String(branch.status || ""),
+          licenseStatus: String(branch.licenseStatus || ""),
+          licenseActivated: !!branch.licenseActivated,
+        })),
+      });
+    }
     if (!access.allowedBranches.length) {
       try { clearSessionUser(req, "staff"); } catch {}
       try { clearStaffUndo(req); } catch {}
