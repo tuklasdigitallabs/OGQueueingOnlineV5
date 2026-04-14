@@ -1948,7 +1948,7 @@ async function jget(url) {
   } else {
     const txt = await r.text().catch(()=> "");
     // If the server sent a redirect/login page, surface it instead of throwing.
-    return { ok:false, error: (txt || ("HTTP " + r.status)).slice(0, 200) };
+    return { ok:false, error: (txt || ("HTTP " + r.status)).slice(0, 200), status: r.status };
   }
 }
 
@@ -2271,7 +2271,7 @@ async function jpost(url, body) {
       async function loadAccessContext() {
         const me = await jget("/api/admin/auth/me");
         if (!me?.ok) {
-          window.location.href = adminLoginUrl();
+          toast("Admin Session", me?.error || "Failed to refresh admin session.", "err");
           throw new Error(me?.error || "Not authenticated");
         }
         CURRENT_USER = me.user || null;
