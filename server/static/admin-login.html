@@ -176,6 +176,14 @@
       const code = String(branchCode || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin`) : window.appUrl("/admin");
     }
+    function getRequestedBranchCode() {
+      try {
+        const url = new URL(window.location.href);
+        return String(url.searchParams.get("branchCode") || "").trim().toUpperCase();
+      } catch {
+        return "";
+      }
+    }
 
     async function refreshHealth() {
       try {
@@ -220,7 +228,7 @@
         const r = await fetch(window.appUrl("/api/admin/auth/login"), {
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ fullName, pin })
+          body: JSON.stringify({ fullName, pin, branchCode: getRequestedBranchCode() })
         });
         let j = null;
         try {

@@ -3000,6 +3000,52 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     const allowed = listAccessibleBranchesForUser(userId, normalizedRoleId).some((row) => String(row.branchId || "") === String(branch.branchId || ""));
     return allowed ? String(branch.branchId || "").trim() : "";
   }
+  function getRequestedLoginBranchCode(req) {
+    return String(
+      req?.body?.branchCode ||
+      req?.query?.branchCode ||
+      req?.params?.branchCode ||
+      ""
+    ).trim().toUpperCase();
+  }
+  function listLoginCandidates(fullName) {
+    return db.prepare(`
+      SELECT userId, fullName, pinHash, roleId, isActive, createdAt, updatedAt
+      FROM users
+      WHERE lower(fullName) = lower(?)
+      ORDER BY updatedAt DESC, createdAt DESC, userId DESC
+    `).all(String(fullName || "").trim());
+  }
+  function resolveLoginUserRecord(req, fullName, allowedRoles = []) {
+    const requestedBranchCode = getRequestedLoginBranchCode(req);
+    const requestedBranch = requestedBranchCode ? getBranchByCode(requestedBranchCode) : null;
+    const allowed = new Set((allowedRoles || []).map((role) => String(role || "").trim().toUpperCase()).filter(Boolean));
+    const candidates = listLoginCandidates(fullName)
+      .filter((row) => !!row && !!row.isActive)
+      .filter((row) => !allowed.size || allowed.has(String(row.roleId || "").trim().toUpperCase()));
+
+    if (!candidates.length) return { error: "Invalid credentials", http: 401 };
+
+    if (requestedBranch?.branchId) {
+      const narrowed = candidates.filter((row) => {
+        const roleId = String(row.roleId || "").trim().toUpperCase();
+        if (roleHasGlobalBranchAccess(roleId)) return true;
+        return listUserBranchAccess(row.userId).some((branch) => String(branch.branchId || "").trim() === String(requestedBranch.branchId || "").trim());
+      });
+      if (narrowed.length === 1) return { user: narrowed[0] };
+      if (narrowed.length > 1) {
+        return { error: "Multiple active users match this name for the selected branch. Use a unique full name.", http: 409 };
+      }
+    }
+
+    if (candidates.length === 1) return { user: candidates[0] };
+    return {
+      error: requestedBranchCode
+        ? "No unique active user matched this name for the selected branch."
+        : "Multiple active users share this name. Use a unique full name or the branch-specific login link.",
+      http: 409,
+    };
+  }
 
   function actorFromReq(req) {
     const u = getSessionUser(req);
@@ -3041,14 +3087,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const u = db.prepare(`
-        SELECT userId, fullName, pinHash, roleId, isActive
-        FROM users
-        WHERE lower(fullName) = lower(?)
-        LIMIT 1
-      `).get(fullName);
-
-      if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
+      const resolved = resolveLoginUserRecord(req, fullName, ["ADMIN"]);
+      if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
+      const u = resolved.user;
 
       const role = String(u.roleId || "").toUpperCase();
       if (!["STAFF","SUPERVISOR"].includes(role)) {
@@ -3098,14 +3139,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const u = db.prepare(`
-        SELECT userId, fullName, pinHash, roleId, isActive
-        FROM users
-        WHERE lower(fullName) = lower(?)
-        LIMIT 1
-      `).get(fullName);
-
-      if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
+      const resolved = resolveLoginUserRecord(req, fullName, ["SUPER_ADMIN"]);
+      if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
+      const u = resolved.user;
 
       const role = String(u.roleId || "").toUpperCase();
       if (role !== "ADMIN") {
@@ -3144,14 +3180,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const pin = String(req.body.pin || "").trim();
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const u = db.prepare(`
-        SELECT userId, fullName, pinHash, roleId, isActive
-        FROM users
-        WHERE lower(fullName) = lower(?)
-        LIMIT 1
-      `).get(fullName);
-
-      if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
+      const resolved = resolveLoginUserRecord(req, fullName, ["STAFF", "SUPERVISOR"]);
+      if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
+      const u = resolved.user;
       const role = String(u.roleId || "").toUpperCase();
       if (role !== "SUPER_ADMIN") return res.status(403).json({ ok: false, error: "Super admin only" });
 
@@ -3182,14 +3213,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const u = db.prepare(`
-        SELECT userId, fullName, pinHash, roleId, isActive
-        FROM users
-        WHERE lower(fullName) = lower(?)
-        LIMIT 1
-      `).get(fullName);
-
-      if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
+      const resolved = resolveLoginUserRecord(req, fullName, ["STAFF", "SUPERVISOR", "ADMIN"]);
+      if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
+      const u = resolved.user;
 
       const role = String(u.roleId || "").toUpperCase();
       const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
@@ -3811,7 +3837,10 @@ function buildGuestEntryPath(branchCodeInput = "") {
 }
 
 function buildStaffLoginPath(branchCodeInput = "") {
-  return pathWithBase("/staff-login");
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  return code
+    ? pathWithBase(`/staff-login?branchCode=${encodeURIComponent(code)}`)
+    : pathWithBase("/staff-login");
 }
 
 function buildStaffEntryPath(branchCodeInput = "") {
@@ -3821,7 +3850,10 @@ function buildStaffEntryPath(branchCodeInput = "") {
 }
 
 function buildAdminLoginPath(branchCodeInput = "") {
-  return pathWithBase("/admin-login");
+  const code = String(branchCodeInput || "").trim().toUpperCase();
+  return code
+    ? pathWithBase(`/admin-login?branchCode=${encodeURIComponent(code)}`)
+    : pathWithBase("/admin-login");
 }
 
 function buildAdminEntryPath(branchCodeInput = "") {
@@ -4102,7 +4134,7 @@ app.get("/admin-login", (req, res) => {
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
 app.get("/b/:branchCode/admin-login", (req, res) => {
-  return res.redirect(pathWithBase("/admin-login"));
+  return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
 });
 
 app.get("/super-admin-login", (req, res) => {
@@ -4131,7 +4163,7 @@ app.get("/staff-login", (req, res) => {
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
 });
 app.get("/b/:branchCode/staff-login", (req, res) => {
-  return res.redirect(pathWithBase("/staff-login"));
+  return res.redirect(buildStaffLoginPath(req?.params?.branchCode));
 });
 
 
@@ -6084,6 +6116,9 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (!["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId))
         return res.status(400).json({ ok: false, error: "Invalid roleId." });
       if (!/^\d{6}$/.test(pin)) return res.status(400).json({ ok: false, error: "PIN must be 6 digits." });
+      if (db.prepare(`SELECT userId FROM users WHERE lower(fullName)=lower(?) LIMIT 1`).get(fullName)) {
+        return res.status(409).json({ ok: false, error: "A user with this full name already exists. Use a unique full name." });
+      }
 
       const userId = randomUUID();
       const pinHash = bcrypt.hashSync(pin, 10);
@@ -6128,6 +6163,10 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (!existing) return res.status(404).json({ ok: false, error: "User not found." });
 
       if (fullName) {
+        const duplicate = db.prepare(`SELECT userId FROM users WHERE lower(fullName)=lower(?) AND userId<>? LIMIT 1`).get(fullName, userId);
+        if (duplicate?.userId) {
+          return res.status(409).json({ ok: false, error: "A user with this full name already exists. Use a unique full name." });
+        }
         db.prepare(`UPDATE users SET fullName=?, updatedAt=? WHERE userId=?`).run(fullName, now, userId);
       }
       if (roleId && ["STAFF", "SUPERVISOR", "ADMIN"].includes(roleId)) {

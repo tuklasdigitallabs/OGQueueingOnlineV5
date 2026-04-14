@@ -184,6 +184,14 @@
       const code = String(branchCodeArg || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
     }
+    function getRequestedBranchCode() {
+      try {
+        const url = new URL(window.location.href);
+        return String(url.searchParams.get("branchCode") || "").trim().toUpperCase();
+      } catch {
+        return "";
+      }
+    }
 
     async function refreshHealth() {
       try {
@@ -214,7 +222,7 @@
         const r = await fetch(window.appUrl("/api/staff/auth/login"), {
           method: "POST",
           headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({ fullName: $n.value, pin: $p.value })
+          body: JSON.stringify({ fullName: $n.value, pin: $p.value, branchCode: getRequestedBranchCode() })
         });
         const j = await r.json();
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
