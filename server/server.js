@@ -3340,6 +3340,77 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     return res.json({ ok: true, features: getProvisionedFeatureMap(keys) });
   });
 
+  app.get("/api/admin/diagnostics/login-trace", requirePerm("USERS_MANAGE"), (req, res) => {
+    try {
+      const fullName = String(req.query?.fullName || "").trim();
+      const requestedBranchCode = String(req.query?.branchCode || "").trim().toUpperCase();
+      const runtimeDbPath = path.join(baseDir, "data", "qsys.db");
+      const requestedBranch = requestedBranchCode ? enrichBranchLicense(getBranchByCode(requestedBranchCode)) : null;
+
+      const users = fullName
+        ? listLoginCandidates(fullName).map((row) => {
+            const roleId = String(row.roleId || "").trim().toUpperCase();
+            const assignedBranches = listAssignedBranchesForUser(row.userId, roleId);
+            const access = getUserBranchAccessSummary(row.userId, roleId, "staff login");
+            return {
+              userId: String(row.userId || ""),
+              fullName: String(row.fullName || ""),
+              roleId,
+              isActive: !!row.isActive,
+              createdAt: Number(row.createdAt || 0) || 0,
+              updatedAt: Number(row.updatedAt || 0) || 0,
+              lastLoginAt: Number(row.lastLoginAt || 0) || 0,
+              assignedBranchCount: assignedBranches.length,
+              assignedBranches: assignedBranches.map((branch) => ({
+                branchId: String(branch.branchId || ""),
+                branchCode: String(branch.branchCode || ""),
+                branchName: String(branch.branchName || ""),
+                status: String(branch.status || ""),
+                licenseStatus: String(branch.licenseStatus || ""),
+                licenseActivated: !!branch.licenseActivated,
+              })),
+              allowedBranches: access.allowedBranches.map((branch) => ({
+                branchId: String(branch.branchId || ""),
+                branchCode: String(branch.branchCode || ""),
+                branchName: String(branch.branchName || ""),
+                status: String(branch.status || ""),
+                licenseStatus: String(branch.licenseStatus || ""),
+                licenseActivated: !!branch.licenseActivated,
+              })),
+              blockedBranches: access.blockedBranches,
+            };
+          })
+        : [];
+
+      return res.json({
+        ok: true,
+        fullName,
+        requestedBranchCode,
+        runtime: {
+          baseDir,
+          dbPath: runtimeDbPath,
+          dbExists: fs.existsSync(runtimeDbPath),
+        },
+        requestedBranch: requestedBranch
+          ? {
+              branchId: String(requestedBranch.branchId || ""),
+              branchCode: String(requestedBranch.branchCode || ""),
+              branchName: String(requestedBranch.branchName || ""),
+              status: String(requestedBranch.status || ""),
+              licenseStatus: String(requestedBranch.licenseStatus || ""),
+              licenseActivated: !!requestedBranch.licenseActivated,
+              access: describeBlockedBranch(requestedBranch, "staff login"),
+            }
+          : null,
+        userCount: users.length,
+        users,
+      });
+    } catch (e) {
+      console.error("[admin/diagnostics/login-trace]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load login diagnostics." });
+    }
+  });
+
   app.get("/api/staff/feature-flags", requireAuth, (_req, res) => {
     const keys = ["queue.recovery_tools", "queue.reopen_completed", "queue.wait_forecast"];
     return res.json({ ok: true, features: getProvisionedFeatureMap(keys) });
@@ -4183,9 +4254,16 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
   if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")));
 });
- app.get("/b/:branchCode/admin", requireAdminPage, (req, res) => {
+app.get("/b/:branchCode/admin", requireAdminPage, (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")));
+});
+app.get("/admin-diagnostics", requireAdminPage, requirePermPage("USERS_MANAGE"), (_req, res) => {
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login-diagnostics.html")));
+});
+app.get("/b/:branchCode/admin-diagnostics", requireAdminPage, requirePermPage("USERS_MANAGE"), (req, res) => {
+  if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login-diagnostics.html")));
 });
 
 app.get("/admin-login", (req, res) => {
