@@ -96,6 +96,17 @@
     <div class="card">
       <h2>Output</h2>
       <p><a class="link" href="" id="rawLink" target="_blank" rel="noreferrer">Open raw JSON</a></p>
+      <div class="row" style="margin-bottom:12px">
+        <label>
+          Repair User ID
+          <input id="repairUserId" placeholder="Paste userId from trace" />
+        </label>
+        <label>
+          Keep Branch Code
+          <input id="repairBranchCode" placeholder="YL-YULO" />
+        </label>
+        <button id="repairBtn" type="button">Repair To Single Branch</button>
+      </div>
       <pre id="output">Run a trace to inspect the live login state.</pre>
     </div>
   </div>
@@ -108,6 +119,9 @@
     const statusEl = document.getElementById("status");
     const outputEl = document.getElementById("output");
     const rawLinkEl = document.getElementById("rawLink");
+    const repairUserIdEl = document.getElementById("repairUserId");
+    const repairBranchCodeEl = document.getElementById("repairBranchCode");
+    const repairBtn = document.getElementById("repairBtn");
 
     function buildUrl() {
       const params = new URLSearchParams();
@@ -137,7 +151,44 @@
       }
     }
 
+    async function repairSingleBranch() {
+      const userId = String(repairUserIdEl.value || "").trim();
+      const branchCode = String(repairBranchCodeEl.value || "").trim().toUpperCase();
+      if (!userId || !branchCode) {
+        statusEl.textContent = "Repair User ID and Keep Branch Code are required.";
+        statusEl.className = "err";
+        return;
+      }
+      try {
+        const traceUrl = buildUrl();
+        const traceRes = await fetch(traceUrl, { cache: "no-store" });
+        const trace = await traceRes.json();
+        if (!trace.ok) throw new Error(trace.error || "Trace lookup failed.");
+        const targetUser = (Array.isArray(trace.users) ? trace.users : []).find((item) => String(item.userId || "") === userId);
+        if (!targetUser) throw new Error("User ID not found in the current trace output.");
+        const targetBranch = (Array.isArray(targetUser.assignedBranches) ? targetUser.assignedBranches : []).find((item) => String(item.branchCode || "").trim().toUpperCase() === branchCode);
+        if (!targetBranch) throw new Error("Branch code not found in that user's assigned branches.");
+
+        statusEl.className = "muted";
+        statusEl.textContent = "Applying single-branch repair...";
+        const res = await fetch(window.appUrl("/api/admin/diagnostics/repair-single-branch"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, branchId: String(targetBranch.branchId || "") }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Repair failed.");
+        statusEl.textContent = `Repair applied. ${data.fullName} now keeps ${data.branchCode}.`;
+        statusEl.className = "muted";
+        await runTrace();
+      } catch (err) {
+        statusEl.textContent = String(err && err.message ? err.message : err);
+        statusEl.className = "err";
+      }
+    }
+
     runBtn.addEventListener("click", runTrace);
+    repairBtn.addEventListener("click", repairSingleBranch);
     [fullNameEl, branchCodeEl].forEach((el) => {
       el.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter") runTrace();

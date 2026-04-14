@@ -933,6 +933,31 @@ function ensureMultiBranchFoundationSchema(db) {
       UNIQUE(userId, branchId)
     );
     CREATE INDEX IF NOT EXISTS idx_user_branch_access_branchId ON user_branch_access(branchId);
+    CREATE TRIGGER IF NOT EXISTS trg_user_branch_access_staff_single_insert
+    BEFORE INSERT ON user_branch_access
+    WHEN upper(coalesce(NEW.roleScope,'')) IN ('STAFF','SUPERVISOR')
+      AND EXISTS (
+        SELECT 1
+        FROM user_branch_access
+        WHERE userId = NEW.userId
+          AND branchId <> NEW.branchId
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'STAFF_SINGLE_BRANCH_REQUIRED');
+    END;
+    CREATE TRIGGER IF NOT EXISTS trg_user_branch_access_staff_single_update
+    BEFORE UPDATE OF userId, branchId, roleScope ON user_branch_access
+    WHEN upper(coalesce(NEW.roleScope,'')) IN ('STAFF','SUPERVISOR')
+      AND EXISTS (
+        SELECT 1
+        FROM user_branch_access
+        WHERE userId = NEW.userId
+          AND branchId <> NEW.branchId
+          AND id <> NEW.id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'STAFF_SINGLE_BRANCH_REQUIRED');
+    END;
 
     CREATE TABLE IF NOT EXISTS branch_business_dates (
       branchId TEXT PRIMARY KEY,
@@ -3410,6 +3435,54 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     } catch (e) {
       console.error("[admin/diagnostics/login-trace]", e);
       return res.status(500).json({ ok: false, error: "Failed to load login diagnostics." });
+    }
+  });
+  app.post("/api/admin/diagnostics/repair-single-branch", requirePerm("USERS_MANAGE"), express.json(), (req, res) => {
+    try {
+      const userId = String(req.body?.userId || "").trim();
+      const branchId = String(req.body?.branchId || "").trim();
+      if (!userId || !branchId) {
+        return res.status(400).json({ ok: false, error: "userId and branchId are required." });
+      }
+      const user = db.prepare(`SELECT userId, fullName, roleId, isActive FROM users WHERE userId=? LIMIT 1`).get(userId);
+      if (!user?.userId) return res.status(404).json({ ok: false, error: "User not found." });
+      const roleId = String(user.roleId || "").trim().toUpperCase();
+      if (!["STAFF", "SUPERVISOR"].includes(roleId)) {
+        return res.status(400).json({ ok: false, error: "Repair is only supported for staff or supervisor users." });
+      }
+      const branch = getBranchById(branchId);
+      if (!branch?.branchId) return res.status(404).json({ ok: false, error: "Branch not found." });
+
+      const nextBranchIds = replaceUserBranchAccess(db, { userId, branchIds: [branchId], roleScope: roleId });
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "ADMIN_DIAGNOSTICS_REPAIR_SINGLE_BRANCH",
+        JSON.stringify({
+          actor: actorFromReq(req),
+          userId,
+          fullName: String(user.fullName || ""),
+          roleId,
+          branchId,
+          branchCode: String(branch.branchCode || ""),
+        }),
+        Date.now()
+      );
+      return res.json({
+        ok: true,
+        userId,
+        fullName: String(user.fullName || ""),
+        roleId,
+        branchId: String(branch.branchId || ""),
+        branchCode: String(branch.branchCode || ""),
+        branchName: String(branch.branchName || ""),
+        branchIds: nextBranchIds,
+      });
+    } catch (e) {
+      console.error("[admin/diagnostics/repair-single-branch]", e);
+      const msg = String(e?.message || "");
+      if (msg.includes("STAFF_SINGLE_BRANCH_REQUIRED")) {
+        return res.status(409).json({ ok: false, error: "Staff users must have exactly one branch assignment." });
+      }
+      return res.status(500).json({ ok: false, error: "Failed to repair staff branch assignment." });
     }
   });
 
