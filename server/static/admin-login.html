@@ -184,40 +184,6 @@
         return "";
       }
     }
-    function getLoginReason() {
-      try {
-        const url = new URL(window.location.href);
-        return String(url.searchParams.get("reason") || "").trim().toUpperCase();
-      } catch {
-        return "";
-      }
-    }
-    function describeLoginReason(reason) {
-      if (reason === "ADMIN_PAGE_NO_SESSION") return "Admin page redirect reason: no admin session was visible to the page route.";
-      if (reason === "ADMIN_PAGE_ROLE_MISMATCH") return "Admin page redirect reason: the session user was not ADMIN for the page route.";
-      return "";
-    }
-    function showLastAdminAuthFailure() {
-      try {
-        const raw = sessionStorage.getItem("qsys_admin_auth_failure");
-        if (!raw) return;
-        sessionStorage.removeItem("qsys_admin_auth_failure");
-        const parsed = JSON.parse(raw || "{}");
-        const status = Number(parsed?.status || 0) || 0;
-        const url = String(parsed?.url || "").trim();
-        const note = String(parsed?.note || "").trim();
-        const parts = ["Admin refresh redirected to login."];
-        if (status) parts.push(`HTTP ${status}.`);
-        if (url) parts.push(`Request: ${url}`);
-        if (note) parts.push(note);
-        $e.textContent = parts.join(" ");
-      } catch {}
-    }
-    function showLoginReason() {
-      const message = describeLoginReason(getLoginReason());
-      if (message) $e.textContent = message;
-    }
-
     async function refreshHealth() {
       try {
         const r = await fetch(window.appUrl("/api/health"), { cache: "no-store" });
@@ -286,8 +252,6 @@
       }
     });
 
-    showLastAdminAuthFailure();
-    if (!$e.textContent) showLoginReason();
     refreshHealth();
     setInterval(refreshHealth, 5000);
   </script>

@@ -1431,11 +1431,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
     if (
       p === "/admin" ||
       p === "/admin-login" ||
-      p === "/admin-diagnostics" ||
-      p === "/admin-session-diagnostics" ||
       /^\/b\/[^/]+\/admin(?:\/|$)/i.test(p) ||
-      /^\/b\/[^/]+\/admin-diagnostics(?:\/|$)/i.test(p) ||
-      /^\/b\/[^/]+\/admin-session-diagnostics(?:\/|$)/i.test(p) ||
       /^\/b\/[^/]+\/admin-login(?:\/|$)/i.test(p) ||
       p.startsWith("/api/admin/")
     ) return "admin";
@@ -2929,10 +2925,10 @@ function requireStaffPage(req, res, next) {
 
 function requireAdminPage(req, res, next) {
   const u = getScopedSessionUser(req, "admin");
-  if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode, { reason: "ADMIN_PAGE_NO_SESSION" }));
+  if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (roleId !== "ADMIN") return res.redirect(buildAdminLoginPath(req?.params?.branchCode, { reason: "ADMIN_PAGE_ROLE_MISMATCH" }));
+  if (roleId !== "ADMIN") return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
   next();
 }
 
@@ -3375,213 +3371,6 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     return res.json({ ok: true, features: getProvisionedFeatureMap(keys) });
   });
 
-  app.get("/api/admin/diagnostics/login-trace", requirePerm("USERS_MANAGE"), (req, res) => {
-    try {
-      const fullName = String(req.query?.fullName || "").trim();
-      const requestedBranchCode = String(req.query?.branchCode || "").trim().toUpperCase();
-      const runtimeDbPath = path.join(baseDir, "data", "qsys.db");
-      const requestedBranch = requestedBranchCode ? enrichBranchLicense(getBranchByCode(requestedBranchCode)) : null;
-
-      const users = fullName
-        ? listLoginCandidates(fullName).map((row) => {
-            const roleId = String(row.roleId || "").trim().toUpperCase();
-            const assignedBranches = listAssignedBranchesForUser(row.userId, roleId);
-            const access = getUserBranchAccessSummary(row.userId, roleId, "staff login");
-            return {
-              userId: String(row.userId || ""),
-              fullName: String(row.fullName || ""),
-              roleId,
-              isActive: !!row.isActive,
-              createdAt: Number(row.createdAt || 0) || 0,
-              updatedAt: Number(row.updatedAt || 0) || 0,
-              lastLoginAt: Number(row.lastLoginAt || 0) || 0,
-              assignedBranchCount: assignedBranches.length,
-              assignedBranches: assignedBranches.map((branch) => ({
-                branchId: String(branch.branchId || ""),
-                branchCode: String(branch.branchCode || ""),
-                branchName: String(branch.branchName || ""),
-                status: String(branch.status || ""),
-                licenseStatus: String(branch.licenseStatus || ""),
-                licenseActivated: !!branch.licenseActivated,
-              })),
-              allowedBranches: access.allowedBranches.map((branch) => ({
-                branchId: String(branch.branchId || ""),
-                branchCode: String(branch.branchCode || ""),
-                branchName: String(branch.branchName || ""),
-                status: String(branch.status || ""),
-                licenseStatus: String(branch.licenseStatus || ""),
-                licenseActivated: !!branch.licenseActivated,
-              })),
-              blockedBranches: access.blockedBranches,
-            };
-          })
-        : [];
-
-      return res.json({
-        ok: true,
-        fullName,
-        requestedBranchCode,
-        runtime: {
-          baseDir,
-          dbPath: runtimeDbPath,
-          dbExists: fs.existsSync(runtimeDbPath),
-        },
-        requestedBranch: requestedBranch
-          ? {
-              branchId: String(requestedBranch.branchId || ""),
-              branchCode: String(requestedBranch.branchCode || ""),
-              branchName: String(requestedBranch.branchName || ""),
-              status: String(requestedBranch.status || ""),
-              licenseStatus: String(requestedBranch.licenseStatus || ""),
-              licenseActivated: !!requestedBranch.licenseActivated,
-              access: describeBlockedBranch(requestedBranch, "staff login"),
-            }
-          : null,
-        userCount: users.length,
-        users,
-      });
-    } catch (e) {
-      console.error("[admin/diagnostics/login-trace]", e);
-      return res.status(500).json({ ok: false, error: "Failed to load login diagnostics." });
-    }
-  });
-  app.get("/api/admin/session-diagnostics", (req, res) => {
-    try {
-      const sid = String(req.sessionID || "");
-      const dbPath = path.join(baseDir, "data", "qsys.db");
-      const sessionRow = sid
-        ? db.prepare(`SELECT sid, expiresAt, updatedAt FROM http_sessions WHERE sid=? LIMIT 1`).get(sid)
-        : null;
-      const rawAdminUser = getScopedSessionUser(req, "admin");
-      let adminAuthProbe = null;
-      try {
-        if (!rawAdminUser) {
-          adminAuthProbe = { ok: false, error: "Not authenticated" };
-        } else {
-          const normalizedUser = ensureSessionBranchContext(rawAdminUser);
-          const allowedBranches = listAccessibleBranchesForUser(normalizedUser?.userId, normalizedUser?.roleId);
-          const branch = getRequestBranch(req);
-          adminAuthProbe = {
-            ok: allowedBranches.length > 0,
-            error: allowedBranches.length ? "" : "No active branches are available.",
-            user: normalizedUser ? {
-              userId: String(normalizedUser.userId || ""),
-              fullName: String(normalizedUser.fullName || ""),
-              roleId: String(normalizedUser.roleId || ""),
-              selectedBranchId: String(normalizedUser.selectedBranchId || ""),
-              allowedBranchIds: Array.isArray(normalizedUser.allowedBranchIds) ? normalizedUser.allowedBranchIds.map((v) => String(v || "")) : [],
-            } : null,
-            branch: branch ? {
-              branchId: String(branch.branchId || ""),
-              branchCode: String(branch.branchCode || ""),
-              branchName: String(branch.branchName || ""),
-              status: String(branch.status || ""),
-            } : null,
-            allowedBranches: allowedBranches.map((item) => ({
-              branchId: String(item.branchId || ""),
-              branchCode: String(item.branchCode || ""),
-              branchName: String(item.branchName || ""),
-              status: String(item.status || ""),
-              licenseStatus: String(item.licenseStatus || ""),
-              licenseActivated: !!item.licenseActivated,
-            })),
-          };
-        }
-      } catch (probeError) {
-        adminAuthProbe = { ok: false, error: String(probeError?.message || probeError || "Probe failed.") };
-      }
-      return res.json({
-        ok: true,
-        scope: String(req.qsysSessionScope || ""),
-        sessionID: sid,
-        runtime: {
-          baseDir,
-          dbPath,
-          dbExists: fs.existsSync(dbPath),
-        },
-        cookies: {
-          headerPresent: !!String(req.headers?.cookie || ""),
-          cookieNames: String(req.headers?.cookie || "")
-            .split(";")
-            .map((part) => String(part || "").split("=")[0].trim())
-            .filter(Boolean),
-        },
-        session: {
-          hasSessionObject: !!req.session,
-          hasAdminUser: !!req.session?.adminUser,
-          hasStaffUser: !!req.session?.staffUser,
-          hasSuperAdminUser: !!req.session?.superAdminUser,
-          adminUser: req.session?.adminUser
-            ? {
-                userId: String(req.session.adminUser.userId || ""),
-                fullName: String(req.session.adminUser.fullName || ""),
-                roleId: String(req.session.adminUser.roleId || ""),
-                selectedBranchId: String(req.session.adminUser.selectedBranchId || ""),
-              }
-            : null,
-        },
-        storeRow: sessionRow
-          ? {
-              sid: String(sessionRow.sid || ""),
-              expiresAt: Number(sessionRow.expiresAt || 0) || 0,
-              updatedAt: Number(sessionRow.updatedAt || 0) || 0,
-            }
-          : null,
-        adminAuthProbe,
-      });
-    } catch (e) {
-      console.error("[admin/session-diagnostics]", e);
-      return res.status(500).json({ ok: false, error: "Failed to load session diagnostics." });
-    }
-  });
-  app.post("/api/admin/diagnostics/repair-single-branch", requirePerm("USERS_MANAGE"), express.json(), (req, res) => {
-    try {
-      const userId = String(req.body?.userId || "").trim();
-      const branchId = String(req.body?.branchId || "").trim();
-      if (!userId || !branchId) {
-        return res.status(400).json({ ok: false, error: "userId and branchId are required." });
-      }
-      const user = db.prepare(`SELECT userId, fullName, roleId, isActive FROM users WHERE userId=? LIMIT 1`).get(userId);
-      if (!user?.userId) return res.status(404).json({ ok: false, error: "User not found." });
-      const roleId = String(user.roleId || "").trim().toUpperCase();
-      if (!["STAFF", "SUPERVISOR"].includes(roleId)) {
-        return res.status(400).json({ ok: false, error: "Repair is only supported for staff or supervisor users." });
-      }
-      const branch = getBranchById(branchId);
-      if (!branch?.branchId) return res.status(404).json({ ok: false, error: "Branch not found." });
-
-      const nextBranchIds = replaceUserBranchAccess(db, { userId, branchIds: [branchId], roleScope: roleId });
-      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
-        "ADMIN_DIAGNOSTICS_REPAIR_SINGLE_BRANCH",
-        JSON.stringify({
-          actor: actorFromReq(req),
-          userId,
-          fullName: String(user.fullName || ""),
-          roleId,
-          branchId,
-          branchCode: String(branch.branchCode || ""),
-        }),
-        Date.now()
-      );
-      return res.json({
-        ok: true,
-        userId,
-        fullName: String(user.fullName || ""),
-        roleId,
-        branchId: String(branch.branchId || ""),
-        branchCode: String(branch.branchCode || ""),
-        branchName: String(branch.branchName || ""),
-        branchIds: nextBranchIds,
-      });
-    } catch (e) {
-      console.error("[admin/diagnostics/repair-single-branch]", e);
-      const msg = String(e?.message || "");
-      if (msg.includes("STAFF_SINGLE_BRANCH_REQUIRED")) {
-        return res.status(409).json({ ok: false, error: "Staff users must have exactly one branch assignment." });
-      }
-      return res.status(500).json({ ok: false, error: "Failed to repair staff branch assignment." });
-    }
-  });
 
   app.get("/api/staff/feature-flags", requireAuth, (_req, res) => {
     const keys = ["queue.recovery_tools", "queue.reopen_completed", "queue.wait_forecast"];
@@ -4150,15 +3939,10 @@ function buildStaffEntryPath(branchCodeInput = "") {
   return pathWithBase(`/b/${encodeURIComponent(code)}/staff`);
 }
 
-function buildAdminLoginPath(branchCodeInput = "", options = {}) {
+function buildAdminLoginPath(branchCodeInput = "") {
   const code = String(branchCodeInput || "").trim().toUpperCase();
-  const query = new URLSearchParams();
-  if (code) query.set("branchCode", code);
-  const reason = String(options?.reason || "").trim().toUpperCase();
-  if (reason) query.set("reason", reason);
-  const suffix = query.toString();
-  return suffix
-    ? pathWithBase(`/admin-login?${suffix}`)
+  return code
+    ? pathWithBase(`/admin-login?branchCode=${encodeURIComponent(code)}`)
     : pathWithBase("/admin-login");
 }
 
@@ -4435,21 +4219,6 @@ app.get("/b/:branchCode/admin", requireAdminPage, (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")));
 });
-app.get("/admin-diagnostics", requireAdminPage, requirePermPage("USERS_MANAGE"), (_req, res) => {
-  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login-diagnostics.html")));
-});
-app.get("/b/:branchCode/admin-diagnostics", requireAdminPage, requirePermPage("USERS_MANAGE"), (req, res) => {
-  if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
-  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login-diagnostics.html")));
-});
-app.get("/admin-session-diagnostics", (_req, res) => {
-  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-session-diagnostics.html")));
-});
-app.get("/b/:branchCode/admin-session-diagnostics", (req, res) => {
-  if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
-  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-session-diagnostics.html")));
-});
-
 app.get("/admin-login", (req, res) => {
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
