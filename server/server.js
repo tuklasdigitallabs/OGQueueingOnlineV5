@@ -93,6 +93,12 @@ function stripBasePathFromUrl(url) {
   return raw || "/";
 }
 
+function getComparablePath(url) {
+  const stripped = stripBasePathFromUrl(url);
+  const [pathname = "/"] = String(stripped || "/").split(/[?#]/, 1);
+  return pathname || "/";
+}
+
 const ACTIVATION_STATUS_UNACTIVATED = "UNACTIVATED";
 const ACTIVATION_STATUS_ACTIVATED = "ACTIVATED";
 const ACTIVATION_STATUS_EXPIRED = "EXPIRED";
@@ -1414,7 +1420,7 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
 
   function detectSessionScope(req) {
     const rawUrl = String(req?.originalUrl || req?.url || "");
-    const p = stripBasePathFromUrl(rawUrl);
+    const p = getComparablePath(rawUrl);
     if (
       p === "/super-admin" ||
       p === "/super-admin-login" ||
@@ -2625,7 +2631,7 @@ app.get("/static/js/:file", (req, res) => {
   /* ===================== SECURITY ADDON: auth + perms ===================== */
 
   function isScopedSessionPath(url, scope) {
-    const normalized = String(url || "").trim();
+    const normalized = getComparablePath(url);
     if (!normalized) return false;
     if (scope === "super-admin") {
       return normalized.startsWith("/api/super-admin/") || normalized.startsWith("/super-admin");
@@ -2648,7 +2654,7 @@ app.get("/static/js/:file", (req, res) => {
   }
 
   function getSessionUser(req) {
-    const url = stripBasePathFromUrl(String(req.path || req.originalUrl || ""));
+    const url = getComparablePath(String(req.path || req.originalUrl || ""));
     // Session separation: Admin and Staff must never overwrite each other
     if (isScopedSessionPath(url, "super-admin")) {
       return (req.session && req.session.superAdminUser) ? req.session.superAdminUser : null;
