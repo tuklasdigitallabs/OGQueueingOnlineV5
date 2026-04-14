@@ -2227,10 +2227,60 @@ app.get("/static/js/:file", (req, res) => {
       licenseExpiresAt: license.licenseExpiresAt,
     };
   }
+  function getBranchAccessDecision(branch, surface = "branch") {
+    if (!branch?.branchId) {
+      return {
+        ok: false,
+        code: "BRANCH_NOT_FOUND",
+        message: "Branch not found.",
+        http: 404,
+      };
+    }
+    const branchStatus = String(branch.status || "ACTIVE").trim().toUpperCase();
+    const license = getBranchLicenseState(branch);
+    const licenseStatus = String(license.status || ACTIVATION_STATUS_UNACTIVATED).trim().toUpperCase();
+
+    if (branchStatus !== "ACTIVE") {
+      return {
+        ok: false,
+        code: "BRANCH_INACTIVE",
+        message: "This branch is inactive.",
+        http: 403,
+        branchStatus,
+        licenseStatus,
+      };
+    }
+    if (licenseStatus === ACTIVATION_STATUS_EXPIRED) {
+      return {
+        ok: false,
+        code: "BRANCH_LICENSE_EXPIRED",
+        message: "Branch license expired. Renewal is required.",
+        http: 403,
+        branchStatus,
+        licenseStatus,
+      };
+    }
+    if (!license.activated) {
+      return {
+        ok: false,
+        code: "BRANCH_NOT_ACTIVATED",
+        message: `This branch is not activated for ${surface}.`,
+        http: 403,
+        branchStatus,
+        licenseStatus,
+      };
+    }
+    return {
+      ok: true,
+      code: "OK",
+      message: "",
+      http: 200,
+      branchStatus,
+      licenseStatus,
+    };
+  }
   function isBranchOperational(branch) {
-    if (!branch?.branchId) return false;
-    const status = String(branch.status || "ACTIVE").trim().toUpperCase();
-    return status === "ACTIVE" && getBranchLicenseState(branch).activated;
+    return getBranchAccessDecision(branch).ok;
   }
   function findBranchForLicensePayload(payload) {
     const branchCode = String(payload?.branchCode || "").trim().toUpperCase();
@@ -2816,12 +2866,15 @@ function requireStaffPage(req, res, next) {
 
 function requireOperationalBranch(req, res, next) {
   const branch = getRequestBranch(req);
-  if (isBranchOperational(branch)) return next();
+  const decision = getBranchAccessDecision(branch, "this branch");
+  if (decision.ok) return next();
   return res.status(403).json({
     ok: false,
-    error: "Branch is not activated. Please activate this branch in Provider Setup.",
+    error: decision.message,
+    code: decision.code,
     branchCode: String(branch?.branchCode || ""),
-    licenseStatus: getBranchLicenseState(branch).status,
+    branchStatus: String(branch?.status || ""),
+    licenseStatus: decision.licenseStatus || getBranchLicenseState(branch).status,
   });
 }
 
@@ -2975,9 +3028,30 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         roleId: role,
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
+      const assignedBranches = listUserBranchAccess(u.userId).map(enrichBranchLicense);
       const allowedBranches = listAccessibleBranchesForUser(u.userId, role);
       if (!allowedBranches.length) {
-        return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+        if (!assignedBranches.length) {
+          return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+        }
+        const blocked = assignedBranches.map((branch) => {
+          const decision = getBranchAccessDecision(branch, "staff login");
+          return {
+            branchId: String(branch.branchId || ""),
+            branchCode: String(branch.branchCode || ""),
+            branchName: String(branch.branchName || ""),
+            status: String(branch.status || ""),
+            licenseStatus: String(branch.licenseStatus || ""),
+            licenseActivated: !!branch.licenseActivated,
+            accessCode: String(decision.code || ""),
+            accessMessage: String(decision.message || ""),
+          };
+        });
+        return res.status(403).json({
+          ok: false,
+          error: blocked[0]?.accessMessage || "Your assigned branch is not available for staff login.",
+          assignedBranches: blocked,
+        });
       }
       await finalizeLoginSession(req, "staff", sessUser);
 
@@ -3896,12 +3970,14 @@ app.get("/qr/wifi", requirePerm("SETTINGS_MANAGE"), async (req, res) => {
   });
 app.get("/staff", requireStaffPage, (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
-  if (!isBranchOperational(getRequestBranch(req))) return res.status(403).send("Branch is not activated.");
+  const decision = getBranchAccessDecision(getRequestBranch(req), "staff access");
+  if (!decision.ok) return res.status(decision.http || 403).send(decision.message);
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
 });
 app.get("/b/:branchCode/staff", requireStaffPage, (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
-  if (!isBranchOperational(getRequestBranch(req))) return res.status(403).send("Branch is not activated.");
+  const decision = getBranchAccessDecision(getRequestBranch(req), "staff access");
+  if (!decision.ok) return res.status(decision.http || 403).send(decision.message);
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
 });
 
@@ -3938,7 +4014,8 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
     if (!branchCode || !branch) {
       return res.status(404).send("Branch not found");
     }
-    if (!isBranchOperational(branch)) return res.status(403).send("Branch is not activated.");
+    const decision = getBranchAccessDecision(branch, "guest registration");
+    if (!decision.ok) return res.status(decision.http || 403).send(decision.message);
     return res.sendFile(path.join(__dirname, "static", "guest.html"));
   });
   app.get("/test", (_req, res) =>
@@ -10065,12 +10142,15 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       const businessDate = ensureBusinessDate(db);
       const branch = getRequestBranch(req);
-      if (!isBranchOperational(branch)) {
+      const decision = getBranchAccessDecision(branch, "guest registration");
+      if (!decision.ok) {
         return res.status(403).json({
           ok: false,
-          error: "This branch is not activated for guest registration.",
+          error: decision.message,
+          code: decision.code,
           branchCode: String(branch?.branchCode || ""),
-          licenseStatus: getBranchLicenseState(branch).status,
+          branchStatus: String(branch?.status || ""),
+          licenseStatus: decision.licenseStatus || getBranchLicenseState(branch).status,
         });
       }
       const bc = String(branch?.branchCode || getBranchCode()).trim();
