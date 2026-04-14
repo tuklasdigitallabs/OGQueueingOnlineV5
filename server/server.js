@@ -5880,7 +5880,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
 
   function normalizeRequestedUserBranchIds(input, fallbackBranchId, roleScope = "") {
     const values = Array.isArray(input) ? input : [];
-    const valid = new Set(listOperationalBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
+    const valid = new Set(listActiveBranches().map((row) => String(row.branchId || "").trim()).filter(Boolean));
     const unique = [];
     for (const raw of values) {
       const branchId = String(raw || "").trim();
@@ -5926,7 +5926,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
             branchAccess,
           };
         });
-      res.json({ ok: true, users: rows, branches: listOperationalBranches() });
+      res.json({ ok: true, users: rows, branches: listActiveBranches() });
     } catch (e) {
       console.error("[admin/users:get]", e);
       res.status(500).json({ ok: false, error: "Server error." });
@@ -6033,12 +6033,17 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (!userId) return res.status(400).json({ ok: false, error: "Missing userId." });
 
       const now = Date.now();
-      const updated = db.prepare(`UPDATE users SET isActive=0, updatedAt=? WHERE userId=?`).run(now, userId);
-      if (!updated.changes) return res.status(404).json({ ok: false, error: "User not found." });
+      const existing = db.prepare(`SELECT userId, fullName, roleId FROM users WHERE userId=? LIMIT 1`).get(userId);
+      if (!existing) return res.status(404).json({ ok: false, error: "User not found." });
+
+      db.transaction(() => {
+        db.prepare(`DELETE FROM user_branch_access WHERE userId=?`).run(userId);
+        db.prepare(`DELETE FROM users WHERE userId=?`).run(userId);
+      })();
 
       db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
         "ADMIN_USER_DELETE",
-        JSON.stringify({ actor: actorFromReq(req), userId }),
+        JSON.stringify({ actor: actorFromReq(req), userId, fullName: existing.fullName || "", roleId: existing.roleId || "" }),
         now
       );
 
