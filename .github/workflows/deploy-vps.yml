@@ -60,7 +60,28 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
-        run: ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+        run: |
+          case "$VPS_PORT" in
+            ''|*[!0-9]*)
+              echo "VPS_PORT must be numeric, got an invalid value."
+              exit 1
+              ;;
+          esac
+          tmp_scan="$(mktemp)"
+          if ! ssh-keyscan -T 15 -p "$VPS_PORT" -H "$VPS_HOST" > "$tmp_scan" 2>/tmp/ssh-keyscan.err; then
+            echo "Failed to fetch the SSH host key for $VPS_HOST:$VPS_PORT."
+            cat /tmp/ssh-keyscan.err || true
+            rm -f "$tmp_scan"
+            exit 1
+          fi
+          if ! test -s "$tmp_scan"; then
+            echo "ssh-keyscan returned no host keys for $VPS_HOST:$VPS_PORT."
+            cat /tmp/ssh-keyscan.err || true
+            rm -f "$tmp_scan"
+            exit 1
+          fi
+          cat "$tmp_scan" >> ~/.ssh/known_hosts
+          rm -f "$tmp_scan"
 
       - name: Run VPS deploy
         env:
