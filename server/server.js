@@ -1640,26 +1640,61 @@ app.get("/static/js/:file", (req, res) => {
     const normalized = String(roleId || "").trim().toUpperCase();
     return normalized === "ADMIN" || normalized === "SUPER_ADMIN";
   }
+  function listAssignedBranchesForUser(userId, roleId = "") {
+    if (roleHasGlobalBranchAccess(roleId)) return listAllBranches();
+    return listUserBranchAccess(userId).map(enrichBranchLicense);
+  }
   function listAccessibleBranchesForUser(userId, roleId = "") {
     if (roleHasGlobalBranchAccess(roleId)) return listOperationalBranches();
-    return listUserBranchAccess(userId).map(enrichBranchLicense).filter(isBranchOperational);
+    return listAssignedBranchesForUser(userId, roleId).filter(isBranchOperational);
+  }
+  function describeBlockedBranch(branch, surface = "branch access") {
+    const decision = getBranchAccessDecision(branch, surface);
+    return {
+      branchId: String(branch?.branchId || ""),
+      branchCode: String(branch?.branchCode || ""),
+      branchName: String(branch?.branchName || ""),
+      status: String(branch?.status || ""),
+      licenseStatus: String(branch?.licenseStatus || ""),
+      licenseActivated: !!branch?.licenseActivated,
+      accessCode: String(decision.code || ""),
+      accessMessage: String(decision.message || ""),
+    };
+  }
+  function getUserBranchAccessSummary(userId, roleId = "", surface = "branch access") {
+    const assignedBranches = listAssignedBranchesForUser(userId, roleId);
+    const allowedBranches = listAccessibleBranchesForUser(userId, roleId);
+    const allowedIds = new Set(allowedBranches.map((row) => String(row.branchId || "").trim()).filter(Boolean));
+    const blockedBranches = assignedBranches
+      .filter((branch) => !allowedIds.has(String(branch.branchId || "").trim()))
+      .map((branch) => describeBlockedBranch(branch, surface));
+    return { assignedBranches, allowedBranches, blockedBranches };
   }
   function ensureSessionBranchContext(user) {
     if (!user || !user.userId) return user || null;
     const roleId = String(user.roleId || "").trim().toUpperCase();
     const branches = listAccessibleBranchesForUser(user.userId, roleId);
+    const assignedBranches = listAssignedBranchesForUser(user.userId, roleId);
     const allowedBranchIds = branches.map((row) => String(row.branchId || "").trim()).filter(Boolean);
+    const assignedBranchIds = assignedBranches.map((row) => String(row.branchId || "").trim()).filter(Boolean);
     let selectedBranchId = String(user.selectedBranchId || "").trim();
     if (!selectedBranchId || !allowedBranchIds.includes(selectedBranchId)) {
       if (allowedBranchIds.length === 1) selectedBranchId = allowedBranchIds[0];
-      else {
+      else if (allowedBranchIds.length > 1) {
         const defaultRow = branches.find((row) => Number(row.isDefault || 0) === 1) || branches[0];
         selectedBranchId = String(defaultRow?.branchId || "").trim();
+      } else if (selectedBranchId && assignedBranchIds.includes(selectedBranchId)) {
+        selectedBranchId = selectedBranchId;
+      } else if (assignedBranchIds.length === 1) {
+        selectedBranchId = assignedBranchIds[0];
+      } else {
+        selectedBranchId = "";
       }
     }
     return {
       ...user,
       allowedBranchIds,
+      assignedBranchIds,
       selectedBranchId,
       branchCount: allowedBranchIds.length,
     };
@@ -1686,8 +1721,10 @@ app.get("/static/js/:file", (req, res) => {
     const user = getSessionUser(req);
     if (user?.userId) {
       const branchId = getSelectedBranchIdForUser(req, user);
+      if (!branchId) return null;
       const byId = getBranchById(branchId);
       if (byId) return byId;
+      return null;
     }
     return getDefaultBranchRecord();
   }
@@ -2888,6 +2925,7 @@ function requireSuperAdminPage(req, res, next) {
 function getCanonicalBranchCodeForScope(req, scope) {
   const u = ensureSessionBranchContext(getScopedSessionUser(req, scope));
   if (!u?.userId) return "";
+  if (!Array.isArray(u.allowedBranchIds) || !u.allowedBranchIds.length) return "";
   if (scope === "admin") setSessionUser(req, "admin", u);
   if (scope === "staff") setSessionUser(req, "staff", u);
   if (scope === "super-admin") setSessionUser(req, "super-admin", u);
@@ -2996,6 +3034,8 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // Staff login (STAFF / SUPERVISOR)
   app.post("/api/staff/auth/login", rateLimitAuthLogin, express.json(), async (req, res) => {
     try {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearStaffUndo(req); } catch {}
       const fullName = String(req.body.fullName || "").trim();
       const pin = String(req.body.pin || "").trim();
 
@@ -3021,6 +3061,18 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
+      const access = getUserBranchAccessSummary(u.userId, role, "staff login");
+      if (!access.allowedBranches.length) {
+        if (!access.assignedBranches.length) {
+          return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+        }
+        return res.status(403).json({
+          ok: false,
+          error: access.blockedBranches[0]?.accessMessage || "Your assigned branch is not available for staff login.",
+          assignedBranches: access.blockedBranches,
+        });
+      }
+
       const requestedBranchId = resolveRequestedLoginBranchId(req, u.userId, role);
       const sessUser = ensureSessionBranchContext({
         userId: u.userId,
@@ -3028,34 +3080,9 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         roleId: role,
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
-      const assignedBranches = listUserBranchAccess(u.userId).map(enrichBranchLicense);
-      const allowedBranches = listAccessibleBranchesForUser(u.userId, role);
-      if (!allowedBranches.length) {
-        if (!assignedBranches.length) {
-          return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
-        }
-        const blocked = assignedBranches.map((branch) => {
-          const decision = getBranchAccessDecision(branch, "staff login");
-          return {
-            branchId: String(branch.branchId || ""),
-            branchCode: String(branch.branchCode || ""),
-            branchName: String(branch.branchName || ""),
-            status: String(branch.status || ""),
-            licenseStatus: String(branch.licenseStatus || ""),
-            licenseActivated: !!branch.licenseActivated,
-            accessCode: String(decision.code || ""),
-            accessMessage: String(decision.message || ""),
-          };
-        });
-        return res.status(403).json({
-          ok: false,
-          error: blocked[0]?.accessMessage || "Your assigned branch is not available for staff login.",
-          assignedBranches: blocked,
-        });
-      }
       await finalizeLoginSession(req, "staff", sessUser);
 
-      return res.json({ ok: true, scope: "staff", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches });
+      return res.json({ ok: true, scope: "staff", user: sessUser, branch: getBranchById(sessUser.selectedBranchId), allowedBranches: access.allowedBranches });
     } catch (e) {
       console.error("[staff/auth/login]", e);
       return res.status(500).json({ ok: false, error: "Server error" });
@@ -3065,6 +3092,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // Admin login (ADMIN only)
   app.post("/api/admin/auth/login", rateLimitAuthLogin, express.json(), async (req, res) => {
     try {
+      try { clearSessionUser(req, "admin"); } catch {}
       const fullName = String(req.body.fullName || "").trim();
       const pin = String(req.body.pin || "").trim();
 
@@ -3147,6 +3175,8 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
   // - STAFF/SUPERVISOR -> staff session
   app.post("/api/auth/login", rateLimitAuthLogin, express.json(), async (req, res) => {
     try {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearSessionUser(req, "admin"); } catch {}
       const fullName = String(req.body.fullName || "").trim();
       const pin = String(req.body.pin || "").trim();
 
@@ -3168,6 +3198,20 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
+      const access = role === "ADMIN"
+        ? { allowedBranches: listAccessibleBranchesForUser(u.userId, role) }
+        : getUserBranchAccessSummary(u.userId, role, "staff login");
+      if (role !== "ADMIN" && !access.allowedBranches.length) {
+        if (!access.assignedBranches.length) {
+          return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+        }
+        return res.status(403).json({
+          ok: false,
+          error: access.blockedBranches[0]?.accessMessage || "Your assigned branch is not available for staff login.",
+          assignedBranches: access.blockedBranches,
+        });
+      }
+
       const sessUser = ensureSessionBranchContext({ userId: u.userId, fullName: u.fullName, roleId: role });
       if (role === "ADMIN") await finalizeLoginSession(req, "admin", sessUser);
       else await finalizeLoginSession(req, "staff", sessUser);
@@ -3177,7 +3221,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         scope: (role === "ADMIN" ? "admin" : "staff"),
         user: sessUser,
         branch: getBranchById(sessUser.selectedBranchId),
-        allowedBranches: listAccessibleBranchesForUser(u.userId, role),
+        allowedBranches: access.allowedBranches,
       });
     } catch (e) {
       console.error("[auth/login]", e);
@@ -3191,13 +3235,22 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
     const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "staff", u);
-    const allowedBranches = listAccessibleBranchesForUser(u?.userId, u?.roleId);
-    if (!allowedBranches.length) {
-      return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+    const access = getUserBranchAccessSummary(u?.userId, u?.roleId, "staff access");
+    if (!access.allowedBranches.length) {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearStaffUndo(req); } catch {}
+      if (!access.assignedBranches.length) {
+        return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+      }
+      return res.status(403).json({
+        ok: false,
+        error: access.blockedBranches[0]?.accessMessage || "Your assigned branch is not available for staff access.",
+        assignedBranches: access.blockedBranches,
+      });
     }
     const perms = getUserPerms(getRoleId(u));
     const branch = getRequestBranch(req);
-    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches });
+    res.json({ ok: true, user: u, permissions: perms, branch, allowedBranches: access.allowedBranches });
   });
 
   app.get("/api/admin/auth/me", requireAuth, (req, res) => {
@@ -3286,10 +3339,23 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     if (!rawUser) return res.status(401).json({ ok: false, error: "Not authenticated" });
     const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "staff", u);
+    const access = getUserBranchAccessSummary(u?.userId, u?.roleId, "staff access");
+    if (!access.allowedBranches.length) {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearStaffUndo(req); } catch {}
+      if (!access.assignedBranches.length) {
+        return res.status(403).json({ ok: false, error: "No branch access assigned to this user." });
+      }
+      return res.status(403).json({
+        ok: false,
+        error: access.blockedBranches[0]?.accessMessage || "Your assigned branch is not available for staff access.",
+        assignedBranches: access.blockedBranches,
+      });
+    }
     return res.json({
       ok: true,
       selectedBranchId: String(u?.selectedBranchId || ""),
-      branches: listAccessibleBranchesForUser(u?.userId, u?.roleId),
+      branches: access.allowedBranches,
     });
   });
 
@@ -4033,7 +4099,15 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
 });
 
 app.get("/admin-login", (req, res) => {
-  if (req?.session?.adminUser && maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  if (req?.session?.adminUser) {
+    const nextUser = ensureSessionBranchContext(req.session.adminUser);
+    if (nextUser?.userId && Array.isArray(nextUser.allowedBranchIds) && nextUser.allowedBranchIds.length) {
+      req.session.adminUser = nextUser;
+      if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+    } else {
+      try { clearSessionUser(req, "admin"); } catch {}
+    }
+  }
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
 app.get("/b/:branchCode/admin-login", (req, res) => {
@@ -4063,7 +4137,16 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 
 
 app.get("/staff-login", (req, res) => {
-  if (req?.session?.staffUser && maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+  if (req?.session?.staffUser) {
+    const nextUser = ensureSessionBranchContext(req.session.staffUser);
+    if (nextUser?.userId && Array.isArray(nextUser.allowedBranchIds) && nextUser.allowedBranchIds.length) {
+      req.session.staffUser = nextUser;
+      if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
+    } else {
+      try { clearSessionUser(req, "staff"); } catch {}
+      try { clearStaffUndo(req); } catch {}
+    }
+  }
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
 });
 app.get("/b/:branchCode/staff-login", (req, res) => {
