@@ -184,6 +184,22 @@
         return "";
       }
     }
+    function showLastAdminAuthFailure() {
+      try {
+        const raw = sessionStorage.getItem("qsys_admin_auth_failure");
+        if (!raw) return;
+        sessionStorage.removeItem("qsys_admin_auth_failure");
+        const parsed = JSON.parse(raw || "{}");
+        const status = Number(parsed?.status || 0) || 0;
+        const url = String(parsed?.url || "").trim();
+        const note = String(parsed?.note || "").trim();
+        const parts = ["Admin refresh redirected to login."];
+        if (status) parts.push(`HTTP ${status}.`);
+        if (url) parts.push(`Request: ${url}`);
+        if (note) parts.push(note);
+        $e.textContent = parts.join(" ");
+      } catch {}
+    }
 
     async function refreshHealth() {
       try {
@@ -253,6 +269,7 @@
       }
     });
 
+    showLastAdminAuthFailure();
     refreshHealth();
     setInterval(refreshHealth, 5000);
   </script>

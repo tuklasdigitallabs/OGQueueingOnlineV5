@@ -1924,18 +1924,29 @@ tr.is-collapsed + tr.subrow + tr.subrow{
           .replaceAll("'","&#039;");
       }
 
-      function handleAuthRedirect(res) {
-  if (res.status === 401) {
-    // session missing/expired => go login
-    window.location.href = adminLoginUrl();
-    return true;
-  }
-  return false;
-}
+      function recordAdminAuthFailure(info = {}) {
+        try {
+          sessionStorage.setItem("qsys_admin_auth_failure", JSON.stringify({
+            at: Date.now(),
+            url: String(info.url || ""),
+            status: Number(info.status || 0) || 0,
+            note: String(info.note || ""),
+          }));
+        } catch {}
+      }
+
+      function handleAuthRedirect(res, url) {
+        if (res.status === 401) {
+          recordAdminAuthFailure({ url, status: res.status, note: "Admin fetch returned 401." });
+          window.location.href = adminLoginUrl();
+          return true;
+        }
+        return false;
+      }
 
 async function jget(url) {
   const r = await fetch(url, { cache: "no-store" });
-  if (handleAuthRedirect(r)) return { ok: false, error: "Not authenticated" };
+  if (handleAuthRedirect(r, url)) return { ok: false, error: "Not authenticated" };
 
   // Be resilient: if server returns HTML/error text, don't crash the entire UI.
   const ct = String(r.headers.get("content-type") || "").toLowerCase();
@@ -1958,7 +1969,7 @@ async function jpost(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {})
   });
-  if (handleAuthRedirect(r)) return { ok: false, error: "Not authenticated" };
+  if (handleAuthRedirect(r, url)) return { ok: false, error: "Not authenticated" };
   const ct = String(r.headers.get("content-type") || "").toLowerCase();
   if (ct.includes("application/json")) {
     try { return await r.json(); }
