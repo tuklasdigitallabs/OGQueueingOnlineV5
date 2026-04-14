@@ -4099,15 +4099,6 @@ app.get("/api/admin/wifi-qrcode.png", requirePerm("SETTINGS_MANAGE"), (req, res)
 });
 
 app.get("/admin-login", (req, res) => {
-  if (req?.session?.adminUser) {
-    const nextUser = ensureSessionBranchContext(req.session.adminUser);
-    if (nextUser?.userId && Array.isArray(nextUser.allowedBranchIds) && nextUser.allowedBranchIds.length) {
-      req.session.adminUser = nextUser;
-      if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
-    } else {
-      try { clearSessionUser(req, "admin"); } catch {}
-    }
-  }
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
 });
 app.get("/b/:branchCode/admin-login", (req, res) => {
@@ -4137,16 +4128,6 @@ app.get("/internal-tools", requireSuperAdminPage, (_req, res) =>
 
 
 app.get("/staff-login", (req, res) => {
-  if (req?.session?.staffUser) {
-    const nextUser = ensureSessionBranchContext(req.session.staffUser);
-    if (nextUser?.userId && Array.isArray(nextUser.allowedBranchIds) && nextUser.allowedBranchIds.length) {
-      req.session.staffUser = nextUser;
-      if (maybeRedirectToCanonicalBranchPage(req, res, "staff", "entry")) return;
-    } else {
-      try { clearSessionUser(req, "staff"); } catch {}
-      try { clearStaffUndo(req); } catch {}
-    }
-  }
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
 });
 app.get("/b/:branchCode/staff-login", (req, res) => {
