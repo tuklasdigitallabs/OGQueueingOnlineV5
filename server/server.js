@@ -3016,7 +3016,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       ORDER BY updatedAt DESC, createdAt DESC, userId DESC
     `).all(String(fullName || "").trim());
   }
-  function resolveLoginUserRecord(req, fullName, allowedRoles = []) {
+  function resolveLoginUserRecord(req, fullName, pin, allowedRoles = []) {
     const requestedBranchCode = getRequestedLoginBranchCode(req);
     const requestedBranch = requestedBranchCode ? getBranchByCode(requestedBranchCode) : null;
     const allowed = new Set((allowedRoles || []).map((role) => String(role || "").trim().toUpperCase()).filter(Boolean));
@@ -3025,9 +3025,11 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       .filter((row) => !allowed.size || allowed.has(String(row.roleId || "").trim().toUpperCase()));
 
     if (!candidates.length) return { error: "Invalid credentials", http: 401 };
+    const pinMatches = candidates.filter((row) => verifyPinAgainstStoredHash(pin, row.pinHash));
+    if (!pinMatches.length) return { error: "Invalid credentials", http: 401 };
 
     if (requestedBranch?.branchId) {
-      const narrowed = candidates.filter((row) => {
+      const narrowed = pinMatches.filter((row) => {
         const roleId = String(row.roleId || "").trim().toUpperCase();
         if (roleHasGlobalBranchAccess(roleId)) return true;
         return listUserBranchAccess(row.userId).some((branch) => String(branch.branchId || "").trim() === String(requestedBranch.branchId || "").trim());
@@ -3036,9 +3038,10 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       if (narrowed.length > 1) {
         return { error: "Multiple active users match this name for the selected branch. Use a unique full name.", http: 409 };
       }
+      return { error: "Invalid credentials", http: 401 };
     }
 
-    if (candidates.length === 1) return { user: candidates[0] };
+    if (pinMatches.length === 1) return { user: pinMatches[0] };
     return {
       error: requestedBranchCode
         ? "No unique active user matched this name for the selected branch."
@@ -3087,7 +3090,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const resolved = resolveLoginUserRecord(req, fullName, ["ADMIN"]);
+      const resolved = resolveLoginUserRecord(req, fullName, pin, ["STAFF", "SUPERVISOR"]);
       if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
       const u = resolved.user;
 
@@ -3139,7 +3142,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const resolved = resolveLoginUserRecord(req, fullName, ["SUPER_ADMIN"]);
+      const resolved = resolveLoginUserRecord(req, fullName, pin, ["ADMIN"]);
       if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
       const u = resolved.user;
 
@@ -3147,9 +3150,6 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       if (role !== "ADMIN") {
         return res.status(403).json({ ok: false, error: "Not allowed for Admin app" });
       }
-
-      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
-      if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
@@ -3180,14 +3180,11 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       const pin = String(req.body.pin || "").trim();
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const resolved = resolveLoginUserRecord(req, fullName, ["STAFF", "SUPERVISOR"]);
+      const resolved = resolveLoginUserRecord(req, fullName, pin, ["SUPER_ADMIN"]);
       if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
       const u = resolved.user;
       const role = String(u.roleId || "").toUpperCase();
       if (role !== "SUPER_ADMIN") return res.status(403).json({ ok: false, error: "Super admin only" });
-
-      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
-      if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
@@ -3213,14 +3210,11 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const resolved = resolveLoginUserRecord(req, fullName, ["STAFF", "SUPERVISOR", "ADMIN"]);
+      const resolved = resolveLoginUserRecord(req, fullName, pin, ["STAFF", "SUPERVISOR", "ADMIN"]);
       if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
       const u = resolved.user;
 
       const role = String(u.roleId || "").toUpperCase();
-      const ok = verifyPinAgainstStoredHash(pin, u.pinHash);
-      if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
-
       const now = Date.now();
       db.prepare(`UPDATE users SET lastLoginAt=?, updatedAt=? WHERE userId=?`).run(now, now, u.userId);
 
