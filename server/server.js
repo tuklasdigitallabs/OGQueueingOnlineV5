@@ -1426,8 +1426,10 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
       p === "/admin" ||
       p === "/admin-login" ||
       p === "/admin-diagnostics" ||
+      p === "/admin-session-diagnostics" ||
       /^\/b\/[^/]+\/admin(?:\/|$)/i.test(p) ||
       /^\/b\/[^/]+\/admin-diagnostics(?:\/|$)/i.test(p) ||
+      /^\/b\/[^/]+\/admin-session-diagnostics(?:\/|$)/i.test(p) ||
       /^\/b\/[^/]+\/admin-login(?:\/|$)/i.test(p) ||
       p.startsWith("/api/admin/")
     ) return "admin";
@@ -3437,6 +3439,56 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
       return res.status(500).json({ ok: false, error: "Failed to load login diagnostics." });
     }
   });
+  app.get("/api/admin/session-diagnostics", (req, res) => {
+    try {
+      const sid = String(req.sessionID || "");
+      const dbPath = path.join(baseDir, "data", "qsys.db");
+      const sessionRow = sid
+        ? db.prepare(`SELECT sid, expiresAt, updatedAt FROM http_sessions WHERE sid=? LIMIT 1`).get(sid)
+        : null;
+      return res.json({
+        ok: true,
+        scope: String(req.qsysSessionScope || ""),
+        sessionID: sid,
+        runtime: {
+          baseDir,
+          dbPath,
+          dbExists: fs.existsSync(dbPath),
+        },
+        cookies: {
+          headerPresent: !!String(req.headers?.cookie || ""),
+          cookieNames: String(req.headers?.cookie || "")
+            .split(";")
+            .map((part) => String(part || "").split("=")[0].trim())
+            .filter(Boolean),
+        },
+        session: {
+          hasSessionObject: !!req.session,
+          hasAdminUser: !!req.session?.adminUser,
+          hasStaffUser: !!req.session?.staffUser,
+          hasSuperAdminUser: !!req.session?.superAdminUser,
+          adminUser: req.session?.adminUser
+            ? {
+                userId: String(req.session.adminUser.userId || ""),
+                fullName: String(req.session.adminUser.fullName || ""),
+                roleId: String(req.session.adminUser.roleId || ""),
+                selectedBranchId: String(req.session.adminUser.selectedBranchId || ""),
+              }
+            : null,
+        },
+        storeRow: sessionRow
+          ? {
+              sid: String(sessionRow.sid || ""),
+              expiresAt: Number(sessionRow.expiresAt || 0) || 0,
+              updatedAt: Number(sessionRow.updatedAt || 0) || 0,
+            }
+          : null,
+      });
+    } catch (e) {
+      console.error("[admin/session-diagnostics]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load session diagnostics." });
+    }
+  });
   app.post("/api/admin/diagnostics/repair-single-branch", requirePerm("USERS_MANAGE"), express.json(), (req, res) => {
     try {
       const userId = String(req.body?.userId || "").trim();
@@ -4339,6 +4391,13 @@ app.get("/admin-diagnostics", requireAdminPage, requirePermPage("USERS_MANAGE"),
 app.get("/b/:branchCode/admin-diagnostics", requireAdminPage, requirePermPage("USERS_MANAGE"), (req, res) => {
   if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
   return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login-diagnostics.html")));
+});
+app.get("/admin-session-diagnostics", (_req, res) => {
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-session-diagnostics.html")));
+});
+app.get("/b/:branchCode/admin-session-diagnostics", (req, res) => {
+  if (maybeRedirectToCanonicalBranchPage(req, res, "admin", "entry")) return;
+  return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-session-diagnostics.html")));
 });
 
 app.get("/admin-login", (req, res) => {
