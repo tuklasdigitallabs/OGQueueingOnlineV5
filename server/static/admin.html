@@ -2282,6 +2282,7 @@ async function jpost(url, body) {
       };
 
       function hasPerm(permKey) {
+        if (isSuperAdmin()) return true;
         if (!permKey) return true;
         if (Array.isArray(permKey)) return permKey.some((k) => USER_PERMS.has(String(k)));
         return USER_PERMS.has(String(permKey));
