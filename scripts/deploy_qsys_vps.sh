@@ -37,7 +37,8 @@ DATA_DIR="${DATA_DIR:-/opt/og-qsys/data}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-og-qsys-net}"
 HOST_PORT="${HOST_PORT:-3100}"
 CONTAINER_PORT="${CONTAINER_PORT:-3100}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${HOST_PORT}/api/health}"
+DEFAULT_HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
+HEALTH_URL="${HEALTH_URL:-$DEFAULT_HEALTH_URL}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_REF="${GIT_REF:-main}"
 HEALTH_RETRIES="${HEALTH_RETRIES:-10}"
@@ -50,6 +51,19 @@ SUBDOMAIN_ENV_FILE="${SUBDOMAIN_ENV_FILE:-/opt/og-qsys/.env.qsys-subdomains}"
 SUBDOMAIN_HOST_PORT="${SUBDOMAIN_HOST_PORT:-3101}"
 SUBDOMAIN_CONTAINER_PORT="${SUBDOMAIN_CONTAINER_PORT:-3101}"
 SUBDOMAIN_HEALTH_URL="${SUBDOMAIN_HEALTH_URL:-http://127.0.0.1:3101/api/health}"
+
+normalize_health_url() {
+  local value="$1"
+  local fallback="$2"
+  value="$(printf '%s' "$value" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  case "$value" in
+    http://*|https://*) printf '%s' "$value" ;;
+    *) printf '%s' "$fallback" ;;
+  esac
+}
+
+HEALTH_URL="$(normalize_health_url "$HEALTH_URL" "$DEFAULT_HEALTH_URL")"
+SUBDOMAIN_HEALTH_URL="$(normalize_health_url "$SUBDOMAIN_HEALTH_URL" "http://127.0.0.1:${SUBDOMAIN_HOST_PORT}/api/health")"
 
 echo "==> QSYS deploy starting"
 echo "APP_DIR=$APP_DIR"
