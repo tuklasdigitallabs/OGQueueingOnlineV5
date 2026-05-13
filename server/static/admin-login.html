@@ -172,7 +172,11 @@
     const $btn = document.getElementById("btn");
     const BTN_IDLE = "Login";
     const BTN_BUSY = "Signing In...";
+    function isAdminHost() {
+      return /^admin\./i.test(String(window.location.hostname || ""));
+    }
     function buildAdminEntryUrl(branchCode = "") {
+      if (isAdminHost()) return window.appUrl("/");
       const code = String(branchCode || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/admin`) : window.appUrl("/admin");
     }

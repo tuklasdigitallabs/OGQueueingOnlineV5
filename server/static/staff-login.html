@@ -180,7 +180,11 @@
     const $p = document.getElementById("pin");
     const $e = document.getElementById("err");
     const $dot = document.querySelector(".dot");
+    function isStaffHost() {
+      return /^staff\./i.test(String(window.location.hostname || ""));
+    }
     function buildStaffEntryUrl(branchCodeArg) {
+      if (isStaffHost()) return window.appUrl("/");
       const code = String(branchCodeArg || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
     }

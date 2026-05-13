@@ -1022,11 +1022,17 @@ function waitingMins(r){
       return String(selected?.branchCode || "").trim().toUpperCase();
     }
 
+    function isStaffHost(){
+      return /^staff\./i.test(String(window.location.hostname || ""));
+    }
+
     function staffLoginUrl(){
+      if (isStaffHost()) return window.appUrl("/");
       return window.appUrl("/staff-login");
     }
 
     function staffEntryUrl(branchCode){
+      if (isStaffHost()) return window.appUrl("/");
       const code = String(branchCode || currentBranchCodeForNav() || "").trim().toUpperCase();
       return code ? window.appUrl(`/b/${encodeURIComponent(code)}/staff`) : window.appUrl("/staff");
     }

@@ -12,5 +12,18 @@ services:
     volumes:
       - qsys_data:/data
 
+  qsys-subdomains:
+    build:
+      context: .
+      dockerfile: Dockerfile.qsys
+    container_name: og-qsys-subdomains
+    restart: unless-stopped
+    env_file:
+      - .env.qsys.subdomains
+    ports:
+      - "3101:3101"
+    volumes:
+      - qsys_data:/data
+
 volumes:
   qsys_data:

@@ -40,6 +40,70 @@ function normalizeBasePath(input) {
 
 const APP_BASE_PATH = normalizeBasePath(process.env.APP_BASE_PATH || "");
 
+function normalizeHostName(input) {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "");
+}
+
+function splitHostEnv(input) {
+  return String(input || "")
+    .split(/[,\s]+/)
+    .map(normalizeHostName)
+    .filter(Boolean);
+}
+
+function configuredBaseDomains() {
+  const hosts = new Set(["onegourmetph.com"]);
+  for (const raw of [
+    process.env.QSYS_PUBLIC_HOST,
+    process.env.PUBLIC_HOST,
+    process.env.APP_HOST,
+  ]) {
+    for (const host of splitHostEnv(raw)) {
+      if (!host || host === "localhost" || host === "127.0.0.1") continue;
+      hosts.add(host.replace(/^www\./, ""));
+    }
+  }
+  return Array.from(hosts);
+}
+
+function configuredSurfaceHosts(surface) {
+  const key = String(surface || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const hosts = new Set([
+    ...splitHostEnv(process.env[`QSYS_${key}_HOST`]),
+    ...splitHostEnv(process.env[`${key}_HOST`]),
+  ]);
+  for (const base of configuredBaseDomains()) {
+    hosts.add(`${String(surface || "").trim().toLowerCase()}.${base}`);
+  }
+  return hosts;
+}
+
+const SURFACE_HOSTS = {
+  guest: configuredSurfaceHosts("guest"),
+  staff: configuredSurfaceHosts("staff"),
+  admin: configuredSurfaceHosts("admin"),
+};
+
+function getHostSurface(req) {
+  const host = normalizeHostName(req?.get?.("host") || req?.headers?.host || "");
+  if (!host) return "";
+  if (SURFACE_HOSTS.staff.has(host)) return "staff";
+  if (SURFACE_HOSTS.admin.has(host)) return "admin";
+  if (SURFACE_HOSTS.guest.has(host)) return "guest";
+  return "";
+}
+
+function getExplicitSurfaceHost(surface) {
+  const key = String(surface || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  return [
+    ...splitHostEnv(process.env[`QSYS_${key}_HOST`]),
+    ...splitHostEnv(process.env[`${key}_HOST`]),
+  ][0] || "";
+}
+
 function pathWithBase(p) {
   const next = String(p || "");
   if (!APP_BASE_PATH) return next || "/";
@@ -1421,6 +1485,9 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
   function detectSessionScope(req) {
     const rawUrl = String(req?.originalUrl || req?.url || "");
     const p = getComparablePath(rawUrl);
+    const surface = getHostSurface(req);
+    if (surface === "admin" && (p === "/" || p === "/app-boot.js")) return "admin";
+    if (surface === "staff" && (p === "/" || p === "/app-boot.js")) return "staff";
     if (
       p === "/super-admin" ||
       p === "/super-admin-login" ||
@@ -3970,6 +4037,13 @@ function buildGuestEntryUrl(req, branchCodeInput = "") {
     (req.headers["x-forwarded-proto"] || req.protocol || "http")
       .split(",")[0]
       .trim();
+  const guestHost = getExplicitSurfaceHost("guest");
+  if (guestHost) {
+    const suffix = String(branchCodeInput || "").trim().toUpperCase()
+      ? `?branchCode=${encodeURIComponent(String(branchCodeInput || "").trim().toUpperCase())}`
+      : "";
+    return `${proto}://${guestHost}/${suffix}`;
+  }
   const host = String(req.get("host") || "");
   return `${proto}://${host}${buildGuestEntryPath(branchCodeInput)}`;
 }
@@ -3992,6 +4066,37 @@ app.get("/qr/guest", async (req, res) => {
     console.error("[QR]", err);
     res.status(500).send("QR generation failed");
   }
+});
+
+app.get("/", (req, res, next) => {
+  const surface = getHostSurface(req);
+  if (surface === "staff") {
+    if (!req.session?.staffUser) {
+      return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff-login.html")));
+    }
+    const decision = getBranchAccessDecision(getRequestBranch(req), "staff access");
+    if (!decision.ok) return res.status(decision.http || 403).send(decision.message);
+    return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "staff.html")));
+  }
+  if (surface === "admin") {
+    if (!req.session?.adminUser) {
+      return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin-login.html")));
+    }
+    return (setPrivateSurfaceNoIndex(res), res.sendFile(path.join(__dirname, "static", "admin.html")));
+  }
+  if (surface === "guest") {
+    const requestedBranchCode = String(req.query.branchCode || "").trim().toUpperCase();
+    const branchCode = requestedBranchCode || getRequestBranchCode(req);
+    if (!requestedBranchCode && branchCode) {
+      return res.redirect(302, `/?branchCode=${encodeURIComponent(branchCode)}`);
+    }
+    const branch = getBranchByCode(branchCode);
+    if (!branchCode || !branch) return res.status(404).send("Branch not found");
+    const decision = getBranchAccessDecision(branch, "guest registration");
+    if (!decision.ok) return res.status(decision.http || 403).send(decision.message);
+    return res.sendFile(path.join(__dirname, "static", "guest.html"));
+  }
+  return next();
 });
 
 app.get("/app-boot.js", (_req, res) => {
@@ -11940,6 +12045,11 @@ app.get("/api/media/list", requireDisplayAuth, (req, res) => {
   ]) {
     const host = String(raw || "").trim().toLowerCase();
     if (host) allowedSocketHosts.add(host);
+  }
+  for (const hosts of Object.values(SURFACE_HOSTS)) {
+    for (const host of hosts) {
+      if (host) allowedSocketHosts.add(host);
+    }
   }
   const io = new Server(server, {
     path: pathWithBase("/socket.io"),

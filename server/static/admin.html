@@ -2066,7 +2066,12 @@ async function jpost(url, body) {
         return String(selected?.branchCode || "").trim().toUpperCase();
       }
 
+      function isAdminHost() {
+        return /^admin\./i.test(String(window.location.hostname || ""));
+      }
+
       function adminLoginUrl() {
+        if (isAdminHost()) return window.appUrl("/");
         return window.appUrl("/admin-login");
       }
 
@@ -2153,6 +2158,13 @@ async function jpost(url, body) {
       }
 
       function adminEntryUrl(branchCode, page = CURRENT_PAGE) {
+        if (isAdminHost()) {
+          const params = new URLSearchParams();
+          if (INTERNAL_MODE) params.set("internal", INTERNAL_MODE);
+          if (page) params.set("page", String(page).trim().toLowerCase());
+          const query = params.toString();
+          return window.appUrl(query ? `/?${query}` : "/");
+        }
         const code = String(branchCode || currentAdminBranchCode() || "").trim().toUpperCase();
         const path = code ? `/b/${encodeURIComponent(code)}/admin` : "/admin";
         const params = new URLSearchParams();
