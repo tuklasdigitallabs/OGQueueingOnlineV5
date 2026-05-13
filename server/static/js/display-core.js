@@ -271,6 +271,11 @@ function dbgDisp(...args){
 
   function getOptionalDisplayToken() {
     try {
+      const qs = new URLSearchParams(window.location.search || "");
+      if (String(qs.get("electronShell") || "").trim() === "1") return "";
+      if (getDisplayBranchCode()) return "";
+    } catch {}
+    try {
       return getDisplayToken();
     } catch {
       return "";

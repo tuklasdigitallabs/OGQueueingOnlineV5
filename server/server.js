@@ -1452,6 +1452,46 @@ function startServer({ baseDir, port = 3000, branchCode = "DEV" }) {
     });
   }
 
+  function isLocalDisplayOrigin(origin) {
+    const raw = String(origin || "").trim();
+    if (!raw) return false;
+    try {
+      const u = new URL(raw);
+      const host = String(u.hostname || "").toLowerCase();
+      return (u.protocol === "http:" || u.protocol === "https:") && (
+        host === "127.0.0.1" ||
+        host === "localhost" ||
+        host === "::1"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function isDisplayCorsPath(req) {
+    const p = String(req.path || req.originalUrl || "").split(/[?#]/, 1)[0] || "/";
+    return (
+      p === "/api/media/list" ||
+      p.startsWith("/api/display/") ||
+      p.startsWith("/media/library/") ||
+      p.startsWith("/media/custom/") ||
+      p.startsWith("/media/local-file/")
+    );
+  }
+
+  app.use((req, res, next) => {
+    const origin = String(req.headers.origin || "").trim();
+    if (isLocalDisplayOrigin(origin) && isDisplayCorsPath(req)) {
+      res.set("Access-Control-Allow-Origin", origin);
+      res.set("Vary", "Origin");
+      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, X-Display-Token, X-Display-Key, Range");
+      res.set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
+      if (req.method === "OPTIONS") return res.status(204).end();
+    }
+    return next();
+  });
+
   // ✅ Session (SECURITY ADDON)
   const configuredSessionSecret = String(process.env.SESSION_SECRET || "").trim();
   if (isProduction && !configuredSessionSecret) {

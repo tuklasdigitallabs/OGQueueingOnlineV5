@@ -30,6 +30,7 @@ const { startServer } = require("../server/server");
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 const ONLINE_SERVER_URL = "https://staff.onegourmetph.com";
+const ONLINE_DISPLAY_URL = "https://guest.onegourmetph.com";
 const LEGACY_ONLINE_SERVER_URLS = new Set([
   "https://onegourmetph.com/qsys",
   "https://www.onegourmetph.com/qsys",
@@ -237,7 +238,7 @@ function normalizeBranchCode(branchCode) {
 function buildLocalDisplayShellUrl(cfg) {
   const mode = normalizeDisplayMode(cfg?.displayMode);
   const branchCode = normalizeBranchCode(cfg?.branchCode);
-  const serverUrl = normalizeServerUrl(cfg?.serverUrl, cfg?.port);
+  const serverUrl = ONLINE_DISPLAY_URL;
   const suffix = mode === "portrait" ? "display-portrait.html" : "display-landscape.html";
   const params = new URLSearchParams({
     branchCode,
@@ -249,8 +250,9 @@ function buildLocalDisplayShellUrl(cfg) {
   if (mediaSourceMode === "local-file" && localMediaFile) {
     params.set("localMediaMode", "1");
     params.set("localMediaFile", localMediaFile);
+    return `http://127.0.0.1:${cfg?.port}/${suffix}?${params.toString()}`;
   }
-  return `http://127.0.0.1:${cfg?.port}/${suffix}?${params.toString()}`;
+  return `${serverUrl}/${suffix}?${params.toString()}`;
 }
 
 async function fetchJsonMaybe(url) {

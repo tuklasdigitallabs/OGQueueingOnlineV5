@@ -1,6 +1,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const HARD_CODED_SERVER_URL = "https://staff.onegourmetph.com";
+  const HARD_CODED_DISPLAY_URL = "https://guest.onegourmetph.com";
 
   const el = {
     healthDot: $("healthDot"),
@@ -69,12 +70,11 @@
 
   function buildResolvedDisplayUrl(config) {
     const branchCode = normalizeBranchCode(config?.branchCode);
-    const serverUrl = normalizeServerUrl(config?.serverUrl);
     const mode = normalizeDisplayMode(config?.displayMode);
     if (!branchCode) return "-";
     const suffix = mode === "portrait" ? "display-portrait.html" : "display-landscape.html";
-    if (!serverUrl) return `/b/${encodeURIComponent(branchCode)}/${suffix}`;
-    return `${serverUrl}/b/${encodeURIComponent(branchCode)}/${suffix}`;
+    const params = new URLSearchParams({ branchCode, electronShell: "1" });
+    return `${HARD_CODED_DISPLAY_URL}/${suffix}?${params.toString()}`;
   }
 
   function setAgentStatus(text, isError) {
