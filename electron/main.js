@@ -29,12 +29,16 @@ app.commandLine.appendSwitch("disable-site-isolation-trials");
 const { startServer } = require("../server/server");
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
-const ONLINE_SERVER_URL = "https://onegourmetph.com/qsys";
+const ONLINE_SERVER_URL = "https://staff.onegourmetph.com";
+const LEGACY_ONLINE_SERVER_URLS = new Set([
+  "https://onegourmetph.com/qsys",
+  "https://www.onegourmetph.com/qsys",
+]);
 if (!gotSingleInstanceLock) {
   try {
     dialog.showErrorBox(
-      "QSys Already Running",
-      "Another QSys Online instance is already running.\n\nPlease close the existing QSys Online window first before opening a new one."
+      "QSYS Online Display Already Running",
+      "Another QSYS Online Display instance is already running.\n\nPlease close the existing QSYS Online Display window first before opening a new one."
     );
   } catch {}
   app.quit();
@@ -222,7 +226,8 @@ function normalizeDisplayMode(mode) {
 function normalizeServerUrl(serverUrl, port) {
   const raw = String(serverUrl || "").trim();
   if (!raw) return ONLINE_SERVER_URL;
-  return raw.replace(/\/+$/, "");
+  const normalized = raw.replace(/\/+$/, "");
+  return LEGACY_ONLINE_SERVER_URLS.has(normalized.toLowerCase()) ? ONLINE_SERVER_URL : normalized;
 }
 
 function normalizeBranchCode(branchCode) {
@@ -877,7 +882,7 @@ function createTray() {
     },
     { type: "separator" },
     {
-      label: "Quit QSys Online",
+      label: "Quit QSYS Online Display",
       click: () => {
         isQuitting = true;
         app.quit();
@@ -885,7 +890,7 @@ function createTray() {
     },
   ]);
 
-  tray.setToolTip("QSys Online");
+  tray.setToolTip("QSYS Online Display");
   tray.setContextMenu(menu);
 
   // Double-click: show launcher (not display)
@@ -977,7 +982,7 @@ function createSplashWindow() {
     </style></head>
     <body>
       <div class="box">
-        <div class="t">Starting QSys Online…</div>
+        <div class="t">Starting QSYS Online Display...</div>
         <div class="s">Initializing local server and loading launcher.</div>
         <div class="bar"><div></div></div>
       </div>
@@ -994,37 +999,37 @@ function showBlockingStartupError(message, details) {
       buttons: ["OK"],
       defaultId: 0,
       noLink: true,
-      title: "QSys Online Startup Error",
+      title: "QSYS Online Display Startup Error",
       message,
       detail: String(details || ""),
     });
   } catch {
     // Fallback for edge cases where dialog cannot be shown.
     try {
-      dialog.showErrorBox("QSys Online Startup Error", `${message}\n\n${String(details || "")}`);
+      dialog.showErrorBox("QSYS Online Display Startup Error", `${message}\n\n${String(details || "")}`);
     } catch {}
   }
 }
 
 function showAlreadyRunningError(port, details) {
-  const message = "QSys Online is already running on this PC.";
+  const message = "QSYS Online Display is already running on this PC.";
   const detail =
-    "Please close the existing QSys Online instance first before opening a new one." +
+    "Please close the existing QSYS Online Display instance first before opening a new one." +
     (details ? `\n\n${details}` : "") +
-    `\n\nDetected local QSys server: http://127.0.0.1:${port}`;
+    `\n\nDetected local QSYS Online Display server: http://127.0.0.1:${port}`;
   try {
     dialog.showMessageBoxSync({
       type: "warning",
       buttons: ["OK"],
       defaultId: 0,
       noLink: true,
-      title: "QSys Online Already Running",
+      title: "QSYS Online Display Already Running",
       message,
       detail,
     });
   } catch {
     try {
-      dialog.showErrorBox("QSys Online Already Running", `${message}\n\n${detail}`);
+      dialog.showErrorBox("QSYS Online Display Already Running", `${message}\n\n${detail}`);
     } catch {}
   }
 }
@@ -1106,7 +1111,7 @@ app.whenReady().then(async () => {
 
     showBlockingStartupError(
       "The local server failed to start.",
-      "Try restarting the PC. If this keeps happening, reinstall QSys.\n\n" +
+      "Try restarting the PC. If this keeps happening, reinstall QSYS Online Display.\n\n" +
         `Details: ${String(e && e.message ? e.message : e)}`
     );
 

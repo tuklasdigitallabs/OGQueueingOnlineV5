@@ -7545,11 +7545,69 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
   });
   
   /* ---------- system: display window (Electron host) ---------- */
+function isLoopbackRequest(req) {
+  const remote = String(req.ip || req.socket?.remoteAddress || "");
+  return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(remote);
+}
+
+function setLocalDisplayCors(req, res) {
+  const origin = String(req.headers.origin || "").trim();
+  if (/^https:\/\/(?:staff|admin)\.onegourmetph\.com$/i.test(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "600");
+}
+
+function requireLocalDisplayRequest(req, res, next) {
+  setLocalDisplayCors(req, res);
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (!isLoopbackRequest(req)) {
+    return res.status(403).json({ ok: false, error: "Loopback only" });
+  }
+  return next();
+}
+
+function displayControllerResponse(res, action, payload = {}) {
+  const ctrl = global.QSYS_DISPLAY;
+  if (!ctrl) return res.status(400).json({ ok: false, error: "Display controller not available" });
+  if (action === "state") return res.json(ctrl.state());
+  if (action === "open") return res.json(ctrl.open({ displayId: payload.displayId }));
+  if (action === "close") return res.json(ctrl.close());
+  return res.status(400).json({ ok: false, error: "Unknown display action" });
+}
+
+app.options("/api/local-display/:action", requireLocalDisplayRequest);
+app.get("/api/local-display/state", requireLocalDisplayRequest, (_req, res) => {
+  try {
+    return displayControllerResponse(res, "state");
+  } catch (e) {
+    console.error("[local-display/state]", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+app.post("/api/local-display/open", requireLocalDisplayRequest, express.json(), (req, res) => {
+  try {
+    return displayControllerResponse(res, "open", req.body || {});
+  } catch (e) {
+    console.error("[local-display/open]", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+app.post("/api/local-display/close", requireLocalDisplayRequest, express.json(), (_req, res) => {
+  try {
+    return displayControllerResponse(res, "close");
+  } catch (e) {
+    console.error("[local-display/close]", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 app.get("/api/system/display/state", requireStaffApi, requireOperationalBranch, (req, res) => {
   try {
-    const ctrl = global.QSYS_DISPLAY;
-    if (!ctrl) return res.json({ ok: true, on: false, note: "Display controller not available" });
-    return res.json(ctrl.state());
+    return displayControllerResponse(res, "state");
   } catch (e) {
     console.error("[display/state]", e);
     res.status(500).json({ ok: false, error: "Server error" });
@@ -7558,9 +7616,7 @@ app.get("/api/system/display/state", requireStaffApi, requireOperationalBranch, 
 
 app.post("/api/system/display/open", requireStaffApi, requireOperationalBranch, (req, res) => {
   try {
-    const ctrl = global.QSYS_DISPLAY;
-    if (!ctrl) return res.status(400).json({ ok: false, error: "Display controller not available" });
-    return res.json(ctrl.open({ displayId: req.body?.displayId }));
+    return displayControllerResponse(res, "open", req.body || {});
   } catch (e) {
     console.error("[display/open]", e);
     res.status(500).json({ ok: false, error: "Server error" });
@@ -7569,9 +7625,7 @@ app.post("/api/system/display/open", requireStaffApi, requireOperationalBranch, 
 
 app.post("/api/system/display/close", requireStaffApi, requireOperationalBranch, (req, res) => {
   try {
-    const ctrl = global.QSYS_DISPLAY;
-    if (!ctrl) return res.status(400).json({ ok: false, error: "Display controller not available" });
-    return res.json(ctrl.close());
+    return displayControllerResponse(res, "close");
   } catch (e) {
     console.error("[display/close]", e);
     res.status(500).json({ ok: false, error: "Server error" });

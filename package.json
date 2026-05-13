@@ -1,7 +1,7 @@
 {
   "name": "qsys-standalone",
   "version": "1.0.0",
-  "description": "QSys Online Display Agent",
+  "description": "QSYS Online Display",
   "main": "electron/main.js",
   "author": "One Gourmet Foods Inc.",
   "license": "UNLICENSED",
@@ -38,9 +38,9 @@
   },
   "build": {
     "appId": "com.onegourmet.qsysonline",
-    "productName": "QSys Online",
+    "productName": "QSYS Online Display",
     "copyright": "Copyright © One Gourmet Foods Inc.",
-    "artifactName": "QSys Display Agent Setup ${version}.${ext}",
+    "artifactName": "QSYS Online Display Setup ${version}.${ext}",
     "asar": true,
     "files": [
       "electron/**/*",
@@ -78,7 +78,7 @@
       "uninstallerIcon": "server/public/assets/icons/Yakiniku-Like-logo.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "QSys Online"
+      "shortcutName": "QSYS Online Display"
     }
   }
 }

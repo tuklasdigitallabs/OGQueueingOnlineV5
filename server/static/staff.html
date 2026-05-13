@@ -985,6 +985,19 @@ function waitingMins(r){
       return { res, data };
     }
 
+    async function localDisplayApi(action, method, body){
+      const url = `http://127.0.0.1:3000/api/local-display/${encodeURIComponent(String(action || ""))}`;
+      const opt = { method: method || "GET", headers: {} };
+      if (body !== undefined){
+        opt.headers["Content-Type"] = "application/json";
+        opt.body = JSON.stringify(body);
+      }
+      const res = await fetch(url, opt);
+      let data = null;
+      try { data = await res.json(); } catch {}
+      return { res, data };
+    }
+
     const state = {
       me: null,
       allowedBranches: [],
@@ -1158,7 +1171,7 @@ function getQueuedMs(item) {
       if (!el) return;
 
       try{
-        const { res, data } = await api("/api/system/display/state", "GET");
+        const { res, data } = await localDisplayApi("state", "GET");
         if (!res.ok || !data || !data.ok) throw new Error("bad");
         const on = !!data.on;
         state.displayOn = on;
@@ -1806,10 +1819,10 @@ function getQueuedMs(item) {
       const displayId = currentDisplayId();
       const body = displayId == null ? {} : { displayId };
       state.pendingDisplayId = displayId == null ? "" : String(displayId);
-      const { res, data } = await api("/api/system/display/open", "POST", body);
+      const { res, data } = await localDisplayApi("open", "POST", body);
       if (!res.ok || !data?.ok) {
         state.pendingDisplayId = "";
-        return toast(data?.error || "Failed to open display", "bad");
+        return toast(data?.error || "Display agent is not running on this PC.", "bad");
       }
       const opened = Array.isArray(data.displays)
         ? data.displays.find((d) => String(d.id) === String(data.displayId ?? ""))
@@ -1824,10 +1837,10 @@ function getQueuedMs(item) {
       if (!state.displayOn) return;
 
       const body = displayId == null ? {} : { displayId };
-      const { res, data } = await api("/api/system/display/open", "POST", body);
+      const { res, data } = await localDisplayApi("open", "POST", body);
       if (!res.ok || !data?.ok) {
         state.pendingDisplayId = "";
-        return toast(data?.error || "Failed to move display", "bad");
+        return toast(data?.error || "Display agent is not running on this PC.", "bad");
       }
 
       const moved = Array.isArray(data.displays)
@@ -1838,8 +1851,8 @@ function getQueuedMs(item) {
     });
 
     $("closeDisplayBtn")?.addEventListener("click", async () => {
-      const { res, data } = await api("/api/system/display/close", "POST", {});
-      if (!res.ok || !data?.ok) return toast(data?.error || "Failed to close display", "bad");
+      const { res, data } = await localDisplayApi("close", "POST", {});
+      if (!res.ok || !data?.ok) return toast(data?.error || "Display agent is not running on this PC.", "bad");
       toast("Display closed", "ok");
       refreshDisplayStatus();
     });

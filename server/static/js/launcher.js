@@ -1,6 +1,6 @@
 (function () {
   const $ = (id) => document.getElementById(id);
-  const HARD_CODED_SERVER_URL = "https://onegourmetph.com/qsys";
+  const HARD_CODED_SERVER_URL = "https://staff.onegourmetph.com";
 
   const el = {
     healthDot: $("healthDot"),
