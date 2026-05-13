@@ -95,7 +95,6 @@ jobs:
           VPS_DOCKER_NETWORK: ${{ secrets.VPS_DOCKER_NETWORK || 'og-qsys-net' }}
           VPS_IMAGE_NAME: ${{ secrets.VPS_IMAGE_NAME || 'og-qsys-app:latest' }}
           VPS_CONTAINER_NAME: ${{ secrets.VPS_CONTAINER_NAME || 'og-qsys-app' }}
-          VPS_HEALTH_URL: ${{ secrets.VPS_HEALTH_URL || 'http://127.0.0.1:3100/api/health' }}
           VPS_NGINX_CONTAINER: ${{ secrets.VPS_NGINX_CONTAINER || 'og_nginx' }}
         run: |
           ssh -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
@@ -105,7 +104,7 @@ jobs:
             DOCKER_NETWORK='$VPS_DOCKER_NETWORK' \
             IMAGE_NAME='$VPS_IMAGE_NAME' \
             CONTAINER_NAME='$VPS_CONTAINER_NAME' \
-            HEALTH_URL='$VPS_HEALTH_URL' \
+            HEALTH_URL='http://127.0.0.1:3100/api/health' \
             NGINX_CONTAINER='$VPS_NGINX_CONTAINER' \
             GIT_REF='$DEPLOY_GIT_REF' \
             RELOAD_NGINX='$DEPLOY_RELOAD_NGINX' \
