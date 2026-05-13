@@ -65,7 +65,8 @@ Recommended branch protection rules:
    - `Deploy VPS` connects and runs
 4. Verify on the server:
    - container restarted successfully
-   - `https://onegourmetph.com/qsys/api/health` responds with `ok: true`
+   - deploy health check passes against `http://127.0.0.1:3100/api/health`
+   - public smoke check `https://onegourmetph.com/qsys/api/health` responds with `ok: true`
 
 ## Future Improvements
 

@@ -10,6 +10,29 @@ CURRENT ONLINE/VPS NOTES
 This repo is now also used for QSys Online deployment at:
 https://onegourmetph.com/qsys
 
+Current live status as of 2026-04-14:
+- GitHub Actions CI/CD is working end-to-end for the VPS deployment.
+- `CI` validates pushes and PRs.
+- `Deploy VPS` connects over SSH and deploys to the live server successfully.
+- Public health endpoint is live at `https://onegourmetph.com/qsys/api/health`.
+- Public test page is live at `https://onegourmetph.com/qsys/test`.
+- Nginx routing to the QSys app is healthy.
+- Branch licensing is active:
+  - newly created/imported branches start `UNACTIVATED`
+  - unactivated branches are blocked from guest, staff, and display access
+- Guest ticket creation protection is active:
+  - rate limiting is enabled
+  - honeypot field is enabled
+- Super Admin backup and restore is working for the live database.
+- Admin shows read-only backup status.
+- Reports export correctly from the hosted `/qsys` path.
+- Raw ticket exports now use clearer filenames and readable re-call times.
+- `Clear Called` now preserves historical called timestamps for reporting/audit.
+- Admin Setup has been simplified for the online model:
+  - Setup keeps Queue Settings, Display Setup, and Authentications
+  - branch record management and QR actions live under Branches
+  - Display Setup is DB-backed and shared with the local Display Agent
+
 The online deployment runs the same Node/Express app in Docker:
 - VPS app checkout: /opt/og-qsys/app
 - Runtime/data folder: /opt/og-qsys
@@ -23,11 +46,20 @@ VPS deploy:
 cd /opt/og-qsys/app
 git pull --ff-only origin main
 bash scripts/deploy_qsys_vps.sh
+curl -s http://127.0.0.1:3100/api/health
 curl -s https://onegourmetph.com/qsys/api/health
 
 GitHub Actions CI/CD:
 - workflow files: `.github/workflows/ci.yml` and `.github/workflows/deploy-vps.yml`
 - setup guide: `CI_CD_VPS_SETUP.md`
+- required repo secrets:
+  - `VPS_HOST`
+  - `VPS_USER`
+  - `VPS_SSH_KEY`
+- common working values on the current VPS:
+  - `VPS_HOST=76.13.214.71`
+  - `VPS_USER=ogadmin`
+  - `VPS_APP_DIR=/opt/og-qsys/app`
 
 Important 2026-04-07 updates:
 - Business date auto-rollover now advances stale persisted dates on request.
@@ -44,6 +76,24 @@ Recommended display video output:
 - Audio codec: AAC
 - Even width/height
 - Faststart enabled
+
+ONLINE ADMIN / OPERATIONS NOTES
+------------------------------------------------------------
+
+Admin:
+- Branches tab is now the source of truth for branch records, guest QR, and branch activation visibility.
+- Setup tab is for queue behavior, shared display behavior, and report/auth integrations only.
+- Display settings saved in Admin are stored in the database and shared with the local Electron Display Agent.
+
+Super Admin:
+- Branch licensing and feature provisioning are active.
+- Backup & Restore is available in Super Admin and is intended for database protection.
+- Current default retention policy keeps 14 backups.
+
+Display Agent:
+- Installer packaging is prepared to bundle FFmpeg for local media conversion.
+- Shared display settings are synced through the server database.
+- Device-only local settings such as monitor selection remain local to the machine.
 
 
 SYSTEM OVERVIEW
