@@ -238,6 +238,25 @@ margin:0;
     align-items:center;
     justify-content:flex-end;
   }
+  .userBadge{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width: 150px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,.72);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+  .userBadge strong{
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 950;
+  }
 
   /* Buttons */
   .btn{
@@ -876,6 +895,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
           <button data-page="reports">Reports</button>
           <button data-page="audit">Audit Logs</button>
           <button data-page="system">System</button>
+          <button data-page="licensing">Licensing</button>
           <button class="danger" id="btnLogout">Logout</button>
         </div>
       </aside>
@@ -899,6 +919,11 @@ tr.is-collapsed + tr.subrow + tr.subrow{
             <h1 id="pageTitle">LIVE OPS OVERVIEW</h1>
           </div>
           <div class="actions">
+            <div class="userBadge" id="loggedInUserBadge" title="Logged in user" style="display:none;">
+              <span>Logged in as</span>
+              <strong id="loggedInUserName">-</strong>
+              <span id="loggedInUserRole">-</span>
+            </div>
             <select id="adminBranchSwitch" class="topSelect" style="display:none;" title="Switch branch"></select>
             <button class="btn" id="btnRefresh">Refresh</button>
           </div>
@@ -1816,6 +1841,12 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <button class="btn" id="btnRunSelfTest">Run Startup Self-Test</button>
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- LICENSING -->
+        <section id="page-licensing" class="hidden">
+          <div class="grid">
             <div class="card" id="cardLicensing" style="grid-column: span 12; display:none;">
               <h3>Licensing</h3>
               <div class="detailGrid">
@@ -2088,6 +2119,7 @@ async function jpost(url, body) {
         if (target === "audit") loadAudit();
         if (target === "reports") initReports();
         if (target === "system") loadSystemInfo();
+        if (target === "licensing") loadSystemInfo();
 
         renderAdminBranchSwitcher();
         syncAdminUrlState();
@@ -2226,7 +2258,7 @@ async function jpost(url, body) {
       }
 
       function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {
-        return ["dashboard", "setup", "media", "reports", "audit"].includes(String(page || "").trim().toLowerCase());
+        return ["dashboard", "setup", "media", "reports", "audit", "licensing"].includes(String(page || "").trim().toLowerCase());
       }
 
       function adminEntryUrl(branchCode, page = CURRENT_PAGE) {
@@ -2263,8 +2295,17 @@ async function jpost(url, body) {
         reports: "REPORT_EXPORT_CSV",
         audit: "AUDIT_VIEW",
         system: "SETTINGS_MANAGE",
+        licensing: "SETTINGS_MANAGE",
       };
       const PAGE_FEATURES = {
+        licensing: [
+          "licensing.advanced_dashboard",
+          "licensing.renewal_reminders",
+          "licensing.audit_history",
+          "licensing.branch_transfer",
+          "licensing.token_revocation",
+          "licensing.one_time_tokens",
+        ],
         system: [
           "operations.system_health",
           "operations.support_bundle",
@@ -2272,12 +2313,6 @@ async function jpost(url, body) {
           "operations.backup_restore",
           "operations.integrity_check",
           "operations.startup_self_test",
-          "licensing.advanced_dashboard",
-          "licensing.renewal_reminders",
-          "licensing.audit_history",
-          "licensing.branch_transfer",
-          "licensing.token_revocation",
-          "licensing.one_time_tokens",
         ],
       };
 
@@ -2293,10 +2328,11 @@ async function jpost(url, body) {
       }
 
       function canUseInternal(mode) {
-        return isSuperAdmin() && INTERNAL_MODE === mode;
+        return isSuperAdmin();
       }
 
       function hasFeature(featureKey) {
+        if (isSuperAdmin()) return true;
         if (!featureKey) return true;
         if (Array.isArray(featureKey)) return featureKey.some((k) => !!FEATURE_FLAGS[String(k)]);
         return !!FEATURE_FLAGS[String(featureKey)];
@@ -2305,9 +2341,23 @@ async function jpost(url, body) {
       function allowedPages() {
         return Object.keys(PAGE_PERMS).filter((page) => {
           if (!hasPerm(PAGE_PERMS[page]) || !hasFeature(PAGE_FEATURES[page] || null)) return false;
-          if (page === "permissions") return canUseInternal("permissions");
+          if (page === "licensing") return isSuperAdmin();
           return true;
         });
+      }
+
+      function renderLoggedInUser() {
+        const badge = $("loggedInUserBadge");
+        if (!badge) return;
+        const name = String(CURRENT_USER?.fullName || "").trim();
+        const role = String(CURRENT_USER?.roleId || "").trim();
+        if (!name && !role) {
+          badge.style.display = "none";
+          return;
+        }
+        badge.style.display = "";
+        if ($("loggedInUserName")) $("loggedInUserName").textContent = name || "-";
+        if ($("loggedInUserRole")) $("loggedInUserRole").textContent = role || "-";
       }
 
       function applyNavPermissions() {
@@ -2369,6 +2419,7 @@ async function jpost(url, body) {
         FEATURE_FLAGS = features?.ok && features.features ? features.features : {};
         renderAdminBranchSwitcher();
         syncAdminUrlState();
+        renderLoggedInUser();
         renderMetaWithTime();
         applyNavPermissions();
         applyInternalAdminVisibility();

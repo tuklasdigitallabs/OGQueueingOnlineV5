@@ -4,6 +4,7 @@ const express = require("express");
 
 module.exports = function createAdminAuth({ db, bcrypt, getUserPerms }) {
   const router = express.Router();
+  const ADMIN_APP_ROLES = new Set(["ADMIN", "SUPER_ADMIN"]);
 
   function requireAdminApi(req, res, next) {
     const u = req.session?.adminUser;
@@ -14,13 +15,12 @@ module.exports = function createAdminAuth({ db, bcrypt, getUserPerms }) {
   function requireAdminPage(req, res, next) {
     const u = req.session?.adminUser;
     if (!u) return res.redirect("/admin-login");
-    // hard lock: only ADMIN role can load admin pages
     const roleId = String(u.roleId || "").toUpperCase();
-    if (roleId !== "ADMIN") return res.redirect("/admin-login");
+    if (!ADMIN_APP_ROLES.has(roleId)) return res.redirect("/admin-login");
     next();
   }
 
-  // Login (ADMIN scope): strictly ADMIN role
+  // Login (ADMIN scope): ADMIN and SUPER_ADMIN roles can load the admin app.
   router.post("/api/admin/auth/login", express.json(), (req, res) => {
     try {
       const fullName = String(req.body.fullName || "").trim();
@@ -44,7 +44,7 @@ module.exports = function createAdminAuth({ db, bcrypt, getUserPerms }) {
       if (!u || !u.isActive) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
       const roleId = String(u.roleId || "").toUpperCase();
-      if (roleId !== "ADMIN") return res.status(403).json({ ok: false, error: "Admin access only" });
+      if (!ADMIN_APP_ROLES.has(roleId)) return res.status(403).json({ ok: false, error: "Admin access only" });
 
       const ok = bcrypt.compareSync(pin, u.pinHash);
       if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });

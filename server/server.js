@@ -2966,6 +2966,13 @@ app.get("/static/js/:file", (req, res) => {
 
   function getUserPerms(roleId) {
     try {
+      const normalizedRoleId = String(roleId || "").toUpperCase();
+      if (normalizedRoleId === "SUPER_ADMIN") {
+        return db
+          .prepare(`SELECT permKey FROM permissions ORDER BY permKey`)
+          .all()
+          .map((r) => r.permKey);
+      }
       const rows = db
         .prepare(
           `
@@ -2974,7 +2981,7 @@ app.get("/static/js/:file", (req, res) => {
         WHERE roleId=? AND allowed=1
       `
         )
-        .all(String(roleId));
+        .all(normalizedRoleId);
       return rows.map((r) => r.permKey);
     } catch {
       return [];
