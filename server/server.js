@@ -967,6 +967,7 @@ function ensureSuperAdminLicenseRegistrySchema(db) {
     CREATE INDEX IF NOT EXISTS idx_super_admin_license_events_licenseId ON super_admin_license_events(licenseId);
     CREATE INDEX IF NOT EXISTS idx_super_admin_license_events_createdAt ON super_admin_license_events(createdAt DESC);
   `);
+  ensureColumn(db, "super_admin_licenses", "isPerpetual", "INTEGER NOT NULL DEFAULT 0");
 }
 
 function ensureMultiBranchFoundationSchema(db) {
@@ -2101,6 +2102,13 @@ app.get("/static/js/:file", (req, res) => {
     if (["ISSUED", "ACTIVE", "DISABLED", "EXPIRED", "REVOKED"].includes(normalized)) return normalized;
     return "ISSUED";
   }
+  function normalizePerpetualLicense(value, fallbackExpiresAt = null) {
+    if (value === undefined || value === null || String(value).trim() === "") {
+      return !(parseEpochOrNull(fallbackExpiresAt) || null);
+    }
+    const normalized = String(value).trim().toLowerCase();
+    return value === true || value === 1 || normalized === "1" || normalized === "true" || normalized === "yes";
+  }
   function mapRegistryStatusToBranchLicenseStatus(status) {
     const normalized = normalizeRegistryLicenseStatus(status);
     if (normalized === "ACTIVE") return ACTIVATION_STATUS_ACTIVATED;
@@ -2127,11 +2135,12 @@ app.get("/static/js/:file", (req, res) => {
   function listSuperAdminLicenses() {
     return db.prepare(
       `SELECT id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
-              expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+              isPerpetual, expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
        FROM super_admin_licenses
        ORDER BY createdAt DESC, licenseNumber DESC`
     ).all().map((row) => ({
       ...row,
+      isPerpetual: normalizePerpetualLicense(row?.isPerpetual, row?.expiresAt),
       keyMasked: maskLicenseKey(row.licenseKey),
     }));
   }
@@ -2156,12 +2165,18 @@ app.get("/static/js/:file", (req, res) => {
     if (!normalized) return null;
     const row = db.prepare(
       `SELECT id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
-              expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+              isPerpetual, expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
        FROM super_admin_licenses
        WHERE id=?
        LIMIT 1`
     ).get(normalized);
-    return row ? { ...row, keyMasked: maskLicenseKey(row.licenseKey) } : null;
+    return row
+      ? {
+          ...row,
+          isPerpetual: normalizePerpetualLicense(row?.isPerpetual, row?.expiresAt),
+          keyMasked: maskLicenseKey(row.licenseKey),
+        }
+      : null;
   }
   function findActiveLicenseForBranch(branchId, excludeLicenseId = "") {
     return db.prepare(
@@ -2195,6 +2210,7 @@ app.get("/static/js/:file", (req, res) => {
     const branch = getBranchById(record?.branchId);
     if (!branch?.branchId) return;
     const status = mapRegistryStatusToBranchLicenseStatus(record?.status);
+    const isPerpetual = normalizePerpetualLicense(record?.isPerpetual, record?.expiresAt);
     const timestamp = status === ACTIVATION_STATUS_ACTIVATED
       ? Number(record?.activatedAt || record?.updatedAt || Date.now()) || Date.now()
       : Number(record?.deactivatedAt || record?.updatedAt || Date.now()) || Date.now();
@@ -2202,7 +2218,8 @@ app.get("/static/js/:file", (req, res) => {
       status,
       licenseId: String(record?.licenseNumber || ""),
       issuedAt: Number(record?.issuedAt || 0) || "",
-      expiresAt: Number(record?.expiresAt || 0) || "",
+      expiresAt: isPerpetual ? "" : Number(record?.expiresAt || 0) || "",
+      isPerpetual,
       activatedAt: status === ACTIVATION_STATUS_ACTIVATED ? timestamp : "",
       activatedBy: String(actorName || record?.updatedBy || record?.createdBy || "super-admin"),
       snapshotJson: {
@@ -2210,8 +2227,17 @@ app.get("/static/js/:file", (req, res) => {
         licenseId: record?.id,
         licenseNumber: record?.licenseNumber,
         status: record?.status,
+        isPerpetual,
+        expiresAt: isPerpetual ? null : (Number(record?.expiresAt || 0) || null),
       },
     });
+  }
+  function buildBranchLicenseRegistryPayload() {
+    return {
+      branches: listAllBranches(),
+      licenses: listSuperAdminLicenses(),
+      licenseEvents: listSuperAdminLicenseEvents(150),
+    };
   }
   function buildSuperAdminConsolePayload() {
     return {
@@ -2219,9 +2245,7 @@ app.get("/static/js/:file", (req, res) => {
         ...item,
         enabled: isFeatureProvisioned(item.key),
       })),
-      branches: listAllBranches(),
-      licenses: listSuperAdminLicenses(),
-      licenseEvents: listSuperAdminLicenseEvents(150),
+      ...buildBranchLicenseRegistryPayload(),
       backup: getBackupManagementPayload({ limit: 20 }),
     };
   }
@@ -2292,6 +2316,8 @@ app.get("/static/js/:file", (req, res) => {
     if (cached) {
       const rawStatus = String(cached.status || "").trim().toUpperCase();
       const exp = Number(cached.expiresAt || 0) || null;
+      const snapshot = safeParseJson(cached.snapshotJson, null);
+      const isPerpetual = normalizePerpetualLicense(snapshot?.isPerpetual, exp);
       const graceUntil = Number(cached.graceUntil || 0) || null;
       const now = Date.now();
       const expired = rawStatus === ACTIVATION_STATUS_ACTIVATED && exp && now > exp && (!graceUntil || now > graceUntil);
@@ -2302,6 +2328,7 @@ app.get("/static/js/:file", (req, res) => {
         licenseId: String(cached.licenseId || ""),
         licenseIssuedAt: Number(cached.issuedAt || 0) || null,
         licenseExpiresAt: exp,
+        licenseIsPerpetual: isPerpetual,
         activatedAt: Number(cached.lastValidatedAt || 0) || null,
         activatedBy: String(cached.source || ""),
       };
@@ -2309,6 +2336,7 @@ app.get("/static/js/:file", (req, res) => {
     const rawStatus = String(getBranchSetting(branchId, "license.status") || "").trim().toUpperCase();
     const status = rawStatus || (Number(branch?.isDefault || 0) === 1 ? ACTIVATION_STATUS_ACTIVATED : ACTIVATION_STATUS_UNACTIVATED);
     const exp = Number(getBranchSetting(branchId, "license.expiresAt") || 0) || null;
+    const isPerpetual = normalizePerpetualLicense(getBranchSetting(branchId, "license.isPerpetual"), exp);
     const expired = status === ACTIVATION_STATUS_ACTIVATED && exp && Date.now() > exp;
     return {
       status: expired ? ACTIVATION_STATUS_EXPIRED : status,
@@ -2316,6 +2344,7 @@ app.get("/static/js/:file", (req, res) => {
       licenseId: String(getBranchSetting(branchId, "license.licenseId") || ""),
       licenseIssuedAt: Number(getBranchSetting(branchId, "license.issuedAt") || 0) || null,
       licenseExpiresAt: exp,
+      licenseIsPerpetual: isPerpetual,
       activatedAt: Number(getBranchSetting(branchId, "license.activatedAt") || 0) || null,
       activatedBy: String(getBranchSetting(branchId, "license.activatedBy") || ""),
     };
@@ -2324,10 +2353,12 @@ app.get("/static/js/:file", (req, res) => {
     const id = String(branchId || "").trim();
     if (!id) return;
     const status = String(payload.status || ACTIVATION_STATUS_UNACTIVATED).trim().toUpperCase();
+    const isPerpetual = normalizePerpetualLicense(payload.isPerpetual, payload.expiresAt);
     setBranchSetting(id, "license.status", status);
     setBranchSetting(id, "license.licenseId", String(payload.licenseId || ""));
     setBranchSetting(id, "license.issuedAt", String(Number(payload.issuedAt || 0) || ""));
-    setBranchSetting(id, "license.expiresAt", String(Number(payload.expiresAt || 0) || ""));
+    setBranchSetting(id, "license.expiresAt", isPerpetual ? "" : String(Number(payload.expiresAt || 0) || ""));
+    setBranchSetting(id, "license.isPerpetual", isPerpetual ? "1" : "0");
     setBranchSetting(id, "license.activatedAt", String(Number(payload.activatedAt || 0) || ""));
     setBranchSetting(id, "license.activatedBy", String(payload.activatedBy || ""));
     const branch = getBranchById(id);
@@ -2337,10 +2368,13 @@ app.get("/static/js/:file", (req, res) => {
         licenseId: payload.licenseId,
         entitled: status === ACTIVATION_STATUS_ACTIVATED,
         issuedAt: payload.issuedAt,
-        expiresAt: payload.expiresAt,
+        expiresAt: isPerpetual ? "" : payload.expiresAt,
         lastValidatedAt: payload.activatedAt || Date.now(),
         source: payload.activatedBy,
-        snapshotJson: payload.snapshotJson || null,
+        snapshotJson: {
+          ...(payload.snapshotJson && typeof payload.snapshotJson === "object" ? payload.snapshotJson : {}),
+          isPerpetual,
+        },
       });
     }
   }
@@ -2365,6 +2399,7 @@ app.get("/static/js/:file", (req, res) => {
           licenseId: String(getBranchSetting(row.branchId, "license.licenseId") || ""),
           issuedAt: Number(getBranchSetting(row.branchId, "license.issuedAt") || 0) || null,
           expiresAt: Number(getBranchSetting(row.branchId, "license.expiresAt") || 0) || null,
+          isPerpetual: normalizePerpetualLicense(getBranchSetting(row.branchId, "license.isPerpetual"), getBranchSetting(row.branchId, "license.expiresAt")),
           activatedAt: Number(getBranchSetting(row.branchId, "license.activatedAt") || 0) || null,
           activatedBy: String(getBranchSetting(row.branchId, "license.activatedBy") || ""),
         };
@@ -2400,6 +2435,7 @@ app.get("/static/js/:file", (req, res) => {
       licenseId: license.licenseId,
       licenseIssuedAt: license.licenseIssuedAt,
       licenseExpiresAt: license.licenseExpiresAt,
+      licenseIsPerpetual: !!license.licenseIsPerpetual,
     };
   }
   function getBranchAccessDecision(branch, surface = "branch") {
@@ -2923,7 +2959,6 @@ app.get("/static/js/:file", (req, res) => {
     keyFn: (req) => `${getRateLimitBranchCode(req)}:${getRequestIp(req)}`,
     errorMessage: "Too many ticket requests from this connection. Please try again shortly or ask staff for help.",
   });
-  const rateLimitDisplayPair = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 25, name: "display_pair" });
 
   function getRoleId(u) {
     return String(u?.roleId || "").toUpperCase();
@@ -3005,6 +3040,12 @@ function requireStaffApi(req, res, next) {
     if (!isSuperAdmin(u)) return res.status(403).json({ ok: false, error: "Super admin only" });
     next();
   }
+  function requireAdminSuperAdminApi(req, res, next) {
+    const u = getScopedSessionUser(req, "admin");
+    if (!u) return res.status(401).json({ ok: false, error: "Not authenticated" });
+    if (!isSuperAdmin(u)) return res.status(403).json({ ok: false, error: "Super admin only" });
+    next();
+  }
 
   function requireProvisionedFeatureApi(...featureKeys) {
     const keys = (featureKeys || []).map((k) => String(k || "").trim()).filter(Boolean);
@@ -3035,7 +3076,7 @@ function requireAdminPage(req, res, next) {
   if (!u) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
 
   const roleId = String(u.roleId || "").toUpperCase();
-  if (roleId !== "ADMIN") return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
+  if (!["ADMIN", "SUPER_ADMIN"].includes(roleId)) return res.redirect(buildAdminLoginPath(req?.params?.branchCode));
   next();
 }
 
@@ -3303,7 +3344,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     }
   });
 
-  // Admin login (ADMIN only)
+  // Admin login (ADMIN and SUPER_ADMIN)
   app.post("/api/admin/auth/login", rateLimitAuthLogin, express.json(), async (req, res) => {
     try {
       try { clearSessionUser(req, "admin"); } catch {}
@@ -3312,12 +3353,12 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
 
       if (!fullName || !pin) return res.status(400).json({ ok: false, error: "fullName/pin required" });
 
-      const resolved = resolveLoginUserRecord(req, fullName, pin, ["ADMIN"]);
+      const resolved = resolveLoginUserRecord(req, fullName, pin, ["ADMIN", "SUPER_ADMIN"]);
       if (!resolved.user) return res.status(Number(resolved.http || 401)).json({ ok: false, error: resolved.error || "Invalid credentials" });
       const u = resolved.user;
 
       const role = String(u.roleId || "").toUpperCase();
-      if (role !== "ADMIN") {
+      if (!["ADMIN", "SUPER_ADMIN"].includes(role)) {
         return res.status(403).json({ ok: false, error: "Not allowed for Admin app" });
       }
 
@@ -5112,159 +5153,11 @@ function saveBranchDisplaySettings(branch, updates = {}) {
   return true;
 }
 
-const DISPLAY_PAIR_CODES_KEY = "display.pairCodes";
-const DISPLAY_PAIRED_DEVICES_KEY = "display.pairedDevices";
-const DISPLAY_LAST_PAIR_CODE_KEY = "display.lastPairCode";
-
-function hashDisplayToken(token) {
-  return createHash("sha256").update(String(token || "")).digest("hex");
-}
-
-function safeJsonArray(raw) {
-  try {
-    const v = JSON.parse(String(raw || "[]"));
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
-
-function getDisplayPairCodes() {
-  return safeJsonArray(getAppSetting(DISPLAY_PAIR_CODES_KEY))
-    .filter((x) => x && typeof x === "object")
-    .filter((x) => !x.usedAt);
-}
-
-function saveDisplayPairCodes(list) {
-  const clean = (Array.isArray(list) ? list : [])
-    .filter((x) => x && typeof x === "object")
-    .filter((x) => !x.usedAt)
-    .slice(-100);
-  setAppSetting(DISPLAY_PAIR_CODES_KEY, JSON.stringify(clean));
-}
-
-function getPairedDisplayDevices() {
-  return safeJsonArray(getAppSetting(DISPLAY_PAIRED_DEVICES_KEY))
-    .filter((x) => x && typeof x === "object")
-    .slice(-300);
-}
-
-function savePairedDisplayDevices(list) {
-  const clean = (Array.isArray(list) ? list : [])
-    .filter((x) => x && typeof x === "object")
-    .slice(-300);
-  setAppSetting(DISPLAY_PAIRED_DEVICES_KEY, JSON.stringify(clean));
-}
-
-function getReqIp(req) {
-  return String(
-    req.headers["x-forwarded-for"] ||
-      req.socket?.remoteAddress ||
-      req.ip ||
-      "",
-  )
-    .split(",")[0]
-    .trim();
-}
-
-function getCookieValue(req, name) {
-  const raw = String(req.headers.cookie || "");
-  if (!raw) return "";
-  const key = String(name || "").trim();
-  if (!key) return "";
-  const parts = raw.split(";");
-  for (const p of parts) {
-    const i = p.indexOf("=");
-    if (i <= 0) continue;
-    const k = String(p.slice(0, i)).trim();
-    if (k !== key) continue;
-    const v = String(p.slice(i + 1)).trim();
-    try {
-      return decodeURIComponent(v);
-    } catch {
-      return v;
-    }
-  }
-  return "";
-}
-
-function setDisplayAuthCookie(res, token) {
-  const v = encodeURIComponent(String(token || "").trim());
-  if (!v) return;
-  res.append(
-    "Set-Cookie",
-    `qsys_display_token=${v}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax`,
-  );
-}
-
-function extractDisplayToken(req) {
-  return (
-    String(req.headers["x-display-token"] || "").trim() ||
-    String(getCookieValue(req, "qsys_display_token") || "").trim()
-  );
-}
-
-function touchDisplayDevice(deviceId, patch) {
-  try {
-    if (!deviceId) return;
-    const now = Date.now();
-    const list = getPairedDisplayDevices();
-    const idx = list.findIndex((d) => String(d.id || "") === String(deviceId));
-    if (idx < 0) return;
-    const prev = list[idx] || {};
-    const prevSeen = Number(prev.lastSeenAt || 0);
-    if (now - prevSeen < 60 * 1000) return;
-    list[idx] = { ...prev, ...patch, lastSeenAt: now };
-    savePairedDisplayDevices(list);
-  } catch {}
-}
-
 function requireDisplayAuth(req, res, next) {
   const requestedBranchCode = String(
     req?.params?.branchCode || req?.query?.branchCode || ""
   ).trim().toUpperCase();
   const canUseBranchSelectedFallback = req.method === "GET" && !!requestedBranchCode;
-
-  const token = extractDisplayToken(req);
-  if (token) {
-    const tokenHash = hashDisplayToken(token);
-    const list = getPairedDisplayDevices();
-    const device = list.find((d) => !d.revokedAt && String(d.tokenHash || "") === tokenHash);
-    if (device) {
-      const pairedBranchCode = String(device.branchCode || "").trim();
-      if (pairedBranchCode && requestedBranchCode && pairedBranchCode !== requestedBranchCode) {
-        if (!canUseBranchSelectedFallback) {
-          return res.status(401).json({
-            ok: false,
-            error: "Display token belongs to a different branch. Re-pair this screen.",
-          });
-        }
-      } else {
-        if (pairedBranchCode) {
-          const pairedBranch = getBranchByCode(pairedBranchCode);
-          if (!pairedBranch) {
-            return res.status(401).json({
-              ok: false,
-              error: "Display token is linked to an unknown branch. Re-pair this screen.",
-            });
-          }
-          req.qsysBranch = pairedBranch;
-        }
-        req.displayToken = token;
-        req.displayDevice = device;
-        setDisplayAuthCookie(res, token);
-        touchDisplayDevice(device.id, { lastIp: getReqIp(req) });
-        return requireOperationalBranch(req, res, next);
-      }
-    }
-  }
-
-  // Legacy fallback if DISPLAY_KEY still exists in environment.
-  const expected = String(process.env.DISPLAY_KEY || "").trim();
-  if (expected) {
-    const got = String(req.headers["x-display-key"] || "").trim();
-    if (got && got === expected) return requireOperationalBranch(req, res, next);
-  }
 
   // Branch/subdomain display mode:
   // for online displays we trust the resolved branch context and allow
@@ -5309,186 +5202,6 @@ function setAppSetting(key, value) {
      ON CONFLICT(key) DO UPDATE SET value=excluded.value, updatedAt=excluded.updatedAt`
   ).run(String(key), String(value || ""), now);
 }
-
-app.post("/api/admin/display/pair-code", requirePerm("SETTINGS_MANAGE"), express.json(), (req, res) => {
-  try {
-    const now = Date.now();
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const branch = getRequestBranch(req);
-    const list = [{
-      code,
-      createdAt: now,
-      createdBy: actorFromReq(req),
-      branchCode: String(branch?.branchCode || "").trim().toUpperCase(),
-      branchName: String(branch?.branchName || "").trim(),
-    }];
-    saveDisplayPairCodes(list);
-    setAppSetting(
-      DISPLAY_LAST_PAIR_CODE_KEY,
-      JSON.stringify({
-        code,
-        createdAt: now,
-        branchCode: String(branch?.branchCode || "").trim().toUpperCase(),
-        branchName: String(branch?.branchName || "").trim(),
-      }),
-    );
-
-    return res.json({
-      ok: true,
-      code,
-      createdAt: now,
-      branchCode: String(branch?.branchCode || "").trim().toUpperCase(),
-      branchName: String(branch?.branchName || "").trim(),
-    });
-  } catch (e) {
-    console.error("[admin/display/pair-code]", e);
-    return res.status(500).json({ ok: false, error: "Failed to create pair code" });
-  }
-});
-
-app.post("/api/display/pair/complete", rateLimitDisplayPair, express.json(), (req, res) => {
-  try {
-    const code = String(req.body?.code || "").trim();
-    const label = String(req.body?.label || "").trim().slice(0, 80);
-    if (!/^\d{6}$/.test(code)) {
-      return res.status(400).json({ ok: false, error: "Invalid pairing code" });
-    }
-
-    const now = Date.now();
-    const codes = getDisplayPairCodes();
-    const idx = codes.findIndex((c) => String(c.code || "") === code);
-    if (idx < 0) {
-      return res.status(400).json({ ok: false, error: "Pairing code invalid" });
-    }
-    const pairEntry = codes[idx] || {};
-    const requestedBranchCode = String(req.query?.branchCode || req.body?.branchCode || "").trim().toUpperCase();
-    const pairedBranchCodeFromCode = String(pairEntry.branchCode || "").trim().toUpperCase();
-    if (requestedBranchCode && pairedBranchCodeFromCode && requestedBranchCode !== pairedBranchCodeFromCode) {
-      return res.status(400).json({
-        ok: false,
-        error: `Pairing code belongs to branch ${pairedBranchCodeFromCode}.`,
-      });
-    }
-    codes.splice(idx, 1);
-    saveDisplayPairCodes(codes);
-    const nextCode = codes.length ? codes[codes.length - 1] : null;
-    setAppSetting(
-      DISPLAY_LAST_PAIR_CODE_KEY,
-      nextCode ? JSON.stringify({
-        code: String(nextCode.code || ""),
-        createdAt: Number(nextCode.createdAt || Date.now()),
-        branchCode: String(nextCode.branchCode || "").trim().toUpperCase(),
-        branchName: String(nextCode.branchName || "").trim(),
-      }) : "",
-    );
-
-    const token = randomBytes(32).toString("hex");
-    const tokenHash = hashDisplayToken(token);
-    const deviceId = randomUUID();
-    const branchCode = pairedBranchCodeFromCode || String(getRequestBranchCode(req) || "").trim().toUpperCase();
-    const branchRow = getBranchByCode(branchCode);
-    const branchName = String(pairEntry.branchName || branchRow?.branchName || "").trim();
-
-    const devices = getPairedDisplayDevices();
-    devices.push({
-      id: deviceId,
-      label:
-        label ||
-        `Display ${new Date(now).toISOString().slice(0, 19).replace("T", " ")}`,
-      tokenHash,
-      createdAt: now,
-      lastSeenAt: now,
-      lastIp: getReqIp(req),
-      branchCode,
-      branchName,
-    });
-    savePairedDisplayDevices(devices);
-    setDisplayAuthCookie(res, token);
-
-    return res.json({
-      ok: true,
-      token,
-      deviceId,
-      branchCode,
-      branchName,
-    });
-  } catch (e) {
-    console.error("[display/pair/complete]", e);
-    return res.status(500).json({ ok: false, error: "Display pairing failed" });
-  }
-});
-
-app.get("/api/admin/display/devices", requirePerm("SETTINGS_MANAGE"), (_req, res) => {
-  try {
-    const devices = getPairedDisplayDevices().map((d) => ({
-      id: String(d.id || ""),
-      label: String(d.label || ""),
-      createdAt: Number(d.createdAt || 0),
-      lastSeenAt: Number(d.lastSeenAt || 0),
-      lastIp: String(d.lastIp || ""),
-      branchCode: String(d.branchCode || ""),
-      branchName: String(d.branchName || ""),
-      revokedAt: Number(d.revokedAt || 0) || 0,
-    }));
-
-    const lastPairRaw = String(getAppSetting(DISPLAY_LAST_PAIR_CODE_KEY) || "").trim();
-    let lastPairCode = null;
-    try {
-      const tmp = JSON.parse(lastPairRaw || "{}");
-      if (tmp && String(tmp.code || "").trim()) {
-        lastPairCode = {
-          code: String(tmp.code || ""),
-          createdAt: Number(tmp.createdAt || 0),
-          branchCode: String(tmp.branchCode || "").trim().toUpperCase(),
-          branchName: String(tmp.branchName || "").trim(),
-        };
-      }
-    } catch {}
-
-    return res.json({ ok: true, devices, lastPairCode });
-  } catch (e) {
-    console.error("[admin/display/devices]", e);
-    return res.status(500).json({ ok: false, error: "Failed to load display devices" });
-  }
-});
-
-app.post(
-  "/api/admin/display/devices/revoke",
-  requirePerm("SETTINGS_MANAGE"),
-  express.json(),
-  (req, res) => {
-    try {
-      const deviceId = String(req.body?.deviceId || "").trim();
-      if (!deviceId) return res.status(400).json({ ok: false, error: "deviceId is required" });
-
-      const now = Date.now();
-      const devices = getPairedDisplayDevices();
-      const idx = devices.findIndex((d) => String(d.id || "") === deviceId);
-      if (idx < 0) return res.status(404).json({ ok: false, error: "Device not found" });
-
-      devices[idx] = { ...devices[idx], revokedAt: now };
-      savePairedDisplayDevices(devices);
-      return res.json({ ok: true });
-    } catch (e) {
-      console.error("[admin/display/devices/revoke]", e);
-      return res.status(500).json({ ok: false, error: "Failed to revoke display device" });
-    }
-  },
-);
-
-app.post("/api/admin/display/devices/revoke-all", requirePerm("SETTINGS_MANAGE"), (_req, res) => {
-  try {
-    const now = Date.now();
-    const devices = getPairedDisplayDevices().map((d) => ({ ...d, revokedAt: now }));
-    savePairedDisplayDevices(devices);
-    saveDisplayPairCodes([]);
-    setAppSetting(DISPLAY_LAST_PAIR_CODE_KEY, "");
-    return res.json({ ok: true, revoked: devices.length });
-  } catch (e) {
-    console.error("[admin/display/devices/revoke-all]", e);
-    return res.status(500).json({ ok: false, error: "Failed to revoke display devices" });
-  }
-});
 
 app.get("/api/super-admin/console", requireSuperAdminApi, (_req, res) => {
   try {
@@ -5579,6 +5292,7 @@ app.post("/api/super-admin/licenses/generate", requireSuperAdminApi, express.jso
         licenseKey: generateLicenseKey(),
         status: "ISSUED",
         issuedAt,
+        isPerpetual: false,
       },
     });
   } catch (e) {
@@ -5595,9 +5309,10 @@ app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req
 
     const actor = actorFromReq(req);
     const status = normalizeRegistryLicenseStatus(req.body?.status || "ISSUED");
+    const isPerpetual = normalizePerpetualLicense(req.body?.isPerpetual, req.body?.expiresAt);
     const notes = String(req.body?.notes || "").trim();
     const issuedAt = Number(req.body?.issuedAt || Date.now()) || Date.now();
-    const expiresAt = Number(req.body?.expiresAt || 0) || null;
+    const expiresAt = isPerpetual ? null : Number(req.body?.expiresAt || 0) || null;
     const activatedAt = status === "ACTIVE" ? Date.now() : null;
     const deactivatedAt = ["DISABLED", "REVOKED", "EXPIRED"].includes(status) ? Date.now() : null;
     const existing = findActiveLicenseForBranch(branch.branchId);
@@ -5615,8 +5330,8 @@ app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req
     db.prepare(
       `INSERT INTO super_admin_licenses(
         id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
-        expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        isPerpetual, expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       id,
       licenseNumber,
@@ -5627,6 +5342,7 @@ app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req
       status,
       issuedAt,
       activatedAt,
+      isPerpetual ? 1 : 0,
       expiresAt,
       deactivatedAt,
       now,
@@ -5645,7 +5361,7 @@ app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req
       toStatus: status,
       actor,
       note: notes,
-      payload: { branchId: branch.branchId, branchCode: branch.branchCode, expiresAt },
+      payload: { branchId: branch.branchId, branchCode: branch.branchCode, isPerpetual, expiresAt },
     });
     db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
       "SUPER_ADMIN_LICENSE_CREATE",
@@ -5656,6 +5372,7 @@ app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req
         branchId: branch.branchId,
         branchCode: branch.branchCode,
         status,
+        isPerpetual,
         expiresAt,
       }),
       now
@@ -7029,10 +6746,12 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.renewal_reminders", "licensing.audit_history", "licensing.branch_transfer", "licensing.token_revocation", "licensing.one_time_tokens"), (req, res) => {
+  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.renewal_reminders", "licensing.audit_history", "licensing.branch_transfer", "licensing.token_revocation", "licensing.one_time_tokens"), requireAdminSuperAdminApi, (req, res) => {
     try {
       const st = refreshActivationState();
       const reminder = buildLicenseReminder(st);
+      const adminUser = getScopedSessionUser(req, "admin");
+      const canManageRegistry = isSuperAdmin(adminUser);
       const features = getProvisionedFeatureMap([
         "licensing.advanced_dashboard",
         "licensing.renewal_reminders",
@@ -7061,6 +6780,8 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
         history: getLicenseAuditHistory(20),
         tokenEvents: listActivationTokenEvents(12),
         currentTokenRevoked: currentTokenHash ? !!findActivationTokenRevocation(currentTokenHash) : false,
+        canManageRegistry,
+        registry: canManageRegistry ? buildBranchLicenseRegistryPayload() : null,
       });
     } catch (e) {
       console.error("[admin/licensing/status]", e);
@@ -7068,7 +6789,188 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/revoke-token", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.token_revocation"), express.json(), (req, res) => {
+  app.post("/api/admin/licensing/generate", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.audit_history"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+    try {
+      const branchId = String(req.body?.branchId || "").trim();
+      const branch = branchId ? getBranchById(branchId) : null;
+      if (!branch?.branchId) return res.status(400).json({ ok: false, error: "Valid branchId is required." });
+      const issuedAt = Date.now();
+      return res.json({
+        ok: true,
+        draft: {
+          branchId: branch.branchId,
+          branchCode: branch.branchCode,
+          branchName: branch.branchName,
+          licenseNumber: generateLicenseNumber(branch.branchCode, issuedAt),
+          licenseKey: generateLicenseKey(),
+          status: "ISSUED",
+          issuedAt,
+          isPerpetual: false,
+        },
+      });
+    } catch (e) {
+      console.error("[admin/licensing/generate]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/admin/licensing/branch-license", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.audit_history"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+    try {
+      const branchId = String(req.body?.branchId || "").trim();
+      const branch = branchId ? getBranchById(branchId) : null;
+      if (!branch?.branchId) return res.status(400).json({ ok: false, error: "Valid branchId is required." });
+
+      const actor = actorFromReq(req);
+      const status = normalizeRegistryLicenseStatus(req.body?.status || "ISSUED");
+      const isPerpetual = normalizePerpetualLicense(req.body?.isPerpetual, req.body?.expiresAt);
+      const notes = String(req.body?.notes || "").trim();
+      const issuedAt = Number(req.body?.issuedAt || Date.now()) || Date.now();
+      const expiresAt = isPerpetual ? null : Number(req.body?.expiresAt || 0) || null;
+      const activatedAt = status === "ACTIVE" ? Date.now() : null;
+      const deactivatedAt = ["DISABLED", "REVOKED", "EXPIRED"].includes(status) ? Date.now() : null;
+      const existing = findActiveLicenseForBranch(branch.branchId);
+      if (existing) {
+        return res.status(409).json({
+          ok: false,
+          error: `Branch '${branch.branchCode}' already has an active or issued license (${existing.licenseNumber}).`,
+        });
+      }
+
+      const id = randomUUID();
+      const licenseNumber = String(req.body?.licenseNumber || generateLicenseNumber(branch.branchCode, issuedAt)).trim();
+      const licenseKey = String(req.body?.licenseKey || generateLicenseKey()).trim();
+      const now = Date.now();
+      db.prepare(
+        `INSERT INTO super_admin_licenses(
+          id, licenseNumber, licenseKey, branchId, branchCode, branchName, status, issuedAt, activatedAt,
+          isPerpetual, expiresAt, deactivatedAt, createdAt, updatedAt, createdBy, updatedBy, notes
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).run(
+        id,
+        licenseNumber,
+        licenseKey,
+        branch.branchId,
+        branch.branchCode,
+        branch.branchName,
+        status,
+        issuedAt,
+        activatedAt,
+        isPerpetual ? 1 : 0,
+        expiresAt,
+        deactivatedAt,
+        now,
+        now,
+        String(actor?.fullName || "super-admin"),
+        String(actor?.fullName || "super-admin"),
+        notes || null,
+      );
+      const record = getSuperAdminLicenseById(id);
+      syncBranchLicenseFromRegistryRecord(record, String(actor?.fullName || "super-admin"));
+      appendSuperAdminLicenseEvent({
+        licenseId: id,
+        licenseNumber,
+        action: "CREATE",
+        fromStatus: "",
+        toStatus: status,
+        actor,
+        note: notes,
+        payload: { branchId: branch.branchId, branchCode: branch.branchCode, isPerpetual, expiresAt },
+      });
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "SUPER_ADMIN_LICENSE_CREATE",
+        JSON.stringify({
+          actor,
+          licenseId: id,
+          licenseNumber,
+          branchId: branch.branchId,
+          branchCode: branch.branchCode,
+          status,
+          isPerpetual,
+          expiresAt,
+        }),
+        now
+      );
+      return res.json({ ok: true, license: record, registry: buildBranchLicenseRegistryPayload() });
+    } catch (e) {
+      console.error("[admin/licensing/branch-license]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/admin/licensing/branch-license/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.audit_history"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+    try {
+      const licenseId = String(req.body?.licenseId || "").trim();
+      const nextStatus = normalizeRegistryLicenseStatus(req.body?.status || "");
+      const note = String(req.body?.note || "").trim();
+      if (!licenseId) return res.status(400).json({ ok: false, error: "licenseId is required." });
+      const current = getSuperAdminLicenseById(licenseId);
+      if (!current?.id) return res.status(404).json({ ok: false, error: "License not found." });
+      if (current.status === nextStatus && !note) {
+        return res.status(400).json({ ok: false, error: "No license change to apply." });
+      }
+      if (["ISSUED", "ACTIVE"].includes(nextStatus)) {
+        const conflict = findActiveLicenseForBranch(current.branchId, current.id);
+        if (conflict) {
+          return res.status(409).json({
+            ok: false,
+            error: `Branch '${current.branchCode}' already has another active or issued license (${conflict.licenseNumber}).`,
+          });
+        }
+      }
+      const actor = actorFromReq(req);
+      const now = Date.now();
+      const activatedAt = nextStatus === "ACTIVE"
+        ? (Number(current.activatedAt || 0) || now)
+        : null;
+      const deactivatedAt = ["DISABLED", "REVOKED", "EXPIRED"].includes(nextStatus)
+        ? now
+        : null;
+      db.prepare(
+        `UPDATE super_admin_licenses
+         SET status=?, activatedAt=?, deactivatedAt=?, updatedAt=?, updatedBy=?, notes=?
+         WHERE id=?`
+      ).run(
+        nextStatus,
+        activatedAt,
+        deactivatedAt,
+        now,
+        String(actor?.fullName || "super-admin"),
+        note || current.notes || null,
+        current.id
+      );
+      const updated = getSuperAdminLicenseById(current.id);
+      syncBranchLicenseFromRegistryRecord(updated, String(actor?.fullName || "super-admin"));
+      appendSuperAdminLicenseEvent({
+        licenseId: updated.id,
+        licenseNumber: updated.licenseNumber,
+        action: "STATUS_CHANGE",
+        fromStatus: current.status,
+        toStatus: nextStatus,
+        actor,
+        note,
+        payload: { previous: current.status, next: nextStatus },
+      });
+      db.prepare(`INSERT INTO audit_logs(action, payload, createdAt) VALUES(?,?,?)`).run(
+        "SUPER_ADMIN_LICENSE_STATUS_UPDATE",
+        JSON.stringify({
+          actor,
+          licenseId: updated.id,
+          licenseNumber: updated.licenseNumber,
+          branchCode: updated.branchCode,
+          fromStatus: current.status,
+          toStatus: nextStatus,
+          note,
+        }),
+        now
+      );
+      return res.json({ ok: true, license: updated, registry: buildBranchLicenseRegistryPayload() });
+    } catch (e) {
+      console.error("[admin/licensing/branch-license/status]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  app.post("/api/admin/licensing/revoke-token", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.token_revocation"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const token = String(req.body?.token || "").trim();
       const reason = String(req.body?.reason || "").trim();
@@ -7106,7 +7008,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/transfer-release", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.branch_transfer"), express.json(), (req, res) => {
+  app.post("/api/admin/licensing/transfer-release", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.branch_transfer"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const confirmText = String(req.body?.confirmText || "").trim().toUpperCase();
       if (confirmText !== "TRANSFER") return res.status(400).json({ ok: false, error: "Type TRANSFER to confirm release." });

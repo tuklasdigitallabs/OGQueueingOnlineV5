@@ -124,136 +124,10 @@ function dbgDisp(...args){
 
   const SETTINGS_KEY = "qsys_display_settings";
   const UI_SCALE_KEY = "qsys_ui_scale";
-  const DISPLAY_TOKEN_STORAGE = "qsys_display_token";
   const UI_SCALE_MIN = 0.7;
   const UI_SCALE_MAX = 1.8;
   const UI_BASE_WIDTH = 1920;
   const UI_BASE_HEIGHT = 1080;
-
-  function getDisplayToken() {
-    dbg("getDisplayToken()", {
-      storageKey: DISPLAY_TOKEN_STORAGE,
-      hasValue: !!localStorage.getItem(DISPLAY_TOKEN_STORAGE),
-    });
-    try {
-      return String(localStorage.getItem(DISPLAY_TOKEN_STORAGE) || "").trim();
-    } catch {
-      return "";
-    }
-  }
-
-  function clearDisplayToken() {
-    try {
-      localStorage.removeItem(DISPLAY_TOKEN_STORAGE);
-    } catch {}
-  }
-
-  function ensureDisplayTokenUI() {
-    const existing = getDisplayToken();
-    if (existing) return existing;
-
-    const wrap = document.createElement("div");
-    wrap.style.cssText = `
-    position:fixed; inset:0; z-index:999999;
-    background:rgba(0,0,0,0.85);
-    display:flex; align-items:center; justify-content:center;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  `;
-
-    wrap.innerHTML = `
-    <div style="
-      width:min(520px,92vw);
-      background:#1c1c1c;
-      border:1px solid #444;
-      border-radius:16px;
-      padding:18px;
-      color:#fff;">
-      
-      <div style="font-size:20px;font-weight:900;margin-bottom:6px;">
-        Pair Display
-      </div>
-
-      <div style="font-size:13px;opacity:.85;margin-bottom:14px;">
-        This display is not paired yet.  
-        Enter the 6-digit Pair Code from Setup to authorize this screen.
-      </div>
-
-      <input id="pairCodeInput"
-        placeholder="Enter 6-digit Pair Code"
-        style="
-          width:100%;
-          padding:12px;
-          border-radius:10px;
-          border:1px solid #555;
-          background:#000;
-          color:#fff;
-          font-size:14px;
-          outline:none;" />
-
-      <div style="display:flex;gap:10px;margin-top:14px;">
-        <button id="pairSave"
-          style="flex:1;padding:10px;border-radius:10px;
-                 background:#007a3f;border:0;color:#fff;
-                 font-weight:900;cursor:pointer;">
-          Pair
-        </button>
-        <button id="pairClear"
-          style="padding:10px;border-radius:10px;
-                 background:#333;border:0;color:#fff;
-                 font-weight:700;cursor:pointer;">
-          Clear
-        </button>
-      </div>
-
-      <div id="pairMsg"
-        style="margin-top:10px;font-size:12px;opacity:.8;"></div>
-    </div>
-  `;
-
-    document.body.appendChild(wrap);
-
-    const input = wrap.querySelector("#pairCodeInput");
-    const msg = wrap.querySelector("#pairMsg");
-
-    wrap.querySelector("#pairClear").onclick = () => {
-      clearDisplayToken();
-      input.value = "";
-      msg.textContent = "Cleared saved pairing token.";
-      input.focus();
-    };
-
-    wrap.querySelector("#pairSave").onclick = () => {
-      const v = input.value.trim();
-      if (!/^\d{6}$/.test(v)) {
-        msg.textContent = "Enter a valid 6-digit code.";
-        return;
-      }
-      msg.textContent = "Pairing...";
-      fetch(withDisplayBranch("/api/display/pair/complete"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: v }),
-      })
-        .then((r) => r.json().catch(() => null).then((j) => ({ ok: r.ok, j })))
-        .then(({ ok, j }) => {
-          if (!ok || !j || !j.ok || !j.token) {
-            msg.textContent = (j && (j.error || j.message)) || "Pairing failed.";
-            return;
-          }
-          localStorage.setItem(DISPLAY_TOKEN_STORAGE, String(j.token));
-          msg.textContent = "Paired. Reloading...";
-          setTimeout(() => location.reload(), 250);
-        })
-        .catch(() => {
-          msg.textContent = "Pairing request failed.";
-        });
-    };
-
-    setTimeout(() => input.focus(), 50);
-
-    // Stop app until paired
-    throw new Error("Display not paired");
-  }
 
   function loadLocalSettings() {
     try {
@@ -267,19 +141,6 @@ function dbgDisp(...args){
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(s || {}));
     } catch {}
-  }
-
-  function getOptionalDisplayToken() {
-    try {
-      const qs = new URLSearchParams(window.location.search || "");
-      if (String(qs.get("electronShell") || "").trim() === "1") return "";
-      if (getDisplayBranchCode()) return "";
-    } catch {}
-    try {
-      return getDisplayToken();
-    } catch {
-      return "";
-    }
   }
 
   function getDisplayBranchCode() {
@@ -393,18 +254,8 @@ function dbgDisp(...args){
 
   async function fetchAdminDisplaySettings() {
     try {
-      const token = getOptionalDisplayToken();
-      const url = token
-        ? withDisplayBranch("/api/display/settings?token=" + encodeURIComponent(token))
-        : withDisplayBranch("/api/display/settings");
-      const r = await fetch(url, {
-        cache: "no-store",
-        headers: token ? { "x-display-token": token } : {},
-      });
-      if (r.status === 401 || r.status === 403) {
-        clearDisplayToken();
-        return null;
-      }
+      const r = await fetch(withDisplayBranch("/api/display/settings"), { cache: "no-store" });
+      if (r.status === 401 || r.status === 403) return null;
       const j = await r.json();
       if (!j || !j.ok) return null;
       return j.settings || {};
@@ -911,21 +762,12 @@ function dbgDisp(...args){
   async function loadState(ui, state) {
     const statusEl = ui.getStatusEl?.();
     try {
-      const token = getOptionalDisplayToken();
-
-      const url = token
-        ? withDisplayBranch("/api/display/state?token=" + encodeURIComponent(token))
-        : withDisplayBranch("/api/display/state");
+      const url = withDisplayBranch("/api/display/state");
       dbg("loadState() fetch", {
         url,
-        hasToken: !!token,
-        tokenPreview: token ? token.slice(0, 3) + "***" + token.slice(-3) : "",
       });
 
-      const r = await fetch(url, {
-        cache: "no-store",
-        headers: token ? { "x-display-token": token } : {},
-      });
+      const r = await fetch(url, { cache: "no-store" });
 
       // Attempt JSON; if not JSON, keep a small snippet
       let j = null;
@@ -939,9 +781,6 @@ function dbgDisp(...args){
       }
 
       if (!r.ok || !j || !j.ok) {
-        if (r.status === 401 || r.status === 403) {
-          clearDisplayToken();
-        }
         const reason =
           j && (j.error || j.message)
             ? j.error || j.message
@@ -1045,12 +884,8 @@ function dbgDisp(...args){
         return;
       }
 
-      const token = getOptionalDisplayToken();
-
-      const url = token
-        ? withDisplayBranch(`/api/media/list?token=${encodeURIComponent(token)}`)
-        : withDisplayBranch("/api/media/list");
-      const headers = token ? { "x-display-token": token } : {};
+      const url = withDisplayBranch("/api/media/list");
+      const headers = {};
 
       const r = await fetch(url, { cache: "no-store", headers });
       const j = await r.json();

@@ -140,7 +140,7 @@
       <span class="dot" aria-hidden="true"></span>
       <div>
         <h2>Admin Login</h2>
-        <div class="sub">Enter admin username and PIN</div>
+        <div class="sub">Enter admin or super admin username and PIN</div>
       </div>
     </div>
 
@@ -240,7 +240,7 @@
           j = { ok: false, error: "Unexpected server response." };
         }
         if (!j.ok) { $e.textContent = j.error || "Login failed"; return; }
-        // Server already enforces ADMIN role on /api/admin/auth/login
+        // Server enforces admin-app eligible roles on /api/admin/auth/login
 
         const nextCode = String(
           j?.branch?.branchCode ||

@@ -1859,6 +1859,78 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <button class="btn" id="btnRevokeToken">Revoke Token</button>
                 <button class="btn danger" id="btnTransferRelease">Release For Transfer</button>
               </div>
+              <div id="branchLicenseAdminSection" style="display:none; margin-top:18px; padding-top:16px; border-top:1px solid rgba(31,41,51,.12);">
+                <div style="font-weight:900; font-size:16px;">Branch Licensing</div>
+                <div class="muted2" style="margin-top:6px;">Super admin can issue, activate, disable, and revoke branch licenses here. Perpetual licenses stay active without an expiry date.</div>
+                <div class="row" style="margin-top:14px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                  <div style="flex:1 1 260px; min-width:220px;">
+                    <label class="muted2" for="branchLicenseBranch">Branch</label>
+                    <select id="branchLicenseBranch"></select>
+                  </div>
+                  <button class="btn small" id="btnGenerateBranchLicense" type="button">Generate Number & Key</button>
+                </div>
+                <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+                  <div style="flex:1 1 260px; min-width:220px;">
+                    <label class="muted2" for="branchLicenseNumber">License Number</label>
+                    <input id="branchLicenseNumber" readonly />
+                  </div>
+                  <div style="flex:1 1 260px; min-width:220px;">
+                    <label class="muted2" for="branchLicenseKey">License Key</label>
+                    <input id="branchLicenseKey" readonly />
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+                  <div style="flex:1 1 180px; min-width:160px;">
+                    <label class="muted2" for="branchLicenseStatus">Initial Status</label>
+                    <select id="branchLicenseStatus">
+                      <option value="ISSUED">Issued</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="DISABLED">Disabled</option>
+                    </select>
+                  </div>
+                  <div style="flex:1 1 180px; min-width:160px;">
+                    <label class="muted2" for="branchLicenseDuration">License Type</label>
+                    <select id="branchLicenseDuration">
+                      <option value="term">Time Bound</option>
+                      <option value="perpetual">Perpetual</option>
+                    </select>
+                  </div>
+                  <div style="flex:1 1 220px; min-width:180px;">
+                    <label class="muted2" for="branchLicenseExpiresAt">Expires At</label>
+                    <input id="branchLicenseExpiresAt" type="datetime-local" />
+                  </div>
+                </div>
+                <div style="margin-top:10px;">
+                  <label class="muted2" for="branchLicenseNotes">Notes</label>
+                  <textarea id="branchLicenseNotes" rows="3" placeholder="Optional rollout notes, activation context, or branch-specific remarks"></textarea>
+                </div>
+                <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap;">
+                  <button class="btn" id="btnCreateBranchLicense" type="button">Create Branch License</button>
+                </div>
+                <div class="muted2" id="branchLicenseInfo" style="margin-top:10px;">-</div>
+                <div style="margin-top:16px; font-weight:900;">Current Branch Licenses</div>
+                <div style="overflow:auto; margin-top:8px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Branch</th>
+                        <th>License</th>
+                        <th>Status</th>
+                        <th>Issued</th>
+                        <th>Expires</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="branchLicenseTable">
+                      <tr><td colspan="6" class="muted2">No branch licenses loaded.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="margin-top:16px; font-weight:900;">License History</div>
+                <div id="branchLicenseEvents" style="margin-top:8px; display:grid; gap:8px;">
+                  <div class="muted2">No branch license events loaded.</div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -3912,10 +3984,11 @@ async function clearGdriveOAuth() {
           "licensing.token_revocation",
           "licensing.one_time_tokens",
         ]);
+        const licensingVisible = licensingOn && isSuperAdmin();
 
         if ($("cardOpsHealth")) $("cardOpsHealth").style.display = opsHealthOn ? "" : "none";
         if ($("cardOpsAutomation")) $("cardOpsAutomation").style.display = automationOn ? "" : "none";
-        if ($("cardLicensing")) $("cardLicensing").style.display = licensingOn ? "" : "none";
+        if ($("cardLicensing")) $("cardLicensing").style.display = licensingVisible ? "" : "none";
 
         if (opsHealthOn) {
           try {
@@ -3955,7 +4028,7 @@ async function clearGdriveOAuth() {
           }
         }
 
-        if (licensingOn) {
+        if (licensingVisible) {
           try {
             const j = await jget("/api/admin/licensing/status");
             if (j?.ok) {
@@ -3970,11 +4043,15 @@ async function clearGdriveOAuth() {
               if ($("licLastRenewed")) $("licLastRenewed").textContent = fmtTime(j.lastRenewedAt);
               if ($("licTokenRevoked")) $("licTokenRevoked").textContent = j.currentTokenRevoked ? "Yes" : "No";
               $("licensingInfo").textContent = j.reminder?.message || "Licensing details loaded.";
+              if ($("branchLicenseAdminSection")) $("branchLicenseAdminSection").style.display = j.canManageRegistry ? "" : "none";
+              if (j.canManageRegistry) populateBranchLicensingRegistry(j.registry || {});
             } else {
               $("licensingInfo").textContent = j?.error || "Failed to load licensing status.";
+              if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = j?.error || "Failed to load branch licensing registry.";
             }
           } catch {
             $("licensingInfo").textContent = "Failed to load licensing status.";
+            if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = "Failed to load branch licensing registry.";
           }
         }
 
@@ -4063,6 +4140,141 @@ async function clearGdriveOAuth() {
         if (!j?.ok) return toast("System", j?.error || "Self-test failed.", "err");
         toast("System", "Startup self-test finished.", "ok");
         await loadAdvancedSystemInfo();
+      }
+
+      function fmtBranchLicenseExpiry(license) {
+        if (license?.isPerpetual) return "Perpetual";
+        return fmtTime(license?.expiresAt);
+      }
+
+      function syncBranchLicenseDurationUi() {
+        const perpetual = String($("branchLicenseDuration")?.value || "term") === "perpetual";
+        if ($("branchLicenseExpiresAt")) {
+          $("branchLicenseExpiresAt").disabled = perpetual;
+          if (perpetual) $("branchLicenseExpiresAt").value = "";
+        }
+      }
+
+      function resetBranchLicenseDraft() {
+        if ($("branchLicenseNumber")) $("branchLicenseNumber").value = "";
+        if ($("branchLicenseKey")) $("branchLicenseKey").value = "";
+        if ($("branchLicenseStatus")) $("branchLicenseStatus").value = "ISSUED";
+        if ($("branchLicenseDuration")) $("branchLicenseDuration").value = "term";
+        if ($("branchLicenseExpiresAt")) $("branchLicenseExpiresAt").value = "";
+        if ($("branchLicenseNotes")) $("branchLicenseNotes").value = "";
+        syncBranchLicenseDurationUi();
+      }
+
+      function populateBranchLicensingRegistry(registry) {
+        const branches = Array.isArray(registry?.branches) ? registry.branches : [];
+        const licenses = Array.isArray(registry?.licenses) ? registry.licenses : [];
+        const events = Array.isArray(registry?.licenseEvents) ? registry.licenseEvents : [];
+        if ($("branchLicenseBranch")) {
+          const current = $("branchLicenseBranch").value;
+          $("branchLicenseBranch").innerHTML = branches.map((branch) => (
+            `<option value="${escapeAttr(branch.branchId)}">${escapeHtml(branch.branchCode)} - ${escapeHtml(branch.branchName)}</option>`
+          )).join("");
+          if (current && branches.some((branch) => String(branch.branchId) === current)) {
+            $("branchLicenseBranch").value = current;
+          }
+        }
+        if ($("branchLicenseTable")) {
+          if (!licenses.length) {
+            $("branchLicenseTable").innerHTML = `<tr><td colspan="6" class="muted2">No branch licenses issued yet.</td></tr>`;
+          } else {
+            $("branchLicenseTable").innerHTML = licenses.map((license) => `
+              <tr>
+                <td><strong>${escapeHtml(license.branchCode || "-")}</strong><div class="muted2">${escapeHtml(license.branchName || "-")}</div></td>
+                <td><div><strong>${escapeHtml(license.licenseNumber || "-")}</strong></div><div class="muted2" style="font-family:Consolas,monospace;">${escapeHtml(license.keyMasked || "")}</div></td>
+                <td>${escapeHtml(license.status || "-")}</td>
+                <td>${escapeHtml(fmtTime(license.issuedAt))}</td>
+                <td>${escapeHtml(fmtBranchLicenseExpiry(license))}</td>
+                <td>
+                  <div class="row" style="gap:6px; flex-wrap:wrap;">
+                    ${String(license.status || "").toUpperCase() !== "ACTIVE" ? `<button class="btn small" type="button" data-branch-license-action="ACTIVE" data-branch-license-id="${escapeAttr(license.id)}">Activate</button>` : `<button class="btn small" type="button" data-branch-license-action="DISABLED" data-branch-license-id="${escapeAttr(license.id)}">Disable</button>`}
+                    ${String(license.status || "").toUpperCase() !== "REVOKED" ? `<button class="btn small danger" type="button" data-branch-license-action="REVOKED" data-branch-license-id="${escapeAttr(license.id)}">Revoke</button>` : ""}
+                  </div>
+                </td>
+              </tr>
+            `).join("");
+            document.querySelectorAll("[data-branch-license-action]").forEach((btn) => {
+              btn.addEventListener("click", async () => {
+                const licenseId = String(btn.getAttribute("data-branch-license-id") || "").trim();
+                const nextStatus = String(btn.getAttribute("data-branch-license-action") || "").trim().toUpperCase();
+                const note = window.prompt(`Optional note for ${nextStatus.toLowerCase()}:`, "") || "";
+                await updateBranchLicenseStatus(licenseId, nextStatus, note);
+              });
+            });
+          }
+        }
+        if ($("branchLicenseEvents")) {
+          if (!events.length) {
+            $("branchLicenseEvents").innerHTML = `<div class="muted2">No branch license events recorded yet.</div>`;
+          } else {
+            $("branchLicenseEvents").innerHTML = events.map((event) => `
+              <div style="border:1px solid rgba(31,41,51,.12); border-radius:14px; padding:10px 12px; background:#fff;">
+                <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                  <strong>${escapeHtml(event.action || "-")}</strong>
+                  <span class="muted2">${escapeHtml(fmtTime(event.createdAt))}</span>
+                </div>
+                <div class="muted2" style="margin-top:4px;">
+                  ${escapeHtml(event.licenseNumber || "-")}
+                  ${(event.fromStatus || event.toStatus) ? ` | ${escapeHtml(event.fromStatus || "-")} -> ${escapeHtml(event.toStatus || "-")}` : ""}
+                  ${event.actorName ? ` | ${escapeHtml(event.actorName)}` : ""}
+                </div>
+                ${event.note ? `<div style="margin-top:6px;">${escapeHtml(event.note)}</div>` : ""}
+              </div>
+            `).join("");
+          }
+        }
+      }
+
+      async function generateBranchLicenseDraft() {
+        const branchId = String($("branchLicenseBranch")?.value || "").trim();
+        if (!branchId) return toast("Licensing", "Select a branch first.", "warn");
+        const j = await jpost("/api/admin/licensing/generate", { branchId });
+        if (!j?.ok) return toast("Licensing", j?.error || "Failed to generate license draft.", "err");
+        const draft = j.draft || {};
+        if ($("branchLicenseNumber")) $("branchLicenseNumber").value = draft.licenseNumber || "";
+        if ($("branchLicenseKey")) $("branchLicenseKey").value = draft.licenseKey || "";
+        if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = `Draft generated for ${draft.branchCode || "selected branch"}.`;
+      }
+
+      async function createBranchLicense() {
+        const branchId = String($("branchLicenseBranch")?.value || "").trim();
+        const licenseNumber = String($("branchLicenseNumber")?.value || "").trim();
+        const licenseKey = String($("branchLicenseKey")?.value || "").trim();
+        const status = String($("branchLicenseStatus")?.value || "ISSUED").trim().toUpperCase();
+        const isPerpetual = String($("branchLicenseDuration")?.value || "term") === "perpetual";
+        const notes = String($("branchLicenseNotes")?.value || "").trim();
+        const expiresAtValue = String($("branchLicenseExpiresAt")?.value || "").trim();
+        const expiresAt = isPerpetual ? null : (expiresAtValue ? new Date(expiresAtValue).getTime() : null);
+        if (!branchId) return toast("Licensing", "Select a branch first.", "warn");
+        if (!licenseNumber || !licenseKey) return toast("Licensing", "Generate a license number and key first.", "warn");
+        if (!isPerpetual && !expiresAt) return toast("Licensing", "Set an expiry date or choose Perpetual.", "warn");
+        const j = await jpost("/api/admin/licensing/branch-license", {
+          branchId,
+          licenseNumber,
+          licenseKey,
+          status,
+          isPerpetual,
+          notes,
+          expiresAt,
+        });
+        if (!j?.ok) return toast("Licensing", j?.error || "Failed to create branch license.", "err");
+        populateBranchLicensingRegistry(j.registry || {});
+        resetBranchLicenseDraft();
+        if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = "Branch license created.";
+        toast("Licensing", "Branch license created.", "ok");
+      }
+
+      async function updateBranchLicenseStatus(licenseId, status, note) {
+        if (!licenseId) return;
+        const j = await jpost("/api/admin/licensing/branch-license/status", { licenseId, status, note });
+        if (!j?.ok) return toast("Licensing", j?.error || "Failed to update branch license.", "err");
+        populateBranchLicensingRegistry(j.registry || {});
+        if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = `Branch license updated to ${status}.`;
+        toast("Licensing", `Branch license updated to ${status}.`, "ok");
       }
 
       async function revokeLicensingToken() {
@@ -5083,6 +5295,10 @@ function renderDailySummaryPage(){
       $("btnRunSelfTest")?.addEventListener("click", runSelfTestNow);
       $("btnRevokeToken")?.addEventListener("click", revokeLicensingToken);
       $("btnTransferRelease")?.addEventListener("click", releaseBranchTransfer);
+      $("branchLicenseDuration")?.addEventListener("change", syncBranchLicenseDurationUi);
+      $("btnGenerateBranchLicense")?.addEventListener("click", generateBranchLicenseDraft);
+      $("btnCreateBranchLicense")?.addEventListener("click", createBranchLicense);
+      syncBranchLicenseDurationUi();
       $("btnSaveSetup").addEventListener("click", saveSetup);
       document.querySelectorAll("[data-setup-pane]").forEach(btn => {
         btn.addEventListener("click", () => setActiveSetupPane(btn.getAttribute("data-setup-pane")));
