@@ -269,6 +269,14 @@ function dbgDisp(...args){
     } catch {}
   }
 
+  function getOptionalDisplayToken() {
+    try {
+      return getDisplayToken();
+    } catch {
+      return "";
+    }
+  }
+
   function getDisplayBranchCode() {
     try {
       const qs = new URLSearchParams(window.location.search || "");
@@ -380,7 +388,7 @@ function dbgDisp(...args){
 
   async function fetchAdminDisplaySettings() {
     try {
-      const token = getDisplayToken();
+      const token = getOptionalDisplayToken();
       const url = token
         ? withDisplayBranch("/api/display/settings?token=" + encodeURIComponent(token))
         : withDisplayBranch("/api/display/settings");
@@ -390,7 +398,6 @@ function dbgDisp(...args){
       });
       if (r.status === 401 || r.status === 403) {
         clearDisplayToken();
-        setTimeout(() => location.reload(), 200);
         return null;
       }
       const j = await r.json();
@@ -899,7 +906,7 @@ function dbgDisp(...args){
   async function loadState(ui, state) {
     const statusEl = ui.getStatusEl?.();
     try {
-      const token = ensureDisplayTokenUI();
+      const token = getOptionalDisplayToken();
 
       const url = token
         ? withDisplayBranch("/api/display/state?token=" + encodeURIComponent(token))
@@ -929,7 +936,6 @@ function dbgDisp(...args){
       if (!r.ok || !j || !j.ok) {
         if (r.status === 401 || r.status === 403) {
           clearDisplayToken();
-          setTimeout(() => location.reload(), 200);
         }
         const reason =
           j && (j.error || j.message)
@@ -1034,14 +1040,7 @@ function dbgDisp(...args){
         return;
       }
 
-      // IMPORTANT: video playlist must respect the same pairing token as state
-      let token = "";
-      try {
-        token = ensureDisplayTokenUI();
-      } catch {
-        state.playlist = [];
-        return;
-      }
+      const token = getOptionalDisplayToken();
 
       const url = token
         ? withDisplayBranch(`/api/media/list?token=${encodeURIComponent(token)}`)
@@ -1061,14 +1060,14 @@ function dbgDisp(...args){
         state.playlist = [
           "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
           "/static/media/" + encodeURIComponent("SaveInsta.App - 3101717398286427917_369353778.mp4"),
-        ].map((p) => window.appUrl(p));
+        ].map((p) => absoluteDisplayServerUrl(p));
       }
     } catch (err) {
       reportDisplayLog("error", "Playlist load failed, using bundled fallback", err);
       state.playlist = [
         "/static/media/" + encodeURIComponent("SaveInsta.App - 3095952121509722877.mp4"),
         "/static/media/" + encodeURIComponent("SaveInsta.App - 3101717398286427917_369353778.mp4"),
-      ].map((p) => window.appUrl(p));
+      ].map((p) => absoluteDisplayServerUrl(p));
     }
   }
 

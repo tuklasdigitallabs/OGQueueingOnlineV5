@@ -5226,12 +5226,19 @@ function requireDisplayAuth(req, res, next) {
     if (got && got === expected) return requireOperationalBranch(req, res, next);
   }
 
-  // Branch-selected display mode:
-  // for the Electron display agent we now trust the selected branch code
-  // and allow read-only display access without pairing.
+  // Branch/subdomain display mode:
+  // for online displays we trust the resolved branch context and allow
+  // read-only display GET access without the old offline pairing key.
   if (canUseBranchSelectedFallback) {
     const branch = getBranchByCode(requestedBranchCode);
     if (branch) {
+      req.qsysBranch = branch;
+      return requireOperationalBranch(req, res, next);
+    }
+  }
+  if (req.method === "GET") {
+    const branch = getRequestBranch(req);
+    if (branch?.branchId) {
       req.qsysBranch = branch;
       return requireOperationalBranch(req, res, next);
     }
