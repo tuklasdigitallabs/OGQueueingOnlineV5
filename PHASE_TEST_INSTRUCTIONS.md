@@ -58,3 +58,27 @@ Expected results:
 
 Known limitations:
 - Store online status is based on sessions touched in the last 2 minutes; idle browser tabs may show offline until they make another request.
+
+## Admin Reports Tabs Update
+
+Scope:
+- Reports section tabbed layout in `server/static/admin.html`.
+- Generated report preview cleanup in `server/static/admin.html`.
+
+Validation flows:
+- Open Admin > Reports.
+- Confirm tabs are visible: Builder, Generated View, Insights, Schedule.
+- Confirm Builder contains the report type, date scope, quick presets, wait reference, and generate/export/print actions.
+- Generate Custom Summary and confirm the app switches to Generated View.
+- Confirm Custom Summary uses a clean report header, summary stats, and right-aligned numeric columns.
+- Generate Raw Data (Tickets) and confirm status/priority values render as compact badges with numeric values aligned.
+- Generate Daily Summary and confirm the table remains paged and grouped by date.
+- Confirm Insights and Schedule tabs remain available only when the corresponding report features are provisioned.
+
+Expected results:
+- Reports controls are separated from generated output and optional report tools.
+- Generated report previews look cleaner and more professional without changing CSV exports.
+- Existing generate, export, print, pagination, insights, and schedule actions still work.
+
+Known limitations:
+- Audit Logs remains CSV-only and does not show a preview in Generated View.

@@ -378,6 +378,63 @@ margin:0;
     line-height:1.4;
     word-break:break-word;
   }
+  .reportOutputShell{
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:rgba(255,255,255,.64);
+    overflow:hidden;
+  }
+  .reportOutputHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:12px 14px;
+    border-bottom:1px solid var(--line);
+    background:rgba(60,40,20,.035);
+  }
+  .reportOutputTitle{
+    font-size:14px;
+    font-weight:950;
+  }
+  .reportStats{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .reportStat{
+    padding:7px 10px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.76);
+    font-size:12px;
+    font-weight:900;
+  }
+  .reportTableWrap{
+    overflow:auto;
+  }
+  .reportTableWrap table{
+    min-width: 980px;
+  }
+  .reportTableWrap td.num,
+  .reportTableWrap th.num{
+    text-align:right;
+  }
+  .reportBadge{
+    display:inline-flex;
+    align-items:center;
+    padding:4px 8px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:rgba(60,40,20,.04);
+    font-size:11px;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .reportBadge.ok{ border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.08); }
+  .reportBadge.warn{ border-color:rgba(245,158,11,.55); background:rgba(245,158,11,.10); }
+  .reportBadge.bad{ border-color:rgba(239,68,68,.55); background:rgba(239,68,68,.10); }
 
   .setup-pills{
     display:flex;
@@ -1425,13 +1482,27 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         <!-- REPORTS -->
         <section id="page-reports" class="hidden">
           <div class="grid">
-
-            <!-- Report Builder -->
             <div class="card" style="grid-column: span 12;">
-              <div class="row" style="justify-content: space-between; align-items:flex-start; gap:12px;">
+              <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
                 <div>
                   <h3 style="margin:0;">Reports</h3>
-                  <div class="muted2" style="margin-top:6px;">Build a report, preview what will be included, then generate/export/print.</div>
+                  <div class="muted2" style="margin-top:6px;">Build, preview, export, schedule, and review report insights.</div>
+                </div>
+              </div>
+              <div class="setup-pills" style="margin-top:12px; margin-bottom:0;">
+                <button class="setup-pill-btn active" type="button" data-reports-tab="builder">Builder</button>
+                <button class="setup-pill-btn" type="button" data-reports-tab="output">Generated View</button>
+                <button class="setup-pill-btn" type="button" data-reports-tab="insights">Insights</button>
+                <button class="setup-pill-btn" type="button" data-reports-tab="schedule">Schedule</button>
+              </div>
+            </div>
+
+            <!-- Report Builder -->
+            <div class="card" id="cardReportBuilder" style="grid-column: span 12;">
+              <div class="row" style="justify-content: space-between; align-items:flex-start; gap:12px;">
+                <div>
+                  <h3 style="margin:0;">Report Builder</h3>
+                  <div class="muted2" style="margin-top:6px;">Choose the report type, date scope, and output action.</div>
                 </div>
                 <div class="row" style="gap:10px;">
                   <button class="btn primary" id="btnRepGenerate">Generate</button>
@@ -1657,39 +1728,53 @@ tr.is-collapsed + tr.subrow + tr.subrow{
             </div>
 
             <!-- Output -->
-            <div class="card" style="grid-column: span 12;">
-              <h3 id="repOutTitle">Report Output</h3>
+            <div class="card" id="cardReportOutput" style="grid-column: span 12;">
+              <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px;">
+                <div>
+                  <h3 id="repOutTitle" style="margin:0;">Report Output</h3>
+                  <div class="muted2" id="repOutputSub" style="margin-top:6px;">Generate a report to preview it here.</div>
+                </div>
+                <span class="pill" id="repOutputStatus">Preview</span>
+              </div>
 
               <div id="sumOut" style="display:none;">
-                <div class="row" style="gap:12px; flex-wrap:wrap; margin-top:6px;">
-                  <div class="pill"><b>Pax Overall:</b> <span id="sumPaxOverall">0</span></div>
-                  <div class="pill"><b>Priority Total:</b> <span id="sumPriOverall">0</span></div>
+                <div class="reportStats" style="margin-top:12px;">
+                  <div class="reportStat">Pax Overall: <span id="sumPaxOverall">0</span></div>
+                  <div class="reportStat">Priority Total: <span id="sumPriOverall">0</span></div>
                 </div>
 
-<div id="customOut" style="display:none; margin-top:12px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Custom Summary</h4>
+                <div id="customOut" class="reportOutputShell" style="display:none; margin-top:12px;">
+                  <div class="reportOutputHeader">
+                    <div class="reportOutputTitle">Custom Summary</div>
+                    <div class="muted2">Grouped operational totals</div>
+                  </div>
+                  <div class="reportTableWrap">
                   <table>
                     <thead>
                       <tr>
                         <th>GROUP CODE</th>
-                        <th>Total Reservations (all created tickets)</th>
-                        <th>Total Pax count reserved</th>
-                        <th>Total Priority Reservations</th>
-                        <th>Seated Count - group</th>
-                        <th>Seated Count - total pax count</th>
-                        <th>Waiting Time to be called - Average (mins)</th>
-                        <th>Waiting Time to be seated - Average (mins)</th>
+                        <th class="num">Total Reservations (all created tickets)</th>
+                        <th class="num">Total Pax count reserved</th>
+                        <th class="num">Total Priority Reservations</th>
+                        <th class="num">Seated Count - group</th>
+                        <th class="num">Seated Count - total pax count</th>
+                        <th class="num">Waiting Time to be called - Average (mins)</th>
+                        <th class="num">Waiting Time to be seated - Average (mins)</th>
                       </tr>
                     </thead>
                     <tbody id="tblCustomSummary">
                       <tr><td colspan="8" class="muted">No data loaded</td></tr>
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
-                <div id="rawOut" style="display:none; margin-top:12px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Raw Data (Tickets)</h4>
-                  <div class="row" style="justify-content:space-between; align-items:center; margin:6px 0 8px;">
+                <div id="rawOut" class="reportOutputShell" style="display:none; margin-top:12px;">
+                  <div class="reportOutputHeader">
+                    <div class="reportOutputTitle">Raw Data (Tickets)</div>
+                    <div class="muted2">Ticket-level operational records</div>
+                  </div>
+                  <div class="row" style="justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line);">
                     <div class="muted2" id="rawPageInfo">Rows: 0</div>
                     <div class="row" style="gap:8px;">
                       <label class="muted2" for="rawPageSize" style="margin:0;">Rows per page</label>
@@ -1703,6 +1788,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <button class="btn" id="btnRawNext" type="button">Next</button>
                     </div>
                   </div>
+                  <div class="reportTableWrap">
                   <table>
                     <thead>
                       <tr>
@@ -1711,27 +1797,31 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                         <th>Queue #</th>
                         <th>Priority</th>
                         <th>Name</th>
-                        <th>Pax</th>
+                        <th class="num">Pax</th>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Called</th>
-                        <th>Times Called</th>
+                        <th class="num">Times Called</th>
                         <th>Re-Call Times</th>
                         <th>Seated</th>
                         <th>Skipped</th>
-                        <th>Wait to Called (mins)</th>
-                        <th>Wait to Seated (mins)</th>
+                        <th class="num">Wait to Called (mins)</th>
+                        <th class="num">Wait to Seated (mins)</th>
                       </tr>
                     </thead>
                     <tbody id="tblRawTickets">
                       <tr><td colspan="15" class="muted">No data loaded</td></tr>
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
-                <div id="dailyOut" style="display:none; margin-top:12px; overflow:auto;">
-                  <h4 style="margin:10px 0 6px;">Daily Summary</h4>
-                  <div class="row" style="justify-content:space-between; align-items:center; margin:6px 0 8px;">
+                <div id="dailyOut" class="reportOutputShell" style="display:none; margin-top:12px;">
+                  <div class="reportOutputHeader">
+                    <div class="reportOutputTitle">Daily Summary</div>
+                    <div class="muted2">Daily totals by group</div>
+                  </div>
+                  <div class="row" style="justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line);">
                     <div class="muted2" id="dailyPageInfo">Rows: 0</div>
                     <div class="row" style="gap:8px;">
                       <label class="muted2" for="dailyPageSize" style="margin:0;">Rows per page</label>
@@ -1745,6 +1835,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <button class="btn" id="btnDailyNext" type="button">Next</button>
                     </div>
                   </div>
+                  <div class="reportTableWrap">
                   <table>
                     <thead>
                       <tr>
@@ -1763,6 +1854,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                       <tr><td colspan="9" class="muted">No data loaded</td></tr>
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
 
@@ -2197,6 +2289,7 @@ async function jpost(url, body) {
       let SETUP_ACTIVE_PANE = "queue";
       let LICENSING_ACTIVE_TAB = "dashboard";
       let SYSTEM_ACTIVE_TAB = "overview";
+      let REPORTS_ACTIVE_TAB = "builder";
       let CURRENT_PAGE = "dashboard";
       let META_BRANCH_LABEL = "-";
       let META_BUSINESS_DATE_LABEL = "";
@@ -2777,6 +2870,26 @@ async function jpost(url, body) {
           const paneEl = $("system-tab-" + key);
           if (!paneEl) return;
           paneEl.classList.toggle("hidden", key !== target);
+        });
+      }
+
+      function setActiveReportsTab(tab) {
+        const target = ["builder", "output", "insights", "schedule"].includes(String(tab || ""))
+          ? String(tab)
+          : "builder";
+        REPORTS_ACTIVE_TAB = target;
+        document.querySelectorAll("[data-reports-tab]").forEach(btn => {
+          btn.classList.toggle("active", btn.getAttribute("data-reports-tab") === target);
+        });
+        const visibility = {
+          cardReportBuilder: target === "builder",
+          cardReportOutput: target === "output",
+          cardReportInsights: target === "insights",
+          cardReportSchedule: target === "schedule",
+        };
+        Object.entries(visibility).forEach(([id, visible]) => {
+          const el = $(id);
+          if (el) el.style.display = visible ? "" : "none";
         });
       }
 
@@ -4863,6 +4976,13 @@ async function clearGdriveOAuth() {
         const btnPrint = $("btnRepPrint");
         if (btnGen) btnGen.disabled = !isInteractive;
         if (btnPrint) btnPrint.disabled = !(type === "custom_summary" && REPORT_HAS_OUTPUT);
+        if ($("repOutputStatus")) $("repOutputStatus").textContent = REPORT_HAS_OUTPUT ? "Generated" : "Preview";
+        if ($("repOutputSub")) {
+          const { from, to } = getReportDates();
+          $("repOutputSub").textContent = REPORT_HAS_OUTPUT && from && to
+            ? `Generated range: ${from} -> ${to}`
+            : "Generate a report to preview it here.";
+        }
 
         // Meta + includes
         const meta = $("repMeta");
@@ -4874,8 +4994,14 @@ async function clearGdriveOAuth() {
         const inc = $("repIncludes");
         if (inc) inc.innerHTML = buildIncludesText();
 
-        if ($("cardReportInsights")) $("cardReportInsights").style.display = (advancedReportsOn || analyticsOn || trendsOn) ? "" : "none";
-        if ($("cardReportSchedule")) $("cardReportSchedule").style.display = scheduledOn ? "" : "none";
+        const insightsAvailable = advancedReportsOn || analyticsOn || trendsOn;
+        const insightsTab = document.querySelector('[data-reports-tab="insights"]');
+        const scheduleTab = document.querySelector('[data-reports-tab="schedule"]');
+        if (insightsTab) insightsTab.style.display = insightsAvailable ? "" : "none";
+        if (scheduleTab) scheduleTab.style.display = scheduledOn ? "" : "none";
+        if (REPORTS_ACTIVE_TAB === "insights" && !insightsAvailable) REPORTS_ACTIVE_TAB = "builder";
+        if (REPORTS_ACTIVE_TAB === "schedule" && !scheduledOn) REPORTS_ACTIVE_TAB = "builder";
+        setActiveReportsTab(REPORTS_ACTIVE_TAB);
         if ($("reportsFeatureNotes")) {
           const notes = [];
           if (advancedReportsOn) notes.push("Advanced Reports Center enabled");
@@ -5147,6 +5273,16 @@ async function clearGdriveOAuth() {
         if (type === "daily_summary") return loadDailySummaryPreview();
         return toast("Reports", "This report exports to CSV only. Use Export CSV.", "warn");
       }
+
+      function reportStatusBadge(status){
+        const label = String(status || "-").trim().toUpperCase();
+        let cls = "";
+        if (["SEATED", "ACTIVE", "COMPLETED"].includes(label)) cls = " ok";
+        else if (["WAITING", "CALLED", "ISSUED"].includes(label)) cls = " warn";
+        else if (["SKIPPED", "CANCELLED", "EXPIRED", "REVOKED"].includes(label)) cls = " bad";
+        return `<span class="reportBadge${cls}">${escapeHtml(label || "-")}</span>`;
+      }
+
 async function loadCustomSummary(){
   const scopeInfo = computeScopeRange();
   const { from, to } = { from: scopeInfo.from, to: scopeInfo.to };
@@ -5199,13 +5335,13 @@ async function loadCustomSummary(){
           const tr = document.createElement("tr");
           tr.innerHTML = `
             <td><b>${escapeHtml(r.groupCode)}</b></td>
-            <td>${escapeHtml(r.totalReservations)}</td>
-            <td>${escapeHtml(r.totalPaxReserved)}</td>
-            <td>${escapeHtml(r.totalPriorityReservations)}</td>
-            <td>${escapeHtml(r.seatedCountGroup)}</td>
-            <td>${escapeHtml(r.seatedPaxTotal)}</td>
-            <td>${escapeHtml(r.avgWaitToCalledMins)}</td>
-            <td>${escapeHtml(r.avgWaitToSeatedMins)}</td>
+            <td class="num">${escapeHtml(r.totalReservations)}</td>
+            <td class="num">${escapeHtml(r.totalPaxReserved)}</td>
+            <td class="num">${escapeHtml(r.totalPriorityReservations)}</td>
+            <td class="num">${escapeHtml(r.seatedCountGroup)}</td>
+            <td class="num">${escapeHtml(r.seatedPaxTotal)}</td>
+            <td class="num">${escapeHtml(r.avgWaitToCalledMins)}</td>
+            <td class="num">${escapeHtml(r.avgWaitToSeatedMins)}</td>
           `;
           tb.appendChild(tr);
         }
@@ -5215,6 +5351,7 @@ async function loadCustomSummary(){
     REPORT_HAS_OUTPUT = true;
     setReportsStale(false);
     updateReportsMode();
+    setActiveReportsTab("output");
     toast("Reports", "Custom Summary updated.", "ok");
   } catch(e){
     toast("Reports", "Failed to load Custom Summary.", "err");
@@ -5246,6 +5383,7 @@ async function loadRawTicketsPreview(){
     REPORT_HAS_OUTPUT = true;
     setReportsStale(false);
     updateReportsMode();
+    setActiveReportsTab("output");
     toast("Reports", `Raw tickets updated (${RAW_TICKETS_CACHE.length} rows).`, "ok");
   } catch(e){
     toast("Reports", "Failed to load Raw Tickets.", "err");
@@ -5275,18 +5413,18 @@ function renderRawTicketsPage(){
           <td>${escapeHtml(r.businessDate ?? "")}</td>
           <td>${escapeHtml(r.groupCode ?? "")}</td>
           <td>${escapeHtml(r.queueNum ?? "")}</td>
-          <td>${escapeHtml(r.priorityType ?? "")}</td>
+          <td>${reportStatusBadge(r.priorityType || "NONE")}</td>
           <td>${escapeHtml(r.name ?? "")}</td>
-          <td>${escapeHtml(r.pax ?? "")}</td>
-          <td>${escapeHtml(r.status ?? "")}</td>
+          <td class="num">${escapeHtml(r.pax ?? "")}</td>
+          <td>${reportStatusBadge(r.status)}</td>
           <td>${escapeHtml(r.createdAtLocalHuman ?? "")}</td>
           <td>${escapeHtml(r.calledAtHuman ?? "")}</td>
-          <td>${escapeHtml(r.timesCalled ?? 0)}</td>
+          <td class="num">${escapeHtml(r.timesCalled ?? 0)}</td>
           <td>${escapeHtml(r.nextCalls ?? "")}</td>
           <td>${escapeHtml(r.seatedAtHuman ?? "")}</td>
           <td>${escapeHtml(r.skippedAtHuman ?? "")}</td>
-          <td>${escapeHtml(r.waitMinsToCalled ?? "")}</td>
-          <td>${escapeHtml(r.waitMinsToSeated ?? "")}</td>
+          <td class="num">${escapeHtml(r.waitMinsToCalled ?? "")}</td>
+          <td class="num">${escapeHtml(r.waitMinsToSeated ?? "")}</td>
         `;
         tb.appendChild(tr);
       }
@@ -5385,6 +5523,7 @@ async function loadDailySummaryPreview(){
     REPORT_HAS_OUTPUT = true;
     setReportsStale(false);
     updateReportsMode();
+    setActiveReportsTab("output");
     toast("Reports", `Daily Summary updated (${DAILY_SUMMARY_CACHE.length} rows).`, "ok");
   } catch(e){
     toast("Reports", "Failed to load Daily Summary.", "err");
@@ -5582,6 +5721,10 @@ function renderDailySummaryPage(){
       $("btnCloseDay")?.addEventListener("click", closeDay);
 
       // Reports Builder
+      document.querySelectorAll("[data-reports-tab]").forEach(btn => {
+        btn.addEventListener("click", () => setActiveReportsTab(btn.getAttribute("data-reports-tab")));
+      });
+      setActiveReportsTab(REPORTS_ACTIVE_TAB);
       $("btnRepGenerate")?.addEventListener("click", generateFromBuilder);
       $("btnRepExport")?.addEventListener("click", exportFromBuilder);
       $("btnRepPrint")?.addEventListener("click", () => {
