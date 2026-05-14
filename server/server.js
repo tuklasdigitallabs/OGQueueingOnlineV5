@@ -2182,7 +2182,7 @@ app.get("/static/js/:file", (req, res) => {
     return db.prepare(
       `SELECT id, licenseNumber, status
        FROM super_admin_licenses
-       WHERE branchId=? AND upper(status) IN ('ISSUED','ACTIVE') AND id<>?
+       WHERE branchId=? AND upper(status)='ACTIVE' AND id<>?
        ORDER BY createdAt DESC
        LIMIT 1`
     ).get(String(branchId || "").trim(), String(excludeLicenseId || "").trim()) || null;
@@ -5326,7 +5326,7 @@ app.post("/api/super-admin/licenses", requireSuperAdminApi, express.json(), (req
     if (existing) {
       return res.status(409).json({
         ok: false,
-        error: `Branch '${branch.branchCode}' already has an active or issued license (${existing.licenseNumber}).`,
+        error: `Branch '${branch.branchCode}' already has an active license (${existing.licenseNumber}).`,
       });
     }
 
@@ -5402,12 +5402,12 @@ app.post("/api/super-admin/licenses/status", requireSuperAdminApi, express.json(
     if (current.status === nextStatus && !note) {
       return res.status(400).json({ ok: false, error: "No license change to apply." });
     }
-    if (["ISSUED", "ACTIVE"].includes(nextStatus)) {
+    if (nextStatus === "ACTIVE") {
       const conflict = findActiveLicenseForBranch(current.branchId, current.id);
       if (conflict) {
         return res.status(409).json({
           ok: false,
-          error: `Branch '${current.branchCode}' already has another active or issued license (${conflict.licenseNumber}).`,
+          error: `Branch '${current.branchCode}' already has another active license (${conflict.licenseNumber}).`,
         });
       }
     }
@@ -6839,7 +6839,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (existing) {
         return res.status(409).json({
           ok: false,
-          error: `Branch '${branch.branchCode}' already has an active or issued license (${existing.licenseNumber}).`,
+          error: `Branch '${branch.branchCode}' already has an active license (${existing.licenseNumber}).`,
         });
       }
 
@@ -6915,12 +6915,12 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
       if (current.status === nextStatus && !note) {
         return res.status(400).json({ ok: false, error: "No license change to apply." });
       }
-      if (["ISSUED", "ACTIVE"].includes(nextStatus)) {
+      if (nextStatus === "ACTIVE") {
         const conflict = findActiveLicenseForBranch(current.branchId, current.id);
         if (conflict) {
           return res.status(409).json({
             ok: false,
-            error: `Branch '${current.branchCode}' already has another active or issued license (${conflict.licenseNumber}).`,
+            error: `Branch '${current.branchCode}' already has another active license (${conflict.licenseNumber}).`,
           });
         }
       }

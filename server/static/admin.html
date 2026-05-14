@@ -1854,89 +1854,61 @@ tr.is-collapsed + tr.subrow + tr.subrow{
           <div class="grid">
             <div class="card" id="cardLicensing" style="grid-column: span 12; display:none;">
               <h3>Licensing</h3>
-              <div class="detailGrid">
-                <div class="detailItem">
-                  <div class="label">Total Licenses Provided</div>
-                  <div class="value" id="licSummaryTotal">0</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Expiring Soon (30 Days)</div>
-                  <div class="value" id="licSummaryExpiringSoon">0</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">No Licenses Yet</div>
-                  <div class="value" id="licSummaryNoLicense">0</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Activated / Non Activated</div>
-                  <div class="value" id="licSummaryActivated">0 / 0</div>
-                </div>
+              <div class="setup-pills" style="margin-top:6px;">
+                <button class="setup-pill-btn active" type="button" data-licensing-tab="dashboard">Dashboard</button>
+                <button class="setup-pill-btn" type="button" data-licensing-tab="create">Create</button>
+                <button class="setup-pill-btn" type="button" data-licensing-tab="licenses">Branch Licenses</button>
+                <button class="setup-pill-btn" type="button" data-licensing-tab="history">License History</button>
               </div>
-              <div id="branchLicenseAdminSection" style="display:none; margin-top:14px;">
-                <div style="font-weight:900; font-size:16px;">Branch License Provisioning</div>
-                <div class="row" style="margin-top:10px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-                  <div style="flex:1 1 360px; min-width:260px;">
-                    <label class="muted2" for="branchLicenseSearch">Branch</label>
-                    <input id="branchLicenseBranch" type="hidden" />
-                    <div class="branchPicker" id="branchLicensePicker">
-                      <button class="branchPickerBtn" type="button" data-role="toggle">
-                        <span id="branchLicensePickerLabel">Select branch</span>
-                        <span>Search</span>
-                      </button>
-                      <div class="branchPickerMenu">
-                        <input class="branchPickerSearch" id="branchLicenseSearch" data-role="search" placeholder="Search branch name or code" />
-                        <div class="branchPickerList" id="branchLicensePickerList"></div>
+
+              <div class="setup-pane" id="licensing-tab-dashboard">
+                <div class="detailGrid">
+                  <div class="detailItem">
+                    <div class="label">Total Licenses Provided</div>
+                    <div class="value" id="licSummaryTotal">0</div>
+                  </div>
+                  <div class="detailItem">
+                    <div class="label">Expiring Soon (30 Days)</div>
+                    <div class="value" id="licSummaryExpiringSoon">0</div>
+                  </div>
+                  <div class="detailItem">
+                    <div class="label">No Licenses Yet</div>
+                    <div class="value" id="licSummaryNoLicense">0</div>
+                  </div>
+                  <div class="detailItem">
+                    <div class="label">Activated / Non Activated</div>
+                    <div class="value" id="licSummaryActivated">0 / 0</div>
+                  </div>
+                </div>
+                <div class="muted2" id="licensingInfo" style="margin-top:10px;">-</div>
+              </div>
+
+              <div class="setup-pane hidden" id="licensing-tab-create">
+                <div id="branchLicenseAdminSection" style="display:none;">
+                  <div style="font-weight:900; font-size:16px;">Branch License Provisioning</div>
+                  <div class="row" style="margin-top:10px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                    <div style="flex:1 1 360px; min-width:260px;">
+                      <label class="muted2" for="branchLicenseSearch">Branch</label>
+                      <input id="branchLicenseBranch" type="hidden" />
+                      <div class="branchPicker" id="branchLicensePicker">
+                        <button class="branchPickerBtn" type="button" data-role="toggle">
+                          <span id="branchLicensePickerLabel">Select branch</span>
+                          <span>Search</span>
+                        </button>
+                        <div class="branchPickerMenu">
+                          <input class="branchPickerSearch" id="branchLicenseSearch" data-role="search" placeholder="Search branch name or code" />
+                          <div class="branchPickerList" id="branchLicensePickerList"></div>
+                        </div>
                       </div>
                     </div>
+                    <button class="btn small" id="btnGenerateBranchLicense" type="button">Generate Activation License</button>
                   </div>
-                  <button class="btn small" id="btnGenerateBranchLicense" type="button">Generate Activation License</button>
+                  <div class="muted2" style="margin-top:8px;">Select a branch, generate the license number and key, then complete the provision tool below.</div>
                 </div>
-                <div class="muted2" style="margin-top:8px;">Select a branch, generate the license number and key, then complete the provision tool below.</div>
-              </div>
-              <div class="detailGrid">
-                <div class="detailItem">
-                  <div class="label">Status</div>
-                  <div class="value" id="licStatus">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Install ID</div>
-                  <div class="value" id="licInstallId">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">License ID</div>
-                  <div class="value" id="licLicenseId">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Activated By</div>
-                  <div class="value" id="licActivatedBy">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Activated At</div>
-                  <div class="value" id="licActivatedAt">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">License Expires</div>
-                  <div class="value" id="licExpiresAt">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Last Renewed</div>
-                  <div class="value" id="licLastRenewed">-</div>
-                </div>
-                <div class="detailItem">
-                  <div class="label">Current Token Revoked</div>
-                  <div class="value" id="licTokenRevoked">-</div>
-                </div>
-              </div>
-              <div class="muted2" id="licensingInfo" style="margin-top:10px;">-</div>
-              <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
-                <input id="revokeTokenInput" placeholder="Activation / renewal token" style="flex:1 1 280px; min-width:240px;" />
-                <input id="revokeTokenReason" placeholder="Reason (optional)" style="flex:1 1 220px; min-width:200px;" />
-                <button class="btn" id="btnRevokeToken">Revoke Token</button>
-                <button class="btn danger" id="btnTransferRelease">Release For Transfer</button>
-              </div>
-              <div id="branchLicenseToolSection" style="display:none; margin-top:18px; padding-top:16px; border-top:1px solid rgba(31,41,51,.12);">
-                <div style="font-weight:900; font-size:16px;">Activation Token / License Tool</div>
-                <div class="muted2" style="margin-top:6px;">Super admin can issue, activate, disable, and revoke branch licenses here. Perpetual licenses stay active without an expiry date.</div>
+
+                <div id="branchLicenseToolSection" style="display:none; margin-top:14px;">
+                  <div style="font-weight:900; font-size:16px;">License Provision Tool</div>
+                  <div class="muted2" style="margin-top:6px;">Super admin can issue branch licenses here. Perpetual licenses stay active without an expiry date.</div>
                 <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
                   <div style="flex:1 1 260px; min-width:220px;">
                     <label class="muted2" for="branchLicenseNumber">License Number</label>
@@ -1976,7 +1948,11 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                   <button class="btn" id="btnCreateBranchLicense" type="button">Create Branch License</button>
                 </div>
                 <div class="muted2" id="branchLicenseInfo" style="margin-top:10px;">-</div>
-                <div style="margin-top:16px; font-weight:900;">Current Branch Licenses</div>
+                </div>
+              </div>
+
+              <div class="setup-pane hidden" id="licensing-tab-licenses">
+                <div style="font-weight:900;">Current Branch Licenses</div>
                 <div style="overflow:auto; margin-top:8px;">
                   <table>
                     <thead>
@@ -1994,7 +1970,10 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     </tbody>
                   </table>
                 </div>
-                <div style="margin-top:16px; font-weight:900;">License History</div>
+              </div>
+
+              <div class="setup-pane hidden" id="licensing-tab-history">
+                <div style="font-weight:900;">License History</div>
                 <div id="branchLicenseEvents" style="margin-top:8px; display:grid; gap:8px;">
                   <div class="muted2">No branch license events loaded.</div>
                 </div>
@@ -2172,6 +2151,7 @@ async function jpost(url, body) {
       let REPORT_SCHEDULE_CACHE = null;
       let REPORT_ACTIVE_PRESET = "";
       let SETUP_ACTIVE_PANE = "queue";
+      let LICENSING_ACTIVE_TAB = "dashboard";
       let CURRENT_PAGE = "dashboard";
       let META_BRANCH_LABEL = "-";
       let META_BUSINESS_DATE_LABEL = "";
@@ -2720,6 +2700,21 @@ async function jpost(url, body) {
         });
         ["queue", "display", "auth"].forEach(key => {
           const paneEl = $("setup-pane-" + key);
+          if (!paneEl) return;
+          paneEl.classList.toggle("hidden", key !== target);
+        });
+      }
+
+      function setActiveLicensingTab(tab) {
+        const target = ["dashboard", "create", "licenses", "history"].includes(String(tab || ""))
+          ? String(tab)
+          : "dashboard";
+        LICENSING_ACTIVE_TAB = target;
+        document.querySelectorAll("[data-licensing-tab]").forEach(btn => {
+          btn.classList.toggle("active", btn.getAttribute("data-licensing-tab") === target);
+        });
+        ["dashboard", "create", "licenses", "history"].forEach(key => {
+          const paneEl = $("licensing-tab-" + key);
           if (!paneEl) return;
           paneEl.classList.toggle("hidden", key !== target);
         });
@@ -5499,6 +5494,10 @@ function renderDailySummaryPage(){
         btn.addEventListener("click", () => setActiveSetupPane(btn.getAttribute("data-setup-pane")));
       });
       setActiveSetupPane(SETUP_ACTIVE_PANE);
+      document.querySelectorAll("[data-licensing-tab]").forEach(btn => {
+        btn.addEventListener("click", () => setActiveLicensingTab(btn.getAttribute("data-licensing-tab")));
+      });
+      setActiveLicensingTab(LICENSING_ACTIVE_TAB);
 
       $("btnReloadGeneralMedia")?.addEventListener("click", loadMediaManager);
       $("btnReloadBranchMedia")?.addEventListener("click", loadMediaManager);
