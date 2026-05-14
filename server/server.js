@@ -1784,7 +1784,10 @@ app.get("/static/js/:file", (req, res) => {
     return listUserBranchAccess(userId).map(enrichBranchLicense);
   }
   function listAccessibleBranchesForUser(userId, roleId = "") {
-    if (roleHasGlobalBranchAccess(roleId)) return listOperationalBranches();
+    if (roleHasGlobalBranchAccess(roleId)) {
+      const activeBranches = listActiveBranches();
+      return activeBranches.length ? activeBranches : listAllBranches();
+    }
     return listAssignedBranchesForUser(userId, roleId).filter(isBranchOperational);
   }
   function describeBlockedBranch(branch, surface = "branch access") {
@@ -3412,7 +3415,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
         ...(requestedBranchId ? { selectedBranchId: requestedBranchId } : {}),
       });
       const allowedBranches = listAccessibleBranchesForUser(u.userId, role);
-      if (!allowedBranches.length) {
+      if (!allowedBranches.length && !roleHasGlobalBranchAccess(role)) {
         return res.status(403).json({ ok: false, error: "No active branches are available." });
       }
       await finalizeLoginSession(req, "admin", sessUser);
@@ -3545,7 +3548,7 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     const u = ensureSessionBranchContext(rawUser);
     if (u) setSessionUser(req, "admin", u);
     const allowedBranches = listAccessibleBranchesForUser(u?.userId, u?.roleId);
-    if (!allowedBranches.length) {
+    if (!allowedBranches.length && !roleHasGlobalBranchAccess(u?.roleId)) {
       return res.status(403).json({ ok: false, error: "No active branches are available." });
     }
     const perms = getUserPerms(getRoleId(u));

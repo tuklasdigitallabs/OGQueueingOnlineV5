@@ -2529,7 +2529,7 @@ async function jpost(url, body) {
         }
         if (!list) return;
         if (!rows.length) {
-          list.innerHTML = `<div class="branchPickerEmpty">No active branches available.</div>`;
+          list.innerHTML = `<div class="branchPickerEmpty">No branches available.</div>`;
           return;
         }
         const filtered = rows.filter((row) => {
