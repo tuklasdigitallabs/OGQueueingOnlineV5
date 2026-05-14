@@ -33,3 +33,28 @@ Expected results:
 
 Known limitations:
 - Manual browser verification is still required for exact visual layout.
+
+## Admin System Tabs Update
+
+Scope:
+- System section tabbed layout in `server/static/admin.html`.
+- System database, API health, and store online status endpoints in `server/server.js`.
+
+Validation flows:
+- Open Admin > System.
+- Confirm tabs are visible: Overview, Database, API Health, Stores, Diagnostics.
+- Confirm Overview shows branch, business date, API health summary, and online store summary.
+- Open Database and confirm DB path, size, SQLite info, integrity check, and table counts load.
+- Open API Health and confirm endpoint checks show OK/FAIL rows.
+- Open Stores and confirm each branch shows online/offline plus staff/admin/display counts.
+- Log in to Staff for a branch, refresh Stores, and confirm that branch shows online within the recent-session window.
+- Open Diagnostics and confirm backup status plus existing support bundle, integrity check, self-test, and seed buttons are still accessible.
+
+Expected results:
+- System page is organized by tabs instead of separate crowded cards.
+- Database and API health status load without requiring optional feature flags.
+- Store online status uses recent staff/admin sessions and connected display sockets.
+- Existing diagnostics actions still work.
+
+Known limitations:
+- Store online status is based on sessions touched in the last 2 minutes; idle browser tabs may show offline until they make another request.

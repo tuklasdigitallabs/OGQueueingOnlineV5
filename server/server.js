@@ -3998,6 +3998,142 @@ function maybeRedirectToCanonicalBranchPage(req, res, scope, pageType) {
     });
   });
 
+  function countTableRowsSafe(tableName) {
+    const safeName = String(tableName || "").replace(/[^A-Za-z0-9_]/g, "");
+    if (!safeName) return 0;
+    try {
+      return Number(db.prepare(`SELECT count(1) AS n FROM ${safeName}`).get()?.n || 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  function parseSessionRows() {
+    try {
+      return db.prepare(`SELECT sess, expiresAt, updatedAt FROM http_sessions WHERE expiresAt > ?`).all(Date.now()).map((row) => {
+        const parsed = safeParseJson(row.sess, {}) || {};
+        return { ...parsed, expiresAt: Number(row.expiresAt || 0), updatedAt: Number(row.updatedAt || 0) };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  function summarizeSessionPresence() {
+    const onlineAfter = Date.now() - (2 * 60 * 1000);
+    const summary = new Map();
+    for (const sess of parseSessionRows()) {
+      const candidates = [
+        { scope: "staff", user: sess.staffUser },
+        { scope: "admin", user: sess.adminUser },
+      ];
+      for (const item of candidates) {
+        const user = item.user || null;
+        const branchId = String(user?.selectedBranchId || "").trim();
+        if (!branchId) continue;
+        if (!summary.has(branchId)) summary.set(branchId, { staff: 0, admin: 0, lastSeenAt: 0 });
+        const bucket = summary.get(branchId);
+        if (item.scope === "staff" && Number(sess.updatedAt || 0) >= onlineAfter) bucket.staff += 1;
+        if (item.scope === "admin" && Number(sess.updatedAt || 0) >= onlineAfter) bucket.admin += 1;
+        bucket.lastSeenAt = Math.max(bucket.lastSeenAt, Number(sess.updatedAt || 0));
+      }
+    }
+    return summary;
+  }
+
+  function summarizeDisplaySockets() {
+    const summary = new Map();
+    try {
+      const io = app.get("io");
+      if (!io?.sockets?.sockets) return summary;
+      for (const socket of io.sockets.sockets.values()) {
+        const branchCode = String(getRequestBranchCode(socket.request) || "").trim().toUpperCase();
+        if (!branchCode) continue;
+        summary.set(branchCode, (summary.get(branchCode) || 0) + 1);
+      }
+    } catch {}
+    return summary;
+  }
+
+  app.get("/api/admin/system/database-status", requirePerm("SETTINGS_MANAGE"), (req, res) => {
+    try {
+      const dbPath = path.join(baseDir, "data", "qsys.db");
+      const stat = fs.existsSync(dbPath) ? fs.statSync(dbPath) : null;
+      const tables = ["branches", "users", "queue_items", "super_admin_licenses", "audit_logs", "http_sessions"].map((name) => ({
+        name,
+        rows: countTableRowsSafe(name),
+      }));
+      return res.json({
+        ok: true,
+        branchCode: getRequestBranchCode(req),
+        branchName: getRequestBranchName(req),
+        currentBusinessDate: ensureBusinessDate(db),
+        dbPath,
+        dbSizeBytes: stat ? Number(stat.size || 0) : 0,
+        dbModifiedAt: stat ? Number(stat.mtimeMs || 0) : null,
+        sqliteVersion: String(db.prepare(`SELECT sqlite_version() AS version`).get()?.version || ""),
+        journalMode: String(db.pragma("journal_mode", { simple: true }) || ""),
+        integrityCheck: String(db.pragma("integrity_check", { simple: true }) || ""),
+        tables,
+      });
+    } catch (e) {
+      console.error("[admin/system/database-status]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load database status." });
+    }
+  });
+
+  app.get("/api/admin/system/api-health", requirePerm("SETTINGS_MANAGE"), (_req, res) => {
+    const runCheck = (name, fn) => {
+      const startedAt = Date.now();
+      try {
+        const detail = fn();
+        return { name, ok: true, durationMs: Date.now() - startedAt, detail: String(detail || "OK") };
+      } catch (e) {
+        return { name, ok: false, durationMs: Date.now() - startedAt, error: String(e?.message || e || "Failed") };
+      }
+    };
+    const checks = [
+      runCheck("Core Health", () => `Business Date ${ensureBusinessDate(db)}`),
+      runCheck("Admin Auth", () => "Session valid"),
+      runCheck("Branches API", () => `${listAllBranches().length} branch(es)`),
+      runCheck("Reports Data", () => `${countTableRowsSafe("queue_items")} queue row(s)`),
+      runCheck("Database", () => String(db.pragma("quick_check", { simple: true }) || "OK")),
+    ];
+    return res.json({ ok: true, checkedAt: Date.now(), checks });
+  });
+
+  app.get("/api/admin/system/store-status", requirePerm("SETTINGS_MANAGE"), (_req, res) => {
+    try {
+      const sessions = summarizeSessionPresence();
+      const displays = summarizeDisplaySockets();
+      const stores = listAllBranches().map((branch) => {
+        const branchId = String(branch.branchId || "").trim();
+        const branchCode = String(branch.branchCode || "").trim().toUpperCase();
+        const sess = sessions.get(branchId) || { staff: 0, admin: 0, lastSeenAt: 0 };
+        const displayOnlineCount = Number(displays.get(branchCode) || 0);
+        const lastSeenAt = Number(sess.lastSeenAt || 0);
+        const online = Number(sess.staff || 0) > 0 || Number(sess.admin || 0) > 0 || displayOnlineCount > 0;
+        return {
+          branchId,
+          branchCode,
+          branchName: String(branch.branchName || ""),
+          status: online ? "ONLINE" : "OFFLINE",
+          staffOnlineCount: Number(sess.staff || 0),
+          adminOnlineCount: Number(sess.admin || 0),
+          displayOnlineCount,
+          lastSeenAt,
+          branchStatus: String(branch.status || ""),
+          licenseStatus: String(branch.licenseStatus || ""),
+          businessDate: String(db.prepare(`SELECT businessDate FROM branch_business_dates WHERE branchId=? LIMIT 1`).get(branchId)?.businessDate || ""),
+        };
+      });
+      return res.json({ ok: true, checkedAt: Date.now(), stores });
+    } catch (e) {
+      console.error("[admin/system/store-status]", e);
+      return res.status(500).json({ ok: false, error: "Failed to load store status." });
+    }
+  });
+
   app.post("/api/internal/super-admin/recover", express.json(), (req, res) => {
     try {
       const remote = String(req.ip || req.socket?.remoteAddress || "");

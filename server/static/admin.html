@@ -1811,39 +1811,83 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         <!-- SYSTEM -->
         <section id="page-system" class="hidden">
           <div class="grid">
-            <div class="card" style="grid-column: span 6;">
-              <h3>System Info</h3>
-              <div class="muted" id="sysInfo">-</div>
-            </div>
-            <div class="card" style="grid-column: span 6;">
-              <h3>Backup Status</h3>
-              <div class="muted" id="backupStatusInfo" style="white-space:pre-line;">-</div>
-              <div class="row" style="margin-top:12px;">
-                <button class="btn" id="btnSeedToday">Seed Test Data (Month To Date)</button>
+            <div class="card" style="grid-column: span 12;">
+              <h3>System</h3>
+              <div class="setup-pills" style="margin-top:6px;">
+                <button class="setup-pill-btn active" type="button" data-system-tab="overview">Overview</button>
+                <button class="setup-pill-btn" type="button" data-system-tab="database">Database</button>
+                <button class="setup-pill-btn" type="button" data-system-tab="api">API Health</button>
+                <button class="setup-pill-btn" type="button" data-system-tab="stores">Stores</button>
+                <button class="setup-pill-btn" type="button" data-system-tab="diagnostics">Diagnostics</button>
               </div>
-              <div class="help">
-                Backup and restore are now managed from Super Admin because they affect the full hosted platform.
-                This page shows read-only backup status for branch admins.
-                Seed Test Data wipes month-to-date queue rows for the current branch and inserts month-to-date demo data for testing (including EMA14/MTD reports).
+
+              <div class="setup-pane" id="system-tab-overview">
+                <div class="detailGrid">
+                  <div class="detailItem"><div class="label">Branch</div><div class="value" id="sysOverviewBranch">-</div></div>
+                  <div class="detailItem"><div class="label">Business Date</div><div class="value" id="sysOverviewBusinessDate">-</div></div>
+                  <div class="detailItem"><div class="label">API Health</div><div class="value" id="sysOverviewApi">-</div></div>
+                  <div class="detailItem"><div class="label">Online Stores</div><div class="value" id="sysOverviewStores">-</div></div>
+                </div>
+                <div class="muted" id="sysInfo" style="margin-top:10px;">-</div>
               </div>
-              <div class="seedLoader" id="seedLoader">
-                <span class="seedSpinner" aria-hidden="true"></span>
-                <span id="seedLoaderText">Seeding test data... 0%</span>
+
+              <div class="setup-pane hidden" id="system-tab-database">
+                <div class="muted" id="systemDatabaseInfo" style="white-space:pre-line;">-</div>
+                <div style="overflow:auto; margin-top:10px;">
+                  <table>
+                    <thead><tr><th>Table</th><th>Rows</th></tr></thead>
+                    <tbody id="systemDatabaseTable"><tr><td colspan="2" class="muted">Loading...</td></tr></tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-            <div class="card" id="cardOpsHealth" style="grid-column: span 6; display:none;">
-              <h3>Operations Health</h3>
-              <div class="muted" id="opsHealthInfo">-</div>
-              <div class="row" style="margin-top:12px;">
-                <button class="btn" id="btnSupportBundle">Download Support Bundle</button>
+
+              <div class="setup-pane hidden" id="system-tab-api">
+                <div style="overflow:auto;">
+                  <table>
+                    <thead><tr><th>Check</th><th>Status</th><th>Response</th><th>Details</th></tr></thead>
+                    <tbody id="systemApiTable"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-            <div class="card" id="cardOpsAutomation" style="grid-column: span 6; display:none;">
-              <h3>Diagnostics</h3>
-              <div class="muted" id="opsAutomationInfo" style="white-space:pre-line;">-</div>
-              <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
-                <button class="btn" id="btnRunIntegrityCheck">Run Integrity Check</button>
-                <button class="btn" id="btnRunSelfTest">Run Startup Self-Test</button>
+
+              <div class="setup-pane hidden" id="system-tab-stores">
+                <div style="overflow:auto;">
+                  <table>
+                    <thead><tr><th>Store</th><th>Status</th><th>Staff</th><th>Admin</th><th>Display</th><th>Last Seen</th><th>License</th></tr></thead>
+                    <tbody id="systemStoresTable"><tr><td colspan="7" class="muted">Loading...</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="setup-pane hidden" id="system-tab-diagnostics">
+                <div class="two">
+                  <div>
+                    <div style="font-weight:900;">Backup Status</div>
+                    <div class="muted" id="backupStatusInfo" style="white-space:pre-line; margin-top:8px;">-</div>
+                  </div>
+                  <div>
+                    <div style="font-weight:900;">Operations Health</div>
+                    <div class="muted" id="opsHealthInfo" style="white-space:pre-line; margin-top:8px;">-</div>
+                  </div>
+                </div>
+                <div style="margin-top:14px;">
+                  <div style="font-weight:900;">Diagnostics</div>
+                  <div class="muted" id="opsAutomationInfo" style="white-space:pre-line; margin-top:8px;">-</div>
+                </div>
+                <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
+                  <button class="btn" id="btnSupportBundle">Download Support Bundle</button>
+                  <button class="btn" id="btnRunIntegrityCheck">Run Integrity Check</button>
+                  <button class="btn" id="btnRunSelfTest">Run Startup Self-Test</button>
+                  <button class="btn" id="btnSeedToday">Seed Test Data (Month To Date)</button>
+                </div>
+                <div class="help">
+                  Backup and restore are managed from Super Admin because they affect the full hosted platform.
+                  Seed Test Data wipes month-to-date queue rows for the current branch and inserts demo data for testing.
+                </div>
+                <div class="seedLoader" id="seedLoader">
+                  <span class="seedSpinner" aria-hidden="true"></span>
+                  <span id="seedLoaderText">Seeding test data... 0%</span>
+                </div>
               </div>
             </div>
           </div>
@@ -2152,6 +2196,7 @@ async function jpost(url, body) {
       let REPORT_ACTIVE_PRESET = "";
       let SETUP_ACTIVE_PANE = "queue";
       let LICENSING_ACTIVE_TAB = "dashboard";
+      let SYSTEM_ACTIVE_TAB = "overview";
       let CURRENT_PAGE = "dashboard";
       let META_BRANCH_LABEL = "-";
       let META_BUSINESS_DATE_LABEL = "";
@@ -2715,6 +2760,21 @@ async function jpost(url, body) {
         });
         ["dashboard", "create", "licenses", "history"].forEach(key => {
           const paneEl = $("licensing-tab-" + key);
+          if (!paneEl) return;
+          paneEl.classList.toggle("hidden", key !== target);
+        });
+      }
+
+      function setActiveSystemTab(tab) {
+        const target = ["overview", "database", "api", "stores", "diagnostics"].includes(String(tab || ""))
+          ? String(tab)
+          : "overview";
+        SYSTEM_ACTIVE_TAB = target;
+        document.querySelectorAll("[data-system-tab]").forEach(btn => {
+          btn.classList.toggle("active", btn.getAttribute("data-system-tab") === target);
+        });
+        ["overview", "database", "api", "stores", "diagnostics"].forEach(key => {
+          const paneEl = $("system-tab-" + key);
           if (!paneEl) return;
           paneEl.classList.toggle("hidden", key !== target);
         });
@@ -4053,10 +4113,99 @@ async function clearGdriveOAuth() {
             currentBusinessDate: h.currentBusinessDate,
           };
           renderSystemInfoWithTime();
-          await loadAdvancedSystemInfo();
+          await Promise.all([
+            loadAdvancedSystemInfo(),
+            loadSystemDatabaseStatus(),
+            loadSystemApiHealth(),
+            loadSystemStoresStatus(),
+          ]);
         } catch {
           SYS_INFO_CACHE = null;
           $("sysInfo").textContent = "Failed to load /api/health";
+        }
+      }
+
+      function setSystemOverviewValue(id, value) {
+        if ($(id)) $(id).textContent = value == null || value === "" ? "-" : String(value);
+      }
+
+      async function loadSystemDatabaseStatus() {
+        try {
+          const j = await jget("/api/admin/system/database-status");
+          if (!j?.ok) throw new Error(j?.error || "database");
+          setSystemOverviewValue("sysOverviewBranch", `${j.branchName || j.branchCode || "-"}${j.branchCode ? ` (${j.branchCode})` : ""}`);
+          setSystemOverviewValue("sysOverviewBusinessDate", j.currentBusinessDate || "-");
+          if ($("systemDatabaseInfo")) {
+            $("systemDatabaseInfo").textContent =
+              `Database: ${j.dbPath || "-"}\n` +
+              `Size: ${fmtBytes(j.dbSizeBytes)}\n` +
+              `SQLite: ${j.sqliteVersion || "-"}\n` +
+              `Journal Mode: ${j.journalMode || "-"}\n` +
+              `Integrity Check: ${j.integrityCheck || "-"}\n` +
+              `Last Modified: ${fmtTime(j.dbModifiedAt)}`;
+          }
+          if ($("systemDatabaseTable")) {
+            const rows = Array.isArray(j.tables) ? j.tables : [];
+            $("systemDatabaseTable").innerHTML = rows.length
+              ? rows.map((row) => `<tr><td>${escapeHtml(row.name || "-")}</td><td>${escapeHtml(row.rows ?? 0)}</td></tr>`).join("")
+              : `<tr><td colspan="2" class="muted">No table counts available.</td></tr>`;
+          }
+        } catch {
+          if ($("systemDatabaseInfo")) $("systemDatabaseInfo").textContent = "Failed to load database status.";
+          if ($("systemDatabaseTable")) $("systemDatabaseTable").innerHTML = `<tr><td colspan="2" class="muted">Failed to load database tables.</td></tr>`;
+        }
+      }
+
+      async function loadSystemApiHealth() {
+        try {
+          const j = await jget("/api/admin/system/api-health");
+          if (!j?.ok) throw new Error(j?.error || "api");
+          const checks = Array.isArray(j.checks) ? j.checks : [];
+          const healthy = checks.filter((row) => row.ok).length;
+          setSystemOverviewValue("sysOverviewApi", `${healthy}/${checks.length} OK`);
+          if ($("systemApiTable")) {
+            $("systemApiTable").innerHTML = checks.length
+              ? checks.map((row) => `
+                <tr>
+                  <td>${escapeHtml(row.name || "-")}</td>
+                  <td>${row.ok ? "OK" : "FAIL"}</td>
+                  <td>${escapeHtml(`${row.durationMs ?? "-"} ms`)}</td>
+                  <td>${escapeHtml(row.detail || row.error || "-")}</td>
+                </tr>
+              `).join("")
+              : `<tr><td colspan="4" class="muted">No API checks available.</td></tr>`;
+          }
+        } catch {
+          setSystemOverviewValue("sysOverviewApi", "Failed");
+          if ($("systemApiTable")) $("systemApiTable").innerHTML = `<tr><td colspan="4" class="muted">Failed to load API health.</td></tr>`;
+        }
+      }
+
+      async function loadSystemStoresStatus() {
+        try {
+          const j = await jget("/api/admin/system/store-status");
+          if (!j?.ok) throw new Error(j?.error || "stores");
+          const stores = Array.isArray(j.stores) ? j.stores : [];
+          const onlineCount = stores.filter((store) => String(store.status || "").toUpperCase() === "ONLINE").length;
+          setSystemOverviewValue("sysOverviewStores", `${onlineCount}/${stores.length} Online`);
+          if ($("systemStoresTable")) {
+            $("systemStoresTable").innerHTML = stores.length
+              ? stores.map((store) => `
+                <tr>
+                  <td><strong>${escapeHtml(store.branchCode || "-")}</strong><div class="muted2">${escapeHtml(store.branchName || "-")}</div></td>
+                  <td>${escapeHtml(store.status || "-")}</td>
+                  <td>${escapeHtml(store.staffOnlineCount ?? 0)}</td>
+                  <td>${escapeHtml(store.adminOnlineCount ?? 0)}</td>
+                  <td>${escapeHtml(store.displayOnlineCount ?? 0)}</td>
+                  <td>${escapeHtml(fmtTime(store.lastSeenAt))}</td>
+                  <td>${escapeHtml(store.licenseStatus || "-")}</td>
+                </tr>
+              `).join("")
+              : `<tr><td colspan="7" class="muted">No stores found.</td></tr>`;
+          }
+        } catch {
+          setSystemOverviewValue("sysOverviewStores", "Failed");
+          if ($("systemStoresTable")) $("systemStoresTable").innerHTML = `<tr><td colspan="7" class="muted">Failed to load store status.</td></tr>`;
         }
       }
 
@@ -4073,8 +4222,6 @@ async function clearGdriveOAuth() {
         ]);
         const licensingVisible = licensingOn && isSuperAdmin();
 
-        if ($("cardOpsHealth")) $("cardOpsHealth").style.display = opsHealthOn ? "" : "none";
-        if ($("cardOpsAutomation")) $("cardOpsAutomation").style.display = automationOn ? "" : "none";
         if ($("cardLicensing")) $("cardLicensing").style.display = licensingVisible ? "" : "none";
 
         if (opsHealthOn) {
@@ -5499,6 +5646,10 @@ function renderDailySummaryPage(){
         btn.addEventListener("click", () => setActiveLicensingTab(btn.getAttribute("data-licensing-tab")));
       });
       setActiveLicensingTab(LICENSING_ACTIVE_TAB);
+      document.querySelectorAll("[data-system-tab]").forEach(btn => {
+        btn.addEventListener("click", () => setActiveSystemTab(btn.getAttribute("data-system-tab")));
+      });
+      setActiveSystemTab(SYSTEM_ACTIVE_TAB);
 
       $("btnReloadGeneralMedia")?.addEventListener("click", loadMediaManager);
       $("btnReloadBranchMedia")?.addEventListener("click", loadMediaManager);
