@@ -257,6 +257,11 @@ margin:0;
     font-size: 13px;
     font-weight: 950;
   }
+  .sidebar .userBadge{
+    margin-bottom: 14px;
+    min-width: 0;
+    background: rgba(255,255,255,.78);
+  }
 
   /* Buttons */
   .btn{
@@ -884,6 +889,11 @@ tr.is-collapsed + tr.subrow + tr.subrow{
       <aside class="sidebar" id="sidebar">
         <div class="brand">Qsys Online - Admin</div>
         <div class="sub" id="sideMeta">Loading...</div>
+        <div class="userBadge" id="sideLoggedInUserBadge" title="Logged in user" style="display:none;">
+          <span>Logged in as</span>
+          <strong id="sideLoggedInUserName">-</strong>
+          <span id="sideLoggedInUserRole">-</span>
+        </div>
 
         <div class="nav">
           <button class="active" data-page="dashboard">Dashboard</button>
@@ -1851,6 +1861,45 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               <h3>Licensing</h3>
               <div class="detailGrid">
                 <div class="detailItem">
+                  <div class="label">Total Licenses Provided</div>
+                  <div class="value" id="licSummaryTotal">0</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Expiring Soon (30 Days)</div>
+                  <div class="value" id="licSummaryExpiringSoon">0</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">No Licenses Yet</div>
+                  <div class="value" id="licSummaryNoLicense">0</div>
+                </div>
+                <div class="detailItem">
+                  <div class="label">Activated / Non Activated</div>
+                  <div class="value" id="licSummaryActivated">0 / 0</div>
+                </div>
+              </div>
+              <div id="branchLicenseAdminSection" style="display:none; margin-top:14px;">
+                <div style="font-weight:900; font-size:16px;">Branch Selector</div>
+                <div class="row" style="margin-top:10px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                  <div style="flex:1 1 360px; min-width:260px;">
+                    <label class="muted2" for="branchLicenseSearch">Branch</label>
+                    <input id="branchLicenseBranch" type="hidden" />
+                    <div class="branchPicker" id="branchLicensePicker">
+                      <button class="branchPickerBtn" type="button" data-role="toggle">
+                        <span id="branchLicensePickerLabel">Select branch</span>
+                        <span>Search</span>
+                      </button>
+                      <div class="branchPickerMenu">
+                        <input class="branchPickerSearch" id="branchLicenseSearch" data-role="search" placeholder="Search branch name or code" />
+                        <div class="branchPickerList" id="branchLicensePickerList"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="btn small" id="btnGenerateBranchLicense" type="button">Generate Activation License</button>
+                </div>
+                <div class="muted2" style="margin-top:8px;">Activation token and license generation are available here for the selected branch.</div>
+              </div>
+              <div class="detailGrid">
+                <div class="detailItem">
                   <div class="label">Status</div>
                   <div class="value" id="licStatus">-</div>
                 </div>
@@ -1890,16 +1939,9 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 <button class="btn" id="btnRevokeToken">Revoke Token</button>
                 <button class="btn danger" id="btnTransferRelease">Release For Transfer</button>
               </div>
-              <div id="branchLicenseAdminSection" style="display:none; margin-top:18px; padding-top:16px; border-top:1px solid rgba(31,41,51,.12);">
-                <div style="font-weight:900; font-size:16px;">Branch Licensing</div>
+              <div id="branchLicenseToolSection" style="display:none; margin-top:18px; padding-top:16px; border-top:1px solid rgba(31,41,51,.12);">
+                <div style="font-weight:900; font-size:16px;">Activation Token / License Tool</div>
                 <div class="muted2" style="margin-top:6px;">Super admin can issue, activate, disable, and revoke branch licenses here. Perpetual licenses stay active without an expiry date.</div>
-                <div class="row" style="margin-top:14px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-                  <div style="flex:1 1 260px; min-width:220px;">
-                    <label class="muted2" for="branchLicenseBranch">Branch</label>
-                    <select id="branchLicenseBranch"></select>
-                  </div>
-                  <button class="btn small" id="btnGenerateBranchLicense" type="button">Generate Number & Key</button>
-                </div>
                 <div class="row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
                   <div style="flex:1 1 260px; min-width:220px;">
                     <label class="muted2" for="branchLicenseNumber">License Number</label>
@@ -2144,6 +2186,7 @@ async function jpost(url, body) {
       let USER_BRANCH_OPTIONS = [];
       let BRANCH_MANAGER_CACHE = [];
       let BRANCH_MANAGER_SELECTED_ID = "";
+      let BRANCH_LICENSE_BRANCHES = [];
       let MEDIA_CACHE = { general: [], branch: [] };
       let USER_PERMS = new Set();
       let FEATURE_FLAGS = {};
@@ -2258,7 +2301,7 @@ async function jpost(url, body) {
       }
 
       function shouldShowAdminBranchSwitcher(page = CURRENT_PAGE) {
-        return ["dashboard", "setup", "media", "reports", "audit", "licensing"].includes(String(page || "").trim().toLowerCase());
+        return ["dashboard", "setup", "media", "reports", "audit"].includes(String(page || "").trim().toLowerCase());
       }
 
       function adminEntryUrl(branchCode, page = CURRENT_PAGE) {
@@ -2347,17 +2390,19 @@ async function jpost(url, body) {
       }
 
       function renderLoggedInUser() {
-        const badge = $("loggedInUserBadge");
-        if (!badge) return;
+        const badges = [$("loggedInUserBadge"), $("sideLoggedInUserBadge")].filter(Boolean);
+        if (!badges.length) return;
         const name = String(CURRENT_USER?.fullName || "").trim();
         const role = String(CURRENT_USER?.roleId || "").trim();
         if (!name && !role) {
-          badge.style.display = "none";
+          badges.forEach((badge) => { badge.style.display = "none"; });
           return;
         }
-        badge.style.display = "";
+        badges.forEach((badge) => { badge.style.display = ""; });
         if ($("loggedInUserName")) $("loggedInUserName").textContent = name || "-";
         if ($("loggedInUserRole")) $("loggedInUserRole").textContent = role || "-";
+        if ($("sideLoggedInUserName")) $("sideLoggedInUserName").textContent = name || "-";
+        if ($("sideLoggedInUserRole")) $("sideLoggedInUserRole").textContent = role || "-";
       }
 
       function applyNavPermissions() {
@@ -2650,6 +2695,7 @@ async function jpost(url, body) {
         if (CURRENT_PAGE === "audit") return loadAudit();
         if (CURRENT_PAGE === "reports") return initReports();
         if (CURRENT_PAGE === "system") return loadSystemInfo();
+        if (CURRENT_PAGE === "licensing") return loadSystemInfo();
       }
 
       function pageLoadingLabel(page) {
@@ -4096,14 +4142,18 @@ async function clearGdriveOAuth() {
               if ($("licTokenRevoked")) $("licTokenRevoked").textContent = j.currentTokenRevoked ? "Yes" : "No";
               $("licensingInfo").textContent = j.reminder?.message || "Licensing details loaded.";
               if ($("branchLicenseAdminSection")) $("branchLicenseAdminSection").style.display = j.canManageRegistry ? "" : "none";
+              if ($("branchLicenseToolSection")) $("branchLicenseToolSection").style.display = j.canManageRegistry ? "" : "none";
               if (j.canManageRegistry) populateBranchLicensingRegistry(j.registry || {});
+              else renderLicensingSummary([], []);
             } else {
               $("licensingInfo").textContent = j?.error || "Failed to load licensing status.";
               if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = j?.error || "Failed to load branch licensing registry.";
+              renderLicensingSummary([], []);
             }
           } catch {
             $("licensingInfo").textContent = "Failed to load licensing status.";
             if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = "Failed to load branch licensing registry.";
+            renderLicensingSummary([], []);
           }
         }
 
@@ -4217,18 +4267,71 @@ async function clearGdriveOAuth() {
         syncBranchLicenseDurationUi();
       }
 
+      function renderLicensingSummary(branches, licenses) {
+        const branchRows = Array.isArray(branches) ? branches : [];
+        const licenseRows = Array.isArray(licenses) ? licenses : [];
+        const now = Date.now();
+        const soonLimit = now + (30 * 24 * 60 * 60 * 1000);
+        const licensedBranchIds = new Set(licenseRows.map((license) => String(license.branchId || "").trim()).filter(Boolean));
+        const expiringSoon = licenseRows.filter((license) => {
+          if (license?.isPerpetual) return false;
+          const expiresAt = Number(license?.expiresAt || 0) || 0;
+          return expiresAt > now && expiresAt <= soonLimit;
+        }).length;
+        const active = licenseRows.filter((license) => String(license.status || "").trim().toUpperCase() === "ACTIVE").length;
+        const nonActive = Math.max(0, licenseRows.length - active);
+        if ($("licSummaryTotal")) $("licSummaryTotal").textContent = licenseRows.length;
+        if ($("licSummaryExpiringSoon")) $("licSummaryExpiringSoon").textContent = expiringSoon;
+        if ($("licSummaryNoLicense")) $("licSummaryNoLicense").textContent = Math.max(0, branchRows.length - licensedBranchIds.size);
+        if ($("licSummaryActivated")) $("licSummaryActivated").textContent = `${active} / ${nonActive}`;
+      }
+
+      function branchLicensePickerLabel(branch) {
+        const code = String(branch?.branchCode || "").trim().toUpperCase();
+        const name = String(branch?.branchName || code || "Branch").trim();
+        return code && name ? `${name} - ${code}` : (name || code || "Select branch");
+      }
+
+      function renderBranchLicensePicker(branches, search = "") {
+        const rows = Array.isArray(branches) ? branches : [];
+        const selectedId = String($("branchLicenseBranch")?.value || "").trim();
+        const selected = rows.find((branch) => String(branch.branchId || "").trim() === selectedId) || null;
+        const query = String(search || "").trim().toLowerCase();
+        if ($("branchLicensePickerLabel")) $("branchLicensePickerLabel").textContent = selected ? branchLicensePickerLabel(selected) : "Select branch";
+        if ($("branchLicensePickerList")) {
+          const filtered = rows.filter((branch) => {
+            const hay = `${branch.branchCode || ""} ${branch.branchName || ""}`.toLowerCase();
+            return !query || hay.includes(query);
+          });
+          $("branchLicensePickerList").innerHTML = filtered.length
+            ? filtered.map((branch) => {
+                const branchId = String(branch.branchId || "").trim();
+                const active = branchId === selectedId;
+                return `
+                  <button type="button" class="branchPickerOption ${active ? "active" : ""}" data-role="option" data-branch-id="${escapeAttr(branchId)}">
+                    <span><b>${escapeHtml(branch.branchName || branch.branchCode || "Branch")}</b><small>${escapeHtml(branch.branchCode || branchId)}</small></span>
+                    <span class="branchPickerCheck">${active ? "Selected" : "Select"}</span>
+                  </button>
+                `;
+              }).join("")
+            : `<div class="branchPickerEmpty">No branches match your search.</div>`;
+        }
+      }
+
       function populateBranchLicensingRegistry(registry) {
         const branches = Array.isArray(registry?.branches) ? registry.branches : [];
         const licenses = Array.isArray(registry?.licenses) ? registry.licenses : [];
         const events = Array.isArray(registry?.licenseEvents) ? registry.licenseEvents : [];
+        BRANCH_LICENSE_BRANCHES = branches;
+        renderLicensingSummary(branches, licenses);
         if ($("branchLicenseBranch")) {
           const current = $("branchLicenseBranch").value;
-          $("branchLicenseBranch").innerHTML = branches.map((branch) => (
-            `<option value="${escapeAttr(branch.branchId)}">${escapeHtml(branch.branchCode)} - ${escapeHtml(branch.branchName)}</option>`
-          )).join("");
           if (current && branches.some((branch) => String(branch.branchId) === current)) {
             $("branchLicenseBranch").value = current;
+          } else {
+            $("branchLicenseBranch").value = String(branches[0]?.branchId || "").trim();
           }
+          renderBranchLicensePicker(branches, String($("branchLicenseSearch")?.value || ""));
         }
         if ($("branchLicenseTable")) {
           if (!licenses.length) {
@@ -5257,6 +5360,32 @@ function renderDailySummaryPage(){
         picker.querySelector('[data-role="search"]')?.addEventListener("input", (ev) => {
           const current = getBranchPickerState("newUserBranches");
           renderUserBranchPicker("newUserBranches", current.selectedIds, String(ev.target?.value || ""));
+          picker.classList.add("open");
+        });
+        document.addEventListener("click", (ev) => {
+          if (!picker.contains(ev.target)) picker.classList.remove("open");
+        });
+      })();
+      (function wireBranchLicensePicker() {
+        const picker = $("branchLicensePicker");
+        if (!picker) return;
+        picker.addEventListener("click", (ev) => {
+          const toggleBtn = ev.target.closest('[data-role="toggle"]');
+          const optionBtn = ev.target.closest('[data-role="option"]');
+          if (toggleBtn) {
+            picker.classList.toggle("open");
+            if (picker.classList.contains("open")) $("branchLicenseSearch")?.focus();
+            return;
+          }
+          if (optionBtn) {
+            const branchId = String(optionBtn.getAttribute("data-branch-id") || "").trim();
+            if ($("branchLicenseBranch")) $("branchLicenseBranch").value = branchId;
+            picker.classList.remove("open");
+            renderBranchLicensePicker(BRANCH_LICENSE_BRANCHES, String($("branchLicenseSearch")?.value || ""));
+          }
+        });
+        $("branchLicenseSearch")?.addEventListener("input", (ev) => {
+          renderBranchLicensePicker(BRANCH_LICENSE_BRANCHES, String(ev.target?.value || ""));
           picker.classList.add("open");
         });
         document.addEventListener("click", (ev) => {
