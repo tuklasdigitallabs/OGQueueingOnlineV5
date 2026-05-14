@@ -17,12 +17,15 @@ Validation flows:
 - Select a branch, click Generate Activation License, and confirm license number/key fields populate.
 - Confirm the old activation token revoke / transfer release strip is no longer visible in Licensing.
 - Confirm activating a new YL-GLO license is not blocked by another `ISSUED` YL-GLO draft.
+- Confirm Branches shows YL-GLO as `ACTIVATED` after its active registry license is set.
+- Confirm Branches shows `Perpetual` under Days Till Renewal for perpetual licenses.
 - Move between admin sections and confirm the logged-in user remains visible in the sidebar nav area.
 
 Expected results:
 - Licensing summary tiles render without changing existing license status details.
 - The branch selector uses a searchable dropdown instead of a plain select.
 - Existing branch license creation and license status actions still work.
+- Branches reflects active registry license status before stale branch cache values.
 - The logged-in user badge stays visible across admin sections after session context loads.
 - Super Admin licensing tools are available even when optional licensing feature flags are not provisioned.
 

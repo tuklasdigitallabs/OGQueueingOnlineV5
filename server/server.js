@@ -2309,9 +2309,41 @@ app.get("/static/js/:file", (req, res) => {
     );
     return { ...st, status: ACTIVATION_STATUS_EXPIRED, validationStatus: LICENSE_STATUS_EXPIRED, updatedAt: now };
   }
+  function getActiveRegistryLicenseForBranch(branchId) {
+    const id = String(branchId || "").trim();
+    if (!id) return null;
+    try {
+      const row = db.prepare(
+        `SELECT id, licenseNumber, status, issuedAt, activatedAt, isPerpetual, expiresAt, updatedAt, updatedBy, createdBy
+         FROM super_admin_licenses
+         WHERE branchId=? AND upper(status)='ACTIVE'
+         ORDER BY activatedAt DESC, updatedAt DESC, createdAt DESC
+         LIMIT 1`
+      ).get(id);
+      return row || null;
+    } catch {
+      return null;
+    }
+  }
   function getBranchLicenseState(branch) {
     const branchId = String(branch?.branchId || "").trim();
     if (!branchId) return { status: ACTIVATION_STATUS_UNACTIVATED, activated: false, licenseExpiresAt: null };
+    const registryActive = getActiveRegistryLicenseForBranch(branchId);
+    if (registryActive) {
+      const isPerpetual = normalizePerpetualLicense(registryActive.isPerpetual, registryActive.expiresAt);
+      const exp = isPerpetual ? null : (Number(registryActive.expiresAt || 0) || null);
+      const expired = exp && Date.now() > exp;
+      return {
+        status: expired ? ACTIVATION_STATUS_EXPIRED : ACTIVATION_STATUS_ACTIVATED,
+        activated: !expired,
+        licenseId: String(registryActive.licenseNumber || ""),
+        licenseIssuedAt: Number(registryActive.issuedAt || 0) || null,
+        licenseExpiresAt: exp,
+        licenseIsPerpetual: isPerpetual,
+        activatedAt: Number(registryActive.activatedAt || registryActive.updatedAt || 0) || null,
+        activatedBy: String(registryActive.updatedBy || registryActive.createdBy || "super-admin"),
+      };
+    }
     const cached = getBranchLicenseCache(branchId);
     if (cached) {
       const rawStatus = String(cached.status || "").trim().toUpperCase();

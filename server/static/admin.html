@@ -3345,6 +3345,7 @@ async function clearGdriveOAuth() {
       }
 
       function branchDaysTillRenewal(row) {
+        if (row?.licenseIsPerpetual) return "Perpetual";
         const expiresAt = Number(row?.licenseExpiresAt || 0) || 0;
         if (!expiresAt) return "-";
         const days = Math.floor((expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
