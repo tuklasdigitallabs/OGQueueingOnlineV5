@@ -6753,7 +6753,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.renewal_reminders", "licensing.audit_history", "licensing.branch_transfer", "licensing.token_revocation", "licensing.one_time_tokens"), requireAdminSuperAdminApi, (req, res) => {
+  app.get("/api/admin/licensing/status", requirePerm("SETTINGS_MANAGE"), requireAdminSuperAdminApi, (req, res) => {
     try {
       const st = refreshActivationState();
       const reminder = buildLicenseReminder(st);
@@ -6796,7 +6796,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/generate", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.audit_history"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+  app.post("/api/admin/licensing/generate", requirePerm("SETTINGS_MANAGE"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const branchId = String(req.body?.branchId || "").trim();
       const branch = branchId ? getBranchById(branchId) : null;
@@ -6821,7 +6821,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/branch-license", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.advanced_dashboard", "licensing.audit_history"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+  app.post("/api/admin/licensing/branch-license", requirePerm("SETTINGS_MANAGE"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const branchId = String(req.body?.branchId || "").trim();
       const branch = branchId ? getBranchById(branchId) : null;
@@ -6904,7 +6904,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/branch-license/status", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.audit_history"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+  app.post("/api/admin/licensing/branch-license/status", requirePerm("SETTINGS_MANAGE"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const licenseId = String(req.body?.licenseId || "").trim();
       const nextStatus = normalizeRegistryLicenseStatus(req.body?.status || "");
@@ -6977,7 +6977,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/revoke-token", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.token_revocation"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+  app.post("/api/admin/licensing/revoke-token", requirePerm("SETTINGS_MANAGE"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const token = String(req.body?.token || "").trim();
       const reason = String(req.body?.reason || "").trim();
@@ -7015,7 +7015,7 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
-  app.post("/api/admin/licensing/transfer-release", requirePerm("SETTINGS_MANAGE"), requireProvisionedFeatureApi("licensing.branch_transfer"), requireAdminSuperAdminApi, express.json(), (req, res) => {
+  app.post("/api/admin/licensing/transfer-release", requirePerm("SETTINGS_MANAGE"), requireAdminSuperAdminApi, express.json(), (req, res) => {
     try {
       const confirmText = String(req.body?.confirmText || "").trim().toUpperCase();
       if (confirmText !== "TRANSFER") return res.status(400).json({ ok: false, error: "Type TRANSFER to confirm release." });

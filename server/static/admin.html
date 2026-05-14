@@ -929,11 +929,6 @@ tr.is-collapsed + tr.subrow + tr.subrow{
             <h1 id="pageTitle">LIVE OPS OVERVIEW</h1>
           </div>
           <div class="actions">
-            <div class="userBadge" id="loggedInUserBadge" title="Logged in user" style="display:none;">
-              <span>Logged in as</span>
-              <strong id="loggedInUserName">-</strong>
-              <span id="loggedInUserRole">-</span>
-            </div>
             <select id="adminBranchSwitch" class="topSelect" style="display:none;" title="Switch branch"></select>
             <button class="btn" id="btnRefresh">Refresh</button>
           </div>
@@ -1878,7 +1873,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                 </div>
               </div>
               <div id="branchLicenseAdminSection" style="display:none; margin-top:14px;">
-                <div style="font-weight:900; font-size:16px;">Branch Selector</div>
+                <div style="font-weight:900; font-size:16px;">Branch License Provisioning</div>
                 <div class="row" style="margin-top:10px; gap:10px; align-items:flex-end; flex-wrap:wrap;">
                   <div style="flex:1 1 360px; min-width:260px;">
                     <label class="muted2" for="branchLicenseSearch">Branch</label>
@@ -1896,7 +1891,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                   </div>
                   <button class="btn small" id="btnGenerateBranchLicense" type="button">Generate Activation License</button>
                 </div>
-                <div class="muted2" style="margin-top:8px;">Activation token and license generation are available here for the selected branch.</div>
+                <div class="muted2" style="margin-top:8px;">Select a branch, generate the license number and key, then complete the provision tool below.</div>
               </div>
               <div class="detailGrid">
                 <div class="detailItem">
@@ -2390,17 +2385,15 @@ async function jpost(url, body) {
       }
 
       function renderLoggedInUser() {
-        const badges = [$("loggedInUserBadge"), $("sideLoggedInUserBadge")].filter(Boolean);
-        if (!badges.length) return;
+        const badge = $("sideLoggedInUserBadge");
+        if (!badge) return;
         const name = String(CURRENT_USER?.fullName || "").trim();
         const role = String(CURRENT_USER?.roleId || "").trim();
         if (!name && !role) {
-          badges.forEach((badge) => { badge.style.display = "none"; });
+          badge.style.display = "none";
           return;
         }
-        badges.forEach((badge) => { badge.style.display = ""; });
-        if ($("loggedInUserName")) $("loggedInUserName").textContent = name || "-";
-        if ($("loggedInUserRole")) $("loggedInUserRole").textContent = role || "-";
+        badge.style.display = "";
         if ($("sideLoggedInUserName")) $("sideLoggedInUserName").textContent = name || "-";
         if ($("sideLoggedInUserRole")) $("sideLoggedInUserRole").textContent = role || "-";
       }
@@ -4141,19 +4134,22 @@ async function clearGdriveOAuth() {
               if ($("licLastRenewed")) $("licLastRenewed").textContent = fmtTime(j.lastRenewedAt);
               if ($("licTokenRevoked")) $("licTokenRevoked").textContent = j.currentTokenRevoked ? "Yes" : "No";
               $("licensingInfo").textContent = j.reminder?.message || "Licensing details loaded.";
-              if ($("branchLicenseAdminSection")) $("branchLicenseAdminSection").style.display = j.canManageRegistry ? "" : "none";
-              if ($("branchLicenseToolSection")) $("branchLicenseToolSection").style.display = j.canManageRegistry ? "" : "none";
-              if (j.canManageRegistry) populateBranchLicensingRegistry(j.registry || {});
-              else renderLicensingSummary([], []);
+              if ($("branchLicenseAdminSection")) $("branchLicenseAdminSection").style.display = "";
+              if ($("branchLicenseToolSection")) $("branchLicenseToolSection").style.display = "";
+              await loadBranchLicensingRegistry(j.registry || null);
             } else {
               $("licensingInfo").textContent = j?.error || "Failed to load licensing status.";
               if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = j?.error || "Failed to load branch licensing registry.";
-              renderLicensingSummary([], []);
+              if ($("branchLicenseAdminSection")) $("branchLicenseAdminSection").style.display = "";
+              if ($("branchLicenseToolSection")) $("branchLicenseToolSection").style.display = "";
+              await loadBranchLicensingRegistry(null);
             }
           } catch {
             $("licensingInfo").textContent = "Failed to load licensing status.";
             if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = "Failed to load branch licensing registry.";
-            renderLicensingSummary([], []);
+            if ($("branchLicenseAdminSection")) $("branchLicenseAdminSection").style.display = "";
+            if ($("branchLicenseToolSection")) $("branchLicenseToolSection").style.display = "";
+            await loadBranchLicensingRegistry(null);
           }
         }
 
@@ -4315,6 +4311,24 @@ async function clearGdriveOAuth() {
                 `;
               }).join("")
             : `<div class="branchPickerEmpty">No branches match your search.</div>`;
+        }
+      }
+
+      async function loadBranchLicensingRegistry(registry) {
+        if (registry && Array.isArray(registry.branches)) {
+          populateBranchLicensingRegistry(registry);
+          return;
+        }
+        try {
+          const j = await jget("/api/admin/branches/manage");
+          const branches = j?.ok && Array.isArray(j.branches) ? j.branches : [];
+          populateBranchLicensingRegistry({ branches, licenses: [], licenseEvents: [] });
+          if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = branches.length
+            ? "Select a branch and generate a license draft."
+            : "No branches found.";
+        } catch {
+          populateBranchLicensingRegistry({ branches: [], licenses: [], licenseEvents: [] });
+          if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = "Failed to load branch list.";
         }
       }
 
