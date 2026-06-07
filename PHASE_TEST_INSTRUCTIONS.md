@@ -15,9 +15,11 @@ Validation flows:
 - Confirm there is no duplicate logged-in user badge in the upper-right top bar.
 - Confirm Licensing uses tabs for Dashboard, Create, Branch Licenses, and License History.
 - Select a branch, click Generate Activation License, and confirm license number/key fields populate.
+- Confirm the generated branch license form defaults Initial Status to `Active`.
 - Confirm the old activation token revoke / transfer release strip is no longer visible in Licensing.
 - Confirm activating a new YL-GLO license is not blocked by another `ISSUED` YL-GLO draft.
 - Confirm Branches shows YL-GLO as `ACTIVATED` after its active registry license is set.
+- Confirm a newly created time-bound license with the default `Active` status lets the assigned staff user log in.
 - Confirm Branches shows `Perpetual` under Days Till Renewal for perpetual licenses.
 - Confirm Admin and Super Admin users can enter the admin panel even if branch operational/license state is unavailable.
 - Move between admin sections and confirm the logged-in user remains visible in the sidebar nav area.
@@ -27,6 +29,7 @@ Expected results:
 - The branch selector uses a searchable dropdown instead of a plain select.
 - Existing branch license creation and license status actions still work.
 - Branches reflects active registry license status before stale branch cache values.
+- Time-bound branch license creation activates the branch by default unless `Issued` is deliberately selected.
 - Admin and Super Admin branch lists use active branch records for admin access instead of blocking on operational license state.
 - The logged-in user badge stays visible across admin sections after session context loads.
 - Super Admin licensing tools are available even when optional licensing feature flags are not provisioned.

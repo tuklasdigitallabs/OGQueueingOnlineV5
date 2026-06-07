@@ -2060,7 +2060,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
                     <label class="muted2" for="branchLicenseStatus">Initial Status</label>
                     <select id="branchLicenseStatus">
                       <option value="ISSUED">Issued</option>
-                      <option value="ACTIVE">Active</option>
+                      <option value="ACTIVE" selected>Active</option>
                       <option value="DISABLED">Disabled</option>
                     </select>
                   </div>
@@ -4512,7 +4512,7 @@ async function clearGdriveOAuth() {
       function resetBranchLicenseDraft() {
         if ($("branchLicenseNumber")) $("branchLicenseNumber").value = "";
         if ($("branchLicenseKey")) $("branchLicenseKey").value = "";
-        if ($("branchLicenseStatus")) $("branchLicenseStatus").value = "ISSUED";
+        if ($("branchLicenseStatus")) $("branchLicenseStatus").value = "ACTIVE";
         if ($("branchLicenseDuration")) $("branchLicenseDuration").value = "term";
         if ($("branchLicenseExpiresAt")) $("branchLicenseExpiresAt").value = "";
         if ($("branchLicenseNotes")) $("branchLicenseNotes").value = "";
@@ -4662,6 +4662,7 @@ async function clearGdriveOAuth() {
         const draft = j.draft || {};
         if ($("branchLicenseNumber")) $("branchLicenseNumber").value = draft.licenseNumber || "";
         if ($("branchLicenseKey")) $("branchLicenseKey").value = draft.licenseKey || "";
+        if ($("branchLicenseStatus")) $("branchLicenseStatus").value = "ACTIVE";
         if ($("branchLicenseInfo")) $("branchLicenseInfo").textContent = `Draft generated for ${draft.branchCode || "selected branch"}.`;
       }
 
@@ -4669,7 +4670,7 @@ async function clearGdriveOAuth() {
         const branchId = String($("branchLicenseBranch")?.value || "").trim();
         const licenseNumber = String($("branchLicenseNumber")?.value || "").trim();
         const licenseKey = String($("branchLicenseKey")?.value || "").trim();
-        const status = String($("branchLicenseStatus")?.value || "ISSUED").trim().toUpperCase();
+        const status = String($("branchLicenseStatus")?.value || "ACTIVE").trim().toUpperCase();
         const isPerpetual = String($("branchLicenseDuration")?.value || "term") === "perpetual";
         const notes = String($("branchLicenseNotes")?.value || "").trim();
         const expiresAtValue = String($("branchLicenseExpiresAt")?.value || "").trim();

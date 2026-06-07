@@ -433,7 +433,7 @@
               <label for="licenseStatusSelect">Initial Status</label>
               <select id="licenseStatusSelect">
                 <option value="ISSUED">Issued</option>
-                <option value="ACTIVE">Active</option>
+                <option value="ACTIVE" selected>Active</option>
                 <option value="DISABLED">Disabled</option>
               </select>
             </div>
@@ -984,6 +984,7 @@
         const draft = response.draft || {};
         document.getElementById("licenseNumber").value = draft.licenseNumber || "";
         document.getElementById("licenseKey").value = draft.licenseKey || "";
+        document.getElementById("licenseStatusSelect").value = "ACTIVE";
         setStatus("Draft license values generated.");
       }
 
