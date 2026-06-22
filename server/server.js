@@ -4719,6 +4719,94 @@ app.get("/b/:branchCode/staff-login", (req, res) => {
     }
   });
 
+  function buildGuestTicketStatus(ticketId) {
+    const id = String(ticketId || "").trim();
+    if (!id) return null;
+
+    const row = db.prepare(
+      `SELECT id, branchCode, businessDate, groupCode, queueNum, priorityType,
+              name, pax, status, createdAtLocal, calledAt, seatedAt, skippedAt
+       FROM queue_items
+       WHERE id=?
+       LIMIT 1`
+    ).get(id);
+    if (!row) return null;
+
+    const branchCode = String(row.branchCode || "").trim().toUpperCase();
+    const businessDate = String(row.businessDate || "").trim();
+    const groupCode = String(row.groupCode || "").trim().toUpperCase();
+    const codeFor = (ticket) => {
+      const priority = String(ticket?.priorityType || "NONE").trim().toUpperCase();
+      const prefix = priority && priority !== "NONE" ? `P${groupCode}` : groupCode;
+      return `${prefix}-${String(Number(ticket?.queueNum || 0)).padStart(2, "0")}`;
+    };
+
+    const currentCalled = db.prepare(
+      `SELECT id, groupCode, queueNum, priorityType, name
+       FROM queue_items
+       WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='CALLED'
+       ORDER BY calledAt ASC, queueNum ASC
+       LIMIT 1`
+    ).get(branchCode, businessDate, groupCode);
+
+    const waitingRows = db.prepare(
+      `SELECT id, groupCode, queueNum, priorityType, name
+       FROM queue_items
+       WHERE branchCode=? AND businessDate=? AND groupCode=? AND status='WAITING'
+       ORDER BY
+         CASE WHEN priorityType IS NOT NULL AND UPPER(priorityType)!='NONE' THEN 0 ELSE 1 END,
+         queueNum ASC`
+    ).all(branchCode, businessDate, groupCode);
+
+    const waitingIndex = waitingRows.findIndex((ticket) => String(ticket.id) === id);
+    const positionInGroup = waitingIndex >= 0 ? waitingIndex + 1 : null;
+    const branch = getBranchByCode(branchCode);
+    const priorityType = String(row.priorityType || "NONE").trim().toUpperCase();
+    const isPriority = priorityType && priorityType !== "NONE";
+
+    return {
+      ok: true,
+      ticketId: id,
+      status: String(row.status || "").toUpperCase(),
+      branchCode,
+      branchName: String(branch?.branchName || branchCode),
+      businessDate,
+      groupCode,
+      displayGroup: isPriority ? `P${groupCode}` : groupCode,
+      isPriority: !!isPriority,
+      code: codeFor(row),
+      nowServing: currentCalled ? {
+        id: String(currentCalled.id || ""),
+        code: codeFor(currentCalled),
+        name: String(currentCalled.name || ""),
+      } : null,
+      queue: {
+        positionInGroup,
+        aheadCount: waitingIndex >= 0 ? waitingIndex : null,
+        waitingCount: waitingRows.length,
+        almostThere: positionInGroup !== null && positionInGroup <= 3,
+        nextThree: waitingRows.slice(0, 3).map((ticket) => ({
+          id: String(ticket.id || ""),
+          code: codeFor(ticket),
+          name: String(ticket.name || ""),
+        })),
+      },
+    };
+  }
+
+  app.get("/api/guest/ticket-status", (req, res) => {
+    try {
+      const id = String(req.query.id || "").trim();
+      if (!id) return res.status(400).json({ ok: false, error: "id required" });
+      const payload = buildGuestTicketStatus(id);
+      if (!payload) return res.status(404).json({ ok: false, error: "not found" });
+      return res.json(payload);
+    } catch (e) {
+      console.error("[api/guest/ticket-status]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
   /* ---------- admin/business date ---------- */
 
   app.get("/api/public/business-date", (req, res) => {

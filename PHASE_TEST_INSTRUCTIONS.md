@@ -73,6 +73,7 @@ Validation flows:
 - Confirm the landscape queue instruction is above the QR and the QR fills the remaining tile space.
 - In portrait, confirm Now Serving, video, and guest QR use a 30/45/25 vertical split.
 - Confirm the portrait queue instruction is above the QR and the QR fills the remaining tile space without overlapping.
+- Confirm Priority/Regular tiles retain equal outer spacing on their left and right edges in both orientations.
 - Confirm the latest called ticket across A/B/C appears in the global panel with priority green and regular maroon.
 - Confirm queue-only mode removes video and reallocates the available space.
 
@@ -82,6 +83,35 @@ Expected results:
 
 Known limitations:
 - Exact TV typography and media crop should be visually checked on the target landscape and portrait resolutions.
+
+## Guest Ticket Live Status
+
+Scope:
+- Mobile ticket confirmation layout in `server/static/ticket.html`.
+- Branch/group live status endpoint in `server/server.js`.
+- Socket.IO refresh, five-second polling fallback, almost-there messaging, and opt-in call alerts.
+
+Validation flows:
+- Register a guest and confirm the browser opens `/static/ticket.html?id=<ticket-id>`.
+- Confirm the page shows the queue code, guest, branch, pax, and priority-aware group badge.
+- Confirm Now Serving is the CALLED ticket from the same branch, business date, and A/B/C group.
+- Confirm waiting position orders priority tickets first and then queue number ascending.
+- Confirm Position in Group starts at 1 and Ahead of You is position minus one.
+- Move the ticket into positions 3, 2, and 1 and confirm the almost-there banner appears.
+- Call, seat, skip, remove, and Undo the ticket and confirm the page updates through Socket.IO.
+- Disconnect Socket.IO while HTTP remains available and confirm five-second polling continues updating the page.
+- Disconnect the network and confirm the connection indicator and warning banner change appropriately.
+- Enable call alerts, use Test Alert, and confirm supported sound, vibration, and browser notifications.
+- Call the guest ticket and confirm alerts fire only after the guest has opted in.
+
+Expected results:
+- Ticket status shows WAITING, CALLED, SEATED, or SKIPPED accurately.
+- Same-group position excludes tickets from other branches, business dates, and groups.
+- Cached ticket details remain visible while the page reconnects.
+
+Known limitations:
+- Browser notifications require permission and generally require HTTPS.
+- Mobile browsers may require an explicit tap each session before sound playback is allowed.
 
 ## Admin Licensing Dashboard Update
 

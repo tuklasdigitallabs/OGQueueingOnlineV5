@@ -145,52 +145,31 @@
       border:none;
     }
 
-    .status-box{
-      margin: calc(var(--sp) * 1.2) 0 0;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: rgba(255,255,255,.05);
+    .status-banner,
+    .live-card{
+      margin-top: calc(var(--sp) * 1.1);
+      padding: calc(var(--sp) * 1.1);
+      border-radius:16px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.04);
+      text-align:left;
     }
-
-    .status-box strong{
-      display:block;
-      color: var(--primary);
-      font-size: 18px;
-      margin-bottom: 4px;
-    }
-
-    .queue-position{
-      margin: calc(var(--sp) * 1.2) 0 0;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(228,148,36,.45);
-      background: rgba(228,148,36,.10);
-    }
-
-    .queue-position .label{
-      display:block;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .queue-position strong{
-      display:block;
-      color: var(--primary);
-      font-size: 30px;
-      font-weight: 950;
-      line-height: 1;
-      margin-bottom: 4px;
-    }
-
-    .queue-position span:last-child{
-      color: rgba(255,255,255,.88);
-      font-size: 13px;
-    }
+    .status-banner{display:none;font-size:13px;line-height:1.45}
+    .status-banner.warn{display:block;background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.35);color:#fde68a}
+    .status-banner.alert{display:block;background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.35);color:#bbf7d0}
+    .live-card h2{margin:0 0 calc(var(--sp) * .8);font-size:18px}
+    .live-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(var(--sp) * .8)}
+    .stat{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:calc(var(--sp) * .85)}
+    .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+    .stat-value{font-size:24px;font-weight:900;line-height:1.1}
+    .stat-value.small{font-size:18px}
+    .live-pill{display:inline-flex;margin-top:calc(var(--sp) * .8);padding:7px 12px;border-radius:999px;background:rgba(34,197,94,.12);color:#bbf7d0;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+    .live-pill.offline{background:rgba(239,68,68,.12);color:#fecaca}
+    .live-note{margin-top:calc(var(--sp) * .9);font-size:12.5px;color:var(--muted);line-height:1.45}
+    .alert-tools{margin-top:calc(var(--sp) * .9);display:flex;flex-wrap:wrap;gap:8px}
+    .alert-btn{border:none;border-radius:999px;padding:9px 14px;background:linear-gradient(180deg,var(--primary),var(--secondary));color:#140909;font-size:12px;font-weight:900;text-transform:uppercase;cursor:pointer}
+    .alert-btn.secondary{background:rgba(255,255,255,.06);color:#fff;border:1px solid var(--line)}
+    .alert-capabilities{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.45}
 
     .btn{
       display:block;
@@ -214,6 +193,10 @@
     .note em{ color: rgba(255,255,255,.88) }
 
     @media (max-width: 420px){
+      .container{padding:var(--sp)}
+      .ticket-card{padding:calc(var(--sp) * 1.5)}
+      .topStripe{margin:calc(var(--sp) * -1.5) calc(var(--sp) * -1.5) calc(var(--sp) * 1.1)}
+      .live-grid{grid-template-columns:1fr}
       .ticket-code .num{ font-size:86px; }
       .ticket-code .code{ font-size:40px; }
       .title{ font-size:28px; }
@@ -249,15 +232,35 @@
         </p>
       </div>
 
-      <div class="status-box" aria-live="polite">
-        <strong id="ticketStatus">WAITING</strong>
-        <span id="ticketStatusHint">We will update this page when your number is called.</span>
-      </div>
+      <div class="status-banner" id="networkBanner" aria-live="polite"></div>
 
-      <div class="queue-position" id="queuePositionBox" aria-live="polite">
-        <span class="label">Your place in this group</span>
-        <strong id="queuePosition">—</strong>
-        <span id="queuePositionHint">Waiting for queue update.</span>
+      <div class="live-card" aria-live="polite">
+        <h2>Live Queue Status</h2>
+        <div class="live-grid">
+          <div class="stat">
+            <div class="stat-label">Now Serving</div>
+            <div class="stat-value small" id="nowServingCode">Waiting</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Your Status</div>
+            <div class="stat-value small" id="ticketStatus">WAITING</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Position in Group</div>
+            <div class="stat-value" id="queuePosition">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Ahead of You</div>
+            <div class="stat-value" id="aheadCount">—</div>
+          </div>
+        </div>
+        <div class="live-pill" id="liveStatePill">Connecting to live updates</div>
+        <div class="live-note" id="queueSummaryNote">Loading your current place in line.</div>
+        <div class="alert-tools">
+          <button type="button" class="alert-btn" id="btnEnableAlerts">Enable Call Alerts</button>
+          <button type="button" class="alert-btn secondary" id="btnTestAlerts">Test Alert</button>
+        </div>
+        <div class="alert-capabilities" id="alertCapabilities">Alerts are optional and depend on browser support.</div>
       </div>
 
       <a href="#" class="btn" id="backToRegister">Thank you for registering!</a>
@@ -274,161 +277,237 @@
   <script src="../app-boot.js"></script>
   <script src="../socket.io/socket.io.js"></script>
   <script>
-    function qs(name){
-      return new URL(window.location.href).searchParams.get(name) || "";
-    }
+    var ticketId = new URL(window.location.href).searchParams.get("id") || "";
+    var ticketBranchCode = "";
+    var socketConnected = false;
+    var lastFetchAt = 0;
+    var lastStatus = "";
+    var hasLoadedStatus = false;
+    var alertEnabled = false;
+    var alertAudio = null;
+    var POLL_MS = 5000;
+    var ALERT_KEY = "qsys_guest_alerts_enabled";
 
-    function setText(id, v){
+    function setText(id, value){
       var el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = (v === undefined || v === null || v === "") ? "—" : String(v);
+      if (el) el.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
     }
 
-    function setGroupBadge(group){
-      var badge = document.getElementById("groupBadge");
-      if (!badge) return;
-
-      var g = String(group || "").toUpperCase();
-      var isPriority = g.startsWith("P") && g.length === 2;
-
-      badge.className = "ticket-group-tag" + (isPriority ? " priority" : "");
-      badge.textContent = isPriority
-        ? ("GROUP " + g + " – PRIORITY")
-        : ("GROUP " + g);
+    function cacheKey(){ return "qsys_ticket_cache:" + ticketId; }
+    function saveTicket(ticket){
+      try { localStorage.setItem(cacheKey(), JSON.stringify(ticket)); } catch {}
+    }
+    function loadCachedTicket(){
+      try { return JSON.parse(localStorage.getItem(cacheKey()) || "null"); } catch { return null; }
     }
 
     function setTicketCode(code){
-      if (!code) return;
-
-      var parts = String(code).split("-");
-      setText("ticketCodePrefix", parts[0] || "—");
-      setText("ticketCodeNum", parts[1] || "—");
+      var parts = String(code || "").split("-");
+      setText("ticketCodePrefix", parts[0]);
+      setText("ticketCodeNum", parts[1]);
     }
 
-    function statusHint(status){
-      var s = String(status || "").toUpperCase();
-      if (s === "CALLED") return "Please proceed to the counter when staff calls your number.";
-      if (s === "SEATED") return "Your party has been seated.";
-      if (s === "SKIPPED") return "Please speak with staff if you still need your table.";
-      if (s === "WAITING") return "We will update this page when your number is called.";
-      return "Keep this page open for updates.";
+    function setGroupBadge(group, priorityType){
+      var badge = document.getElementById("groupBadge");
+      if (!badge) return;
+      var base = String(group || "").toUpperCase();
+      var isPriority = String(priorityType || "NONE").toUpperCase() !== "NONE";
+      badge.className = "ticket-group-tag" + (isPriority ? " priority" : "");
+      badge.textContent = isPriority ? "GROUP P" + base + " – PRIORITY" : "GROUP " + base;
     }
 
-    function renderWaitingPosition(t){
-      var box = document.getElementById("queuePositionBox");
-      if (!box) return;
+    function setBanner(message, type){
+      var banner = document.getElementById("networkBanner");
+      if (!banner) return;
+      banner.className = "status-banner" + (type ? " " + type : "");
+      banner.textContent = message || "";
+      banner.style.display = message ? "block" : "none";
+    }
 
-      var status = String((t && t.status) || "").toUpperCase();
-      var pos = Number(t && t.waitingPosition);
-      var ahead = Number(t && t.waitingAhead);
-
-      if (status === "WAITING" && Number.isFinite(pos) && pos > 0) {
-        box.style.display = "";
-        setText("queuePosition", "#" + String(pos));
-        var aheadText = Number.isFinite(ahead) && ahead > 0
-          ? (String(ahead) + " ahead of you")
-          : "You are next in this group";
-        setText("queuePositionHint", aheadText);
-        return;
+    function setConnection(mode){
+      var pill = document.getElementById("liveStatePill");
+      if (!pill) return;
+      if (mode === "socket") {
+        pill.className = "live-pill";
+        pill.textContent = "Live Updates Connected";
+      } else if (mode === "polling") {
+        pill.className = "live-pill";
+        pill.textContent = "Live Updates via Refresh";
+      } else {
+        pill.className = "live-pill offline";
+        pill.textContent = "Live Updates Disconnected";
       }
-
-      if (status === "CALLED") {
-        box.style.display = "";
-        setText("queuePosition", "Called");
-        setText("queuePositionHint", "Please proceed when staff calls your number.");
-        return;
-      }
-
-      box.style.display = "none";
     }
 
-    function renderTicket(t, stale){
-      if (!t) return;
-      ticketBranchCode = String(t.branchCode || ticketBranchCode || "").trim().toUpperCase();
-      setTicketCode(t.code);
-      setText("guestName", t.name);
-      setText("branchName", t.branchName || t.branchCode);
-      setText("pax", t.pax);
-      setGroupBadge(t.group);
-      setText("ticketStatus", String(t.status || "WAITING").toUpperCase());
-      setText("ticketStatusHint", (stale ? "Reconnecting. Showing last saved status. " : "") + statusHint(t.status));
-      renderWaitingPosition(t);
-
+    function renderTicket(ticket){
+      if (!ticket) return;
+      ticketBranchCode = String(ticket.branchCode || "").trim().toUpperCase();
+      setTicketCode(ticket.code);
+      setText("guestName", ticket.name);
+      setText("branchName", ticket.branchName || ticket.branchCode);
+      setText("pax", ticket.pax);
+      setGroupBadge(ticket.group, ticket.priorityType);
       var back = document.getElementById("backToRegister");
-      if (back) back.href = window.appUrl("/guest");
+      if (back) {
+        var suffix = ticketBranchCode ? "?branchCode=" + encodeURIComponent(ticketBranchCode) : "";
+        back.href = window.appUrl("/guest" + suffix);
+      }
     }
 
-    function cacheKey(){
-      return "qsys_ticket_cache:" + String(ticketId || "");
+    function renderStatus(status){
+      if (!status) return;
+      var currentStatus = String(status.status || "").toUpperCase();
+      var queue = status.queue || {};
+      setText("ticketStatus", currentStatus);
+      setText("nowServingCode", status.nowServing && status.nowServing.code ? status.nowServing.code : "Waiting");
+      setText("queuePosition", queue.positionInGroup != null ? queue.positionInGroup : (currentStatus === "CALLED" ? "Now" : "—"));
+      setText("aheadCount", queue.aheadCount != null ? queue.aheadCount : "—");
+
+      var note = document.getElementById("queueSummaryNote");
+      if (note) {
+        if (currentStatus === "CALLED") note.textContent = "Your ticket is being called. Please proceed to our staff now.";
+        else if (currentStatus === "SEATED") note.textContent = "Your party has been seated.";
+        else if (currentStatus === "SKIPPED") note.textContent = "Your ticket was skipped. Please approach staff for assistance.";
+        else if (queue.almostThere) note.textContent = "You are within the next three tickets for your group. Please stay nearby.";
+        else note.textContent = "We will keep updating your current place in line while this page remains open.";
+      }
+
+      if (currentStatus === "WAITING" && queue.almostThere) {
+        setBanner("You are almost to be called. Please stay near the counter.", "alert");
+      } else if (!socketConnected && Date.now() - lastFetchAt > POLL_MS * 2.5) {
+        setBanner("Live updates are temporarily disconnected. Reconnecting…", "warn");
+      } else {
+        setBanner("", "");
+      }
+
+      if (hasLoadedStatus && lastStatus !== "CALLED" && currentStatus === "CALLED") triggerCallAlert(status);
+      lastStatus = currentStatus;
+      hasLoadedStatus = true;
+      document.title = queue.positionInGroup != null
+        ? "#" + queue.positionInGroup + " in line • " + status.code
+        : status.code + " • " + currentStatus;
     }
 
-    function saveCachedTicket(t){
-      try { localStorage.setItem(cacheKey(), JSON.stringify({ ticket: t, savedAt: Date.now() })); } catch(e) {}
+    function updateAlertUi(){
+      var button = document.getElementById("btnEnableAlerts");
+      var capabilities = document.getElementById("alertCapabilities");
+      if (button) button.textContent = alertEnabled ? "Call Alerts Enabled" : "Enable Call Alerts";
+      if (capabilities) {
+        var notification = "Notification" in window ? Notification.permission : "unsupported";
+        var vibration = navigator.vibrate ? "supported" : "unsupported";
+        capabilities.textContent = "Notifications: " + notification + " | Vibration: " + vibration + " | Sound: " + (alertAudio ? "ready" : "tap enable first");
+      }
     }
 
-    function loadCachedTicket(){
+    async function enableAlerts(){
+      alertEnabled = true;
+      try { localStorage.setItem(ALERT_KEY, "1"); } catch {}
+      if ("Notification" in window && Notification.permission === "default") {
+        try { await Notification.requestPermission(); } catch {}
+      }
       try {
-        var cached = JSON.parse(localStorage.getItem(cacheKey()) || "null");
-        return cached && cached.ticket ? cached.ticket : null;
-      } catch(e) {
-        return null;
-      }
+        alertAudio = new Audio(window.appUrl("/static/chime.mp3"));
+        alertAudio.preload = "auto";
+        alertAudio.muted = true;
+        await alertAudio.play();
+        alertAudio.pause();
+        alertAudio.currentTime = 0;
+        alertAudio.muted = false;
+      } catch {}
+      updateAlertUi();
+      setBanner("Call alerts are enabled where supported by this browser.", "alert");
     }
 
-    var ticketId = qs("id");
-    var ticketBranchCode = "";
-    var refreshTimer = null;
-    if (!ticketId) alert("Missing ticket id.");
-
-    async function loadTicket(options){
-      options = options || {};
-      try{
-        var res = await fetch(window.appUrl("/api/guest/ticket?id=" + encodeURIComponent(ticketId)), { cache: "no-store" });
-        if (!res.ok) throw new Error("ticket fetch failed");
-
-        var data = await res.json();
-        if (!data || !data.ok || !data.ticket) throw new Error("bad payload");
-
-        var t = data.ticket;
-        ticketBranchCode = String(t.branchCode || "").trim().toUpperCase();
-        saveCachedTicket(t);
-        renderTicket(t, false);
-      }catch(e){
-        console.error(e);
-        var cached = loadCachedTicket();
-        if (cached) {
-          renderTicket(cached, true);
-        } else if (!options.silent) {
-          alert("Unable to load ticket info.");
+    function triggerCallAlert(status, force){
+      if (!alertEnabled && !force) return;
+      try {
+        if (alertAudio) {
+          alertAudio.currentTime = 0;
+          alertAudio.play().catch(function(){});
         }
-      }
+      } catch {}
+      try { if (navigator.vibrate) navigator.vibrate([250,120,250,120,300]); } catch {}
+      try {
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("QSys Queue Call", {
+            body: (status.code || "Your ticket") + " is now being called. Please proceed to the counter."
+          });
+        }
+      } catch {}
+    }
+
+    async function loadTicket(){
+      var response = await fetch(window.appUrl("/api/guest/ticket?id=" + encodeURIComponent(ticketId)), { cache:"no-store" });
+      if (!response.ok) throw new Error("ticket fetch failed");
+      var data = await response.json();
+      if (!data || !data.ok || !data.ticket) throw new Error("bad ticket payload");
+      saveTicket(data.ticket);
+      renderTicket(data.ticket);
+    }
+
+    async function loadStatus(){
+      var response = await fetch(window.appUrl("/api/guest/ticket-status?id=" + encodeURIComponent(ticketId)), { cache:"no-store" });
+      if (!response.ok) throw new Error("status fetch failed");
+      var data = await response.json();
+      if (!data || !data.ok) throw new Error("bad status payload");
+      lastFetchAt = Date.now();
+      renderStatus(data);
+      setConnection(socketConnected ? "socket" : "polling");
     }
 
     function startRealtime(){
-      refreshTimer = setInterval(function(){
-        loadTicket({ silent: true });
-      }, 5000);
+      setInterval(function(){
+        loadStatus().catch(function(){
+          if (!socketConnected && Date.now() - lastFetchAt > POLL_MS * 2.5) {
+            setConnection("offline");
+            setBanner("Live updates are temporarily disconnected. Reconnecting…", "warn");
+          }
+        });
+      }, POLL_MS);
 
-      try {
-        if (!window.io) return;
-        var sock = io({
-          path: window.appUrl("/socket.io"),
-          query: ticketBranchCode ? { branchCode: ticketBranchCode } : undefined,
-          transports: ["websocket", "polling"]
-        });
-        sock.on("state:changed", function(payload){
-          var eventBranchCode = String((payload && payload.branchCode) || "").trim().toUpperCase();
-          if (eventBranchCode && ticketBranchCode && eventBranchCode !== ticketBranchCode) return;
-          loadTicket({ silent: true });
-        });
-      } catch(e) {}
+      if (!window.io) return;
+      var socket = io({
+        path: window.appUrl("/socket.io"),
+        query: ticketBranchCode ? { branchCode: ticketBranchCode } : undefined,
+        transports:["websocket","polling"]
+      });
+      socket.on("connect", function(){
+        socketConnected = true;
+        setConnection("socket");
+        loadStatus().catch(function(){});
+      });
+      socket.on("disconnect", function(){
+        socketConnected = false;
+        setConnection(Date.now() - lastFetchAt < POLL_MS * 2.5 ? "polling" : "offline");
+      });
+      socket.on("state:changed", function(payload){
+        var branchCode = String(payload && payload.branchCode || "").trim().toUpperCase();
+        if (branchCode && ticketBranchCode && branchCode !== ticketBranchCode) return;
+        loadStatus().catch(function(){});
+      });
     }
 
     async function boot(){
+      if (!ticketId) return alert("Missing ticket id.");
       var cached = loadCachedTicket();
-      if (cached) renderTicket(cached, true);
-      await loadTicket();
-      startRealtime();
+      if (cached) renderTicket(cached);
+      try {
+        alertEnabled = localStorage.getItem(ALERT_KEY) === "1";
+      } catch {}
+      updateAlertUi();
+      document.getElementById("btnEnableAlerts").addEventListener("click", function(){ enableAlerts(); });
+      document.getElementById("btnTestAlerts").addEventListener("click", function(){
+        triggerCallAlert({ code: document.getElementById("ticketCodePrefix").textContent + "-" + document.getElementById("ticketCodeNum").textContent }, true);
+      });
+      try {
+        await loadTicket();
+        await loadStatus();
+        startRealtime();
+      } catch (error) {
+        console.error(error);
+        if (!cached) alert("Unable to load ticket information.");
+        setConnection("offline");
+      }
     }
 
     boot();

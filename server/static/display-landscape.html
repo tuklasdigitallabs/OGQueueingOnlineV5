@@ -42,7 +42,7 @@
     .groupName{font-size:clamp(22px,2.3vw,42px);font-weight:950}
     .hidden{text-align:right;font-size:clamp(14px,1.25vw,23px);font-weight:900;line-height:1.05}
     .hidden:before{content:"WAITING";display:block;font-size:.7em}
-    .columns{min-height:0;margin-top:8px;display:grid;grid-template-columns:40% 60%;gap:8px}
+    .columns{min-height:0;margin-top:8px;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:8px}
     .queueColumn{min-height:0;border-radius:12px;padding:6px;border:2px solid rgba(0,0,0,.15);overflow:hidden}
     .queueColumn.priority{border-color:rgba(0,143,76,.55);background:rgba(0,143,76,.06)}
     .queueColumn.regular{border-color:rgba(164,0,0,.35);background:rgba(164,0,0,.06)}
