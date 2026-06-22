@@ -434,15 +434,14 @@ function normalizePriority(v) {
 
 function computeGroupCode({ priorityType, pax }) {
   const n = Number(pax || 1);
-  if (n <= 1) return "A"; // 1 pax
-  if (n <= 3) return "B"; // 2-3 pax
-  if (n <= 5) return "C"; // 4-5 pax
-  return "D"; // 6+
+  if (n <= 2) return "A"; // 1-2 pax
+  if (n <= 5) return "B"; // 3-5 pax
+  return "C"; // 6+ pax
 }
 
 function normalizeGroup(v) {
   const g = String(v || "").toUpperCase().trim();
-  return ["P", "A", "B", "C", "D"].includes(g) ? g : null;
+  return ["A", "B", "C"].includes(g) ? g : null;
 }
 
 function emitChanged(a, b, c, d) {
@@ -501,8 +500,8 @@ function emitChanged(a, b, c, d) {
 // CSV helpers (no external libs)
 function csvEscape(v) {
   if (v === null || v === undefined) return "";
-  // Excel auto-converts values like 2-3 / 4-5 into dates (3-Feb / 5-Apr). Force as text.
-  if (typeof v === "string" && (v === "2-3" || v === "4-5")) v = `="${v}"`;
+  // Excel auto-converts values like 1-2 / 3-5 into dates. Force them as text.
+  if (typeof v === "string" && (v === "1-2" || v === "3-5")) v = `="${v}"`;
   const s = String(v);
   if (/[,"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
@@ -518,7 +517,7 @@ function rowsToCsv(header, rows) {
 /* -------------------- admin overview (today stats) -------------------- */
 // Single source of truth for Admin dashboard counters (realtime-safe)
 function computeAdminTodayStats(db, branchCode, businessDate) {
-  const groups = ["P", "A", "B", "C", "D"];
+  const groups = ["A", "B", "C"];
   const out = {};
   const bc = branchCode;
 
@@ -535,7 +534,7 @@ function computeAdminTodayStats(db, branchCode, businessDate) {
       })
   );
 
-      ["A", "B", "C", "D"].forEach((g) => {
+      ["A", "B", "C"].forEach((g) => {
       if (!out[g]) return;
       out[g].sub = {
         regular: { registered: 0, waiting: 0, called: 0, seated: 0, skipped: 0 },
@@ -574,7 +573,7 @@ function computeAdminTodayStats(db, branchCode, businessDate) {
     if (r.status === "SKIPPED") out[r.groupCode].skipped = r.n;
   });
 
-    // --- Regular vs Priority counters (A-D only) ---
+    // --- Regular vs Priority counters (A-C only) ---
   const prioRegs = db.prepare(`
     SELECT
       groupCode,
@@ -585,7 +584,7 @@ function computeAdminTodayStats(db, branchCode, businessDate) {
       END AS isPrio,
       COUNT(*) AS n
     FROM queue_items
-    WHERE branchCode=? AND businessDate=? AND groupCode IN ('A','B','C','D')
+    WHERE branchCode=? AND businessDate=? AND groupCode IN ('A','B','C')
     GROUP BY groupCode, isPrio
   `).all(bc, businessDate);
 
@@ -607,7 +606,7 @@ function computeAdminTodayStats(db, branchCode, businessDate) {
       END AS isPrio,
       COUNT(*) AS n
     FROM queue_items
-    WHERE branchCode=? AND businessDate=? AND groupCode IN ('A','B','C','D')
+    WHERE branchCode=? AND businessDate=? AND groupCode IN ('A','B','C')
     GROUP BY groupCode, status, isPrio
   `).all(bc, businessDate);
 
@@ -1642,6 +1641,13 @@ return res.status(404).send("Not found");
 
 // Keep the real static handler AFTER the gate
 app.use("/static", express.static(path.join(__dirname, "static")));
+
+app.get("/static/js/lucide.min.js", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "node_modules", "lucide", "dist", "umd", "lucide.min.js"));
+});
+app.get("/b/:branchCode/static/js/lucide.min.js", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "node_modules", "lucide", "dist", "umd", "lucide.min.js"));
+});
 
 // ✅ Hard fallback for display JS (prevents mysterious 404s if static mapping changes)
 app.get("/static/js/:file", (req, res) => {
@@ -7824,7 +7830,6 @@ app.get("/api/staff/state", requireAuth, (req, res) => {
           WHEN 'A' THEN 1
           WHEN 'B' THEN 2
           WHEN 'C' THEN 3
-          WHEN 'D' THEN 4
           ELSE 9
       END,
       CASE WHEN (priorityType IS NOT NULL AND priorityType!='NONE') THEN 0 ELSE 1 END,
@@ -7856,7 +7861,6 @@ app.get("/api/state", requireAuth, (req, res) => {
           WHEN 'A' THEN 1
           WHEN 'B' THEN 2
           WHEN 'C' THEN 3
-          WHEN 'D' THEN 4
           ELSE 9
       END,
       CASE WHEN (priorityType IS NOT NULL AND priorityType!='NONE') THEN 0 ELSE 1 END,
@@ -7893,7 +7897,6 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
         WHEN 'A' THEN 1
         WHEN 'B' THEN 2
         WHEN 'C' THEN 3
-        WHEN 'D' THEN 4
         ELSE 9
     END,
     CASE WHEN (priorityType IS NOT NULL AND priorityType!='NONE') THEN 0 ELSE 1 END,
@@ -7903,7 +7906,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     .all(bc, businessDate);
 
   // ---- Display mapping ----
-  // Display must see priority as PA/PB/PC/PD (not just A/B/C/D)
+  // Display receives priority tickets as PA/PB/PC.
   // and must receive a normalized 'priority' field.
   const pad2 = (n) => {
     const x = Number(n);
@@ -7952,7 +7955,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     try {
       const bc = getRequestBranchCode(req);
       const alpha = 2 / (14 + 1); // 2/15
-      const groups = ["P", "A", "B", "C", "D"];
+      const groups = ["A", "B", "C"];
 
       const result = {};
       for (const g of groups) {
@@ -8096,7 +8099,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
          FROM daily_group_stats
          WHERE branchCode=? AND businessDate BETWEEN ? AND ?
          ORDER BY businessDate ASC,
-           CASE groupCode WHEN 'P' THEN 0 WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 9 END`
+           CASE groupCode WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 9 END`
       )
       .all(branchCode, effectiveFrom, to);
 
@@ -8171,7 +8174,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
          ${sinceSql}
          GROUP BY businessDate, groupCode
          ORDER BY businessDate ASC,
-           CASE groupCode WHEN 'P' THEN 0 WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 9 END`
+           CASE groupCode WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 9 END`
       )
       .all(...baseParams);
 
@@ -8227,7 +8230,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
        WHERE branchCode=? AND businessDate BETWEEN ? AND ?
        ${sinceSql}
        ORDER BY businessDate ASC,
-         CASE groupCode WHEN 'P' THEN 0 WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 9 END,
+         CASE groupCode WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 9 END,
          queueNum ASC`
         )
         .all(...params);
@@ -8319,7 +8322,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
        WHERE branchCode=? AND businessDate BETWEEN ? AND ?
        ${sinceSql}
        ORDER BY businessDate ASC,
-         CASE groupCode WHEN 'P' THEN 0 WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 9 END,
+         CASE groupCode WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 9 END,
          queueNum ASC`
         )
         .all(...params);
@@ -8587,7 +8590,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
   function pad2(n){ return String(Number(n||0)).padStart(2,"0"); }
 
   function baseGroupFromRow(r){
-    // For priority tickets, we still bucket by pax so they fall under A/B/C/D
+    // Reports bucket tickets by pax so priority and regular tickets share A/B/C.
     return computeGroupCode({ priorityType: "NONE", pax: r.pax });
   }
 
@@ -8610,7 +8613,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     return null;
   }
 
-  // Computes A/B/C/D custom summary rows used by JSON preview and CSV export.
+  // Computes A/B/C custom summary rows used by JSON preview and CSV export.
   function buildCustomSummary(from, to, sinceMs, branchCodeArg){
     const bc = String(branchCodeArg || getBranchCode()).trim();
 
@@ -8634,7 +8637,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
       ${sinceSql}
     `).all(...params);
 
-    const groups = { A:null, B:null, C:null, D:null };
+    const groups = { A:null, B:null, C:null };
     for (const g of Object.keys(groups)){
       groups[g] = {
         groupCode: g,
@@ -8651,7 +8654,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     }
 
     for (const r of rows){
-      const g = baseGroupFromRow(r); // A/B/C/D
+      const g = baseGroupFromRow(r); // A/B/C
       const bucket = groups[g];
       if (!bucket) continue;
 
@@ -8682,7 +8685,7 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
     let paxOverall = 0;
     let priorityTotal = 0;
 
-    for (const g of ["A","B","C","D"]){
+    for (const g of ["A","B","C"]){
       const b = groups[g];
       b.avgToCalledMins = avgMins(b._sumToCalledMs, b._nToCalled);
       b.avgToSeatedMins = avgMins(b._sumToSeatedMs, b._nToSeated);
@@ -8813,10 +8816,9 @@ function computeReportSummary(db, branchCode, fromYmd, toYmd, waitRef, sinceMs){
 
   const bucketCase = `
     CASE
-      WHEN pax <= 1 THEN '1'
-      WHEN pax BETWEEN 2 AND 3 THEN '2-3'
-      WHEN pax BETWEEN 4 AND 5 THEN '4-5'
-      ELSE '6+'
+      WHEN pax <= 2 THEN '1-2'
+      WHEN pax BETWEEN 3 AND 5 THEN '3-5'
+      ELSE '6++'
     END
   `;
 
@@ -8948,7 +8950,7 @@ function computeReportSummary(db, branchCode, fromYmd, toYmd, waitRef, sinceMs){
 
 function csvSafePaxBucket(bucket){
   const b = String(bucket || "");
-  if (b === "2-3" || b === "4-5") return `="${b}"`;
+  if (b === "1-2" || b === "3-5") return `="${b}"`;
   return b;
 }
 
@@ -9478,7 +9480,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
          WHERE branchCode=? AND businessDate BETWEEN ? AND ?
          ${sinceSql}
          ORDER BY businessDate ASC,
-           CASE groupCode WHEN 'P' THEN 0 WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 9 END,
+           CASE groupCode WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 9 END,
            queueNum ASC`
       )
       .all(...params);
@@ -10636,7 +10638,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       const isPriority = priorityType !== "NONE";
 
-      // Regular queue numbers: A/B/C/D sequence (shared for non-priority)
+      // Regular queue numbers: separate A/B/C sequences.
       const regRow = db
         .prepare(
           `
@@ -10650,7 +10652,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
 
       const nextReg = (regRow?.mx || 0) + 1;
 
-      // Priority queue numbers: separate per bucket (PA/PB/PC/PD)
+      // Priority queue numbers: separate per bucket (PA/PB/PC).
       const prRow = db
         .prepare(
           `
@@ -11287,6 +11289,207 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
     }
   });
 
+  /* ---------- STAFF: SEAT SPECIFIC TICKET ---------- */
+  app.post("/api/staff/seat-ticket", requirePerm("QUEUE_SEAT"), express.json(), (req, res) => {
+    const now = Date.now();
+    try {
+      const ticketId = String(req.body.id || "").trim();
+      const reason = String(req.body.reason || "").trim().slice(0, 200);
+      if (!ticketId) return res.status(400).json({ ok: false, error: "Ticket is required." });
+
+      const businessDate = ensureBusinessDate(db);
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
+      const actor = actorFromReq(req);
+
+      const tx = db.transaction(() => {
+        const target = db.prepare(
+          `SELECT id, groupCode, queueNum, name, pax, status, priorityType,
+                  calledAt, next_calls, calledNote, seatedAt, skippedAt
+           FROM queue_items
+           WHERE id=? AND branchCode=? AND businessDate=?
+             AND status IN ('WAITING','CALLED')
+           LIMIT 1`
+        ).get(ticketId, bc, businessDate);
+        if (!target) {
+          const err = new Error("Ticket is no longer waiting or called.");
+          err.http = 409;
+          throw err;
+        }
+
+        const expected = db.prepare(
+          `SELECT id
+           FROM queue_items
+           WHERE branchCode=? AND businessDate=? AND groupCode=?
+             AND status IN ('WAITING','CALLED')
+           ORDER BY
+             CASE WHEN status='CALLED' THEN 0 ELSE 1 END,
+             CASE WHEN priorityType IS NOT NULL AND UPPER(priorityType)!='NONE' THEN 0 ELSE 1 END,
+             queueNum ASC
+           LIMIT 1`
+        ).get(bc, businessDate, target.groupCode);
+        const isOutOfOrder = String(expected?.id || "") !== target.id;
+        if (isOutOfOrder && !reason) {
+          const err = new Error("A reason is required to seat this ticket out of queue order.");
+          err.http = 400;
+          throw err;
+        }
+
+        db.prepare(`UPDATE queue_items SET status='SEATED', seatedAt=? WHERE id=?`).run(now, target.id);
+        db.prepare(
+          `INSERT INTO daily_group_stats (
+             businessDate, branchCode, groupCode,
+             registeredCount, calledCount, seatedCount, skippedCount, overrideCalledCount,
+             waitSumMinutes, waitCount, createdAt, updatedAt
+           ) VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, 0, ?, ?)
+           ON CONFLICT(businessDate, branchCode, groupCode) DO NOTHING`
+        ).run(businessDate, bc, target.groupCode, now, now);
+        db.prepare(
+          `UPDATE daily_group_stats
+           SET seatedCount=seatedCount+1, updatedAt=?
+           WHERE businessDate=? AND branchCode=? AND groupCode=?`
+        ).run(now, businessDate, bc, target.groupCode);
+
+        const action = isOutOfOrder ? "QUEUE_SEAT_OVERRIDE" : "QUEUE_SEAT";
+        db.prepare(`INSERT INTO audit_logs (action, payload, createdAt) VALUES (?, ?, ?)`).run(
+          action,
+          JSON.stringify({
+            actor,
+            branchId: branch?.branchId || null,
+            ...target,
+            status: "SEATED",
+            branchCode: bc,
+            businessDate,
+            reason: reason || null,
+          }),
+          now
+        );
+        return { target, action, isOutOfOrder };
+      });
+
+      const result = tx();
+      const undoExpiresAt = now + 30 * 1000;
+      setStaffUndo(req, {
+        action: result.action,
+        resultingStatus: "SEATED",
+        actorUserId: actor?.userId || null,
+        branchCode: bc,
+        businessDate,
+        groupCode: result.target.groupCode,
+        ticketId: result.target.id,
+        expiresAt: undoExpiresAt,
+        previous: {
+          status: result.target.status,
+          calledAt: result.target.calledAt ?? null,
+          next_calls: result.target.next_calls ?? null,
+          calledNote: result.target.calledNote ?? null,
+          seatedAt: result.target.seatedAt ?? null,
+          skippedAt: result.target.skippedAt ?? null,
+        },
+      });
+      emitChanged(app, db, result.action, { branchCode: bc, groupCode: result.target.groupCode });
+      return res.json({
+        ok: true,
+        seated: { ...result.target, status: "SEATED" },
+        outOfOrder: result.isOutOfOrder,
+        undo: { available: true, action: result.action, expiresAt: undoExpiresAt },
+      });
+    } catch (e) {
+      if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message });
+      console.error("[staff/seat-ticket]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
+  /* ---------- STAFF: REMOVE SPECIFIC TICKET ---------- */
+  app.post("/api/staff/remove-ticket", requirePerm("QUEUE_SKIP"), express.json(), (req, res) => {
+    const now = Date.now();
+    try {
+      const ticketId = String(req.body.id || "").trim();
+      if (!ticketId) return res.status(400).json({ ok: false, error: "Ticket is required." });
+
+      const businessDate = ensureBusinessDate(db);
+      const branch = getRequestBranch(req);
+      const bc = getRequestBranchCode(req);
+      const actor = actorFromReq(req);
+
+      const tx = db.transaction(() => {
+        const target = db.prepare(
+          `SELECT id, groupCode, queueNum, name, pax, status, priorityType,
+                  calledAt, next_calls, calledNote, seatedAt, skippedAt
+           FROM queue_items
+           WHERE id=? AND branchCode=? AND businessDate=?
+             AND status IN ('WAITING','CALLED')
+           LIMIT 1`
+        ).get(ticketId, bc, businessDate);
+        if (!target) {
+          const err = new Error("Ticket is no longer waiting or called.");
+          err.http = 409;
+          throw err;
+        }
+
+        db.prepare(`UPDATE queue_items SET status='SKIPPED', skippedAt=? WHERE id=?`).run(now, target.id);
+        db.prepare(
+          `INSERT INTO daily_group_stats (
+             businessDate, branchCode, groupCode,
+             registeredCount, calledCount, seatedCount, skippedCount, overrideCalledCount,
+             waitSumMinutes, waitCount, createdAt, updatedAt
+           ) VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, 0, ?, ?)
+           ON CONFLICT(businessDate, branchCode, groupCode) DO NOTHING`
+        ).run(businessDate, bc, target.groupCode, now, now);
+        db.prepare(
+          `UPDATE daily_group_stats
+           SET skippedCount=skippedCount+1, updatedAt=?
+           WHERE businessDate=? AND branchCode=? AND groupCode=?`
+        ).run(now, businessDate, bc, target.groupCode);
+        db.prepare(`INSERT INTO audit_logs (action, payload, createdAt) VALUES (?, ?, ?)`).run(
+          "QUEUE_REMOVE",
+          JSON.stringify({
+            actor,
+            branchId: branch?.branchId || null,
+            ...target,
+            status: "SKIPPED",
+            branchCode: bc,
+            businessDate,
+          }),
+          now
+        );
+        return target;
+      });
+
+      const removed = tx();
+      const undoExpiresAt = now + 30 * 1000;
+      setStaffUndo(req, {
+        action: "QUEUE_REMOVE",
+        resultingStatus: "SKIPPED",
+        actorUserId: actor?.userId || null,
+        branchCode: bc,
+        businessDate,
+        groupCode: removed.groupCode,
+        ticketId: removed.id,
+        expiresAt: undoExpiresAt,
+        previous: {
+          status: removed.status,
+          calledAt: removed.calledAt ?? null,
+          next_calls: removed.next_calls ?? null,
+          calledNote: removed.calledNote ?? null,
+          seatedAt: removed.seatedAt ?? null,
+          skippedAt: removed.skippedAt ?? null,
+        },
+      });
+      emitChanged(app, db, "QUEUE_REMOVE", { branchCode: bc, groupCode: removed.groupCode });
+      return res.json({
+        ok: true,
+        removed: { ...removed, status: "SKIPPED" },
+        undo: { available: true, action: "QUEUE_REMOVE", expiresAt: undoExpiresAt },
+      });
+    } catch (e) {
+      if (e && typeof e.http === "number") return res.status(e.http).json({ ok: false, error: e.message });
+      console.error("[staff/remove-ticket]", e);
+      return res.status(500).json({ ok: false, error: "Server error." });
+    }
+  });
+
   /* ---------- STAFF: SKIP ---------- */
   // Skips current CALLED ticket, or the next WAITING ticket if none is called.
   app.post("/api/staff/skip", requirePerm("QUEUE_SKIP"), (req, res) => {
@@ -11418,7 +11621,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
       if (undo.actorUserId && actor?.userId && undo.actorUserId !== actor.userId) {
         return res.status(403).json({ ok: false, error: "Undo is locked to the original staff user." });
       }
-      if (!["QUEUE_SEAT", "QUEUE_SKIP", "QUEUE_CLEAR_CALLED"].includes(String(undo.action || ""))) {
+      if (!["QUEUE_SEAT", "QUEUE_SEAT_OVERRIDE", "QUEUE_SKIP", "QUEUE_REMOVE", "QUEUE_CLEAR_CALLED"].includes(String(undo.action || ""))) {
         clearStaffUndo(req);
         return res.status(400).json({ ok: false, error: "Unsupported undo action." });
       }
@@ -11483,7 +11686,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
           ticketId
         );
 
-        if (undo.action === "QUEUE_SEAT") {
+        if (undo.action === "QUEUE_SEAT" || undo.action === "QUEUE_SEAT_OVERRIDE") {
           db.prepare(
             `UPDATE daily_group_stats
              SET seatedCount = CASE WHEN seatedCount > 0 THEN seatedCount - 1 ELSE 0 END,
@@ -11491,7 +11694,7 @@ app.get("/api/admin/reports/summary.csv", requirePerm("REPORT_EXPORT_CSV"), (req
              WHERE businessDate=? AND branchCode=? AND groupCode=?`
           ).run(now, businessDate, bc, groupCode);
         }
-        if (undo.action === "QUEUE_SKIP") {
+        if (undo.action === "QUEUE_SKIP" || undo.action === "QUEUE_REMOVE") {
           db.prepare(
             `UPDATE daily_group_stats
              SET skippedCount = CASE WHEN skippedCount > 0 THEN skippedCount - 1 ELSE 0 END,

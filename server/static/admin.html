@@ -2898,10 +2898,9 @@ async function jpost(url, body) {
         if (!o) return;
 
         const labels = {
-          A: "A (1 Pax)",
-          B: "B (2-3 Pax)",
-          C: "C (4-5 Pax)",
-          D: "D (6+ Pax)"
+          A: "A (1-2 Pax)",
+          B: "B (3-5 Pax)",
+          C: "C (6++ Pax)"
         };
 
         // normalize groups
@@ -4871,7 +4870,7 @@ async function clearGdriveOAuth() {
         lines.push(`Scope: <b>${escapeHtml(rangeTxt)}</b> - (${escapeHtml(scopeLabel)}) - Branch: <b>${escapeHtml(branch || "Current")}</b>`);
 
         if (type === "custom_summary") {
-          lines.push(`Rows included: Aggregate by GROUP CODE (A-D) for all tickets created in the selected scope.`);
+          lines.push(`Rows included: Aggregate by GROUP CODE (A-C) for all tickets created in the selected scope.`);
           lines.push(`<br/><b>Columns (matches your template):</b>`);
           lines.push(`- Total Reservations (all created tickets)`);
           lines.push(`- Total Pax count reserved`);
@@ -5492,7 +5491,7 @@ async function loadDailySummaryPreview(){
           DAILY_SUMMARY_CACHE = Array.from(map.values())
             .sort((a, b) => {
               if (a.businessDate !== b.businessDate) return a.businessDate < b.businessDate ? -1 : 1;
-              const ord = { P:0, A:1, B:2, C:3, D:4 };
+              const ord = { A:1, B:2, C:3 };
               return (ord[a.groupCode] ?? 9) - (ord[b.groupCode] ?? 9);
             })
             .map((r) => ({

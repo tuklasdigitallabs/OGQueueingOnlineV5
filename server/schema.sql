@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS user_overrides (
 CREATE TABLE IF NOT EXISTS daily_group_stats (
   businessDate TEXT NOT NULL,     -- 'YYYY-MM-DD'
   branchCode TEXT NOT NULL,
-  groupCode TEXT NOT NULL,        -- P/A/B/C/D
+  groupCode TEXT NOT NULL,        -- A/B/C (priority is stored in priorityType)
   registeredCount INTEGER NOT NULL DEFAULT 0,
   calledCount INTEGER NOT NULL DEFAULT 0,
   seatedCount INTEGER NOT NULL DEFAULT 0,

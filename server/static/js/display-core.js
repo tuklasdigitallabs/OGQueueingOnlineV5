@@ -647,8 +647,8 @@ function dbgDisp(...args){
       `${base}/now_serving.mp3`,
       `${base}/proceed_to_counter.mp3`,
       // Common letters/groups
-      `${base}/letters/A.mp3`, `${base}/letters/B.mp3`, `${base}/letters/C.mp3`, `${base}/letters/D.mp3`,
-      `${base}/letters/PA.mp3`, `${base}/letters/PB.mp3`, `${base}/letters/PC.mp3`, `${base}/letters/PD.mp3`,
+      `${base}/letters/A.mp3`, `${base}/letters/B.mp3`, `${base}/letters/C.mp3`,
+      `${base}/letters/PA.mp3`, `${base}/letters/PB.mp3`, `${base}/letters/PC.mp3`,
     ];
     for (let i = 0; i <= 9; i++) srcs.push(`${base}/numbers/${i}.mp3`);
     // Fire and forget
@@ -702,22 +702,23 @@ function dbgDisp(...args){
 
   // ===== Helpers for queue formatting =====
   function isPriorityRow(r) {
-    return String(r?.groupCode || "").toUpperCase() === "P";
+    const g = String(r?.groupCode || "").toUpperCase();
+    const p = String(r?.priorityType || r?.priority || "NONE").toUpperCase();
+    return g.startsWith("P") || (p && p !== "NONE");
   }
 
   function paxToBucket(r) {
     const pax = Number(r?.pax);
     if (Number.isFinite(pax) && pax > 0) {
-      if (pax <= 1) return "A";
-      if (pax <= 3) return "B";
-      if (pax <= 5) return "C";
-      return "D";
+      if (pax <= 2) return "A";
+      if (pax <= 5) return "B";
+      return "C";
     }
 
-    const g = String(r?.groupCode || "").toUpperCase();
-    if (g === "A" || g === "B" || g === "C" || g === "D") return g;
+    const g = String(r?.originalGroupCode || r?.groupCode || "").toUpperCase().replace(/^P/, "");
+    if (g === "A" || g === "B" || g === "C") return g;
 
-    return "B";
+    return "A";
   }
 
   function pad2(n) {
@@ -728,8 +729,8 @@ function dbgDisp(...args){
 
   function displayGroupCode(r) {
     const g = String(r?.groupCode || "").toUpperCase();
-    if (g === "P") return "P" + paxToBucket(r); // PA/PB/PC/PD
-    return g; // A/B/C/D
+    if (isPriorityRow(r)) return "P" + paxToBucket(r);
+    return paxToBucket(r);
   }
 
   function ticketText(r) {
@@ -756,6 +757,50 @@ function dbgDisp(...args){
 
     const reg = called.filter((r) => !isPriorityRow(r)).sort(sortByQueueNum);
     return reg[0] || called[0];
+  }
+
+  function stableWaitingColumns(group, waitingRows, options = {}) {
+    const priorityCapacity = Math.max(0, Number(options.priorityCapacity || 0));
+    const regularCapacity = Math.max(0, Number(options.regularCapacity || 0));
+    const layoutKey = String(options.layoutKey || "display");
+    const storageKey = `qsys_visible_waiting:${layoutKey}:${group}`;
+    const sorted = (waitingRows || []).slice().sort((a, b) => {
+      const createdDiff = Number(a?.createdAtLocal || 0) - Number(b?.createdAtLocal || 0);
+      return createdDiff || sortByQueueNum(a, b);
+    });
+    const priorityRows = sorted.filter(isPriorityRow);
+    const regularRows = sorted.filter((row) => !isPriorityRow(row));
+    let saved = {};
+    try { saved = safeJsonParse(localStorage.getItem(storageKey) || "{}", {}); } catch {}
+
+    function retainAndFill(rows, savedIds, capacity) {
+      const byId = new Map(rows.map((row) => [String(row.id || ""), row]));
+      const visible = [];
+      for (const id of Array.isArray(savedIds) ? savedIds.slice(0, capacity) : []) {
+        const row = byId.get(String(id));
+        if (row && !visible.some((item) => item.id === row.id)) visible.push(row);
+      }
+      for (const row of rows) {
+        if (visible.length >= capacity) break;
+        if (!visible.some((item) => item.id === row.id)) visible.push(row);
+      }
+      return visible;
+    }
+
+    const visiblePriority = retainAndFill(priorityRows, saved.priority, priorityCapacity);
+    const visibleRegular = retainAndFill(regularRows, saved.regular, regularCapacity);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({
+        priority: visiblePriority.map((row) => row.id),
+        regular: visibleRegular.map((row) => row.id),
+      }));
+    } catch {}
+    return {
+      visiblePriority,
+      visibleRegular,
+      hiddenPriority: Math.max(0, priorityRows.length - visiblePriority.length),
+      hiddenRegular: Math.max(0, regularRows.length - visibleRegular.length),
+    };
   }
 
   // ===== State fetching =====
@@ -1225,6 +1270,7 @@ function dbgDisp(...args){
     ticketText,
     sortByQueueNum,
     pickCalledForBucket,
+    stableWaitingColumns,
   };
 
   function boot() {
@@ -1381,6 +1427,7 @@ socket.on("display:recall", async (payload) => {
   const eventBranchCode = String(payload?.branchCode || "").trim().toUpperCase();
   if (eventBranchCode && branchCode && eventBranchCode !== branchCode) return;
   const code = (payload && payload.code) ? payload.code : __lastAnnouncedCode;
+  try { window.DisplayUI?.showRecalledCode?.(code, payload); } catch {}
   try { await announceCode(code, { force: true }); } catch {}
   try { window.DisplayUI?.forceHeroPulse?.(); } catch {}
 });

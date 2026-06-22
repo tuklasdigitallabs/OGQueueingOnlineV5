@@ -225,12 +225,12 @@
     }
     .grid{
       display:grid;
-      grid-template-columns: minmax(230px, .56fr) minmax(0, 1.45fr) minmax(320px, .78fr);
+      grid-template-columns: minmax(230px, .42fr) minmax(0, 1.58fr);
       gap:16px;
       align-items:start;
     }
     .grid.noQueueTools{
-      grid-template-columns: minmax(0, 1.55fr) minmax(320px, .82fr);
+      grid-template-columns: minmax(0, 1fr);
     }
     @media (max-width: 980px){
       .grid{ grid-template-columns: 1fr; }
@@ -274,7 +274,7 @@
     /* Queue */
     .groups{
       display:grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap:10px;
     }
     @media (max-width: 980px){
@@ -285,6 +285,13 @@
       background: #6f7378;
       border-radius: 16px;
       padding:12px;
+      cursor:pointer;
+      transition:transform .08s ease, border-color .12s ease, box-shadow .12s ease;
+    }
+    .gcard:hover{ transform:translateY(-1px); }
+    .gcard.active{
+      border-color:var(--accent);
+      box-shadow:0 0 0 2px rgba(225,6,0,.14);
     }
     .ghead{
       display:flex; align-items:center; justify-content:space-between;
@@ -322,16 +329,34 @@
       padding-top:10px;
     }
     .row{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
       padding:10px 10px;
       border-radius:14px;
       border:1px solid rgba(0,0,0,.08);
       background: rgba(60,40,20,.04);
       margin-bottom:8px;
+      cursor:pointer;
     }
+    .rowMain{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .rowActions{
+      display:none;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      margin-top:10px;
+      padding-top:10px;
+      border-top:1px solid rgba(0,0,0,.08);
+    }
+    .row.expanded .rowActions{ display:grid; }
+    .rowAction{
+      justify-content:center;
+      width:100%;
+    }
+    .rowAction.remove{ color:#a30000; border-color:rgba(225,6,0,.25); }
+    .rowAction.seat{ color:#075d24; border-color:rgba(22,163,74,.25); }
     .row:last-child{ margin-bottom:0; }
     .code{
       font-weight:950;
@@ -376,14 +401,42 @@
     /* Actions */
     .actions{
       display:grid;
-      grid-template-columns: 1fr;
-      gap:10px;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap:8px;
+      margin-top:10px;
     }
     .actions .btn{
       width:100%;
       justify-content:center;
-      padding:12px 12px;
+      flex-direction:column;
+      padding:10px 8px;
       border-radius:14px;
+      font-size:11px;
+      gap:5px;
+    }
+    .actions .btn svg{ width:22px; height:22px; }
+    @media (max-width: 980px){
+      .actions{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    }
+    .pagination{
+      display:none;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-top:12px;
+      padding-top:12px;
+      border-top:1px solid rgba(0,0,0,.08);
+    }
+    .pageButtons{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .pageBtn{
+      min-width:38px;
+      justify-content:center;
+      padding:8px 10px;
+    }
+    .pageBtn.active{
+      color:var(--accent);
+      border-color:rgba(225,6,0,.35);
+      background:rgba(225,6,0,.10);
     }
     .hint{
       margin-top:10px;
@@ -734,12 +787,27 @@
 
         <div class="card-b">
           <div class="groups" id="groupSummary"></div>
+          <div class="actions">
+            <button class="btn primary" id="callNextBtn"><i data-lucide="rotate-ccw"></i><span>Call Again</span></button>
+            <button class="btn" id="callPriorityBtn"><i data-lucide="badge-alert"></i><span>Priority Next</span></button>
+            <button class="btn" id="callRegularBtn"><i data-lucide="user-round"></i><span>Regular Next</span></button>
+            <button class="btn" id="seatBtn"><i data-lucide="armchair"></i><span>Seat Called</span></button>
+            <button class="btn" id="skipBtn"><i data-lucide="skip-forward"></i><span>Skip</span></button>
+            <button class="btn" id="clearBtn"><i data-lucide="eraser"></i><span>Clear Called</span></button>
+            <button class="btn" id="overrideBtn"><i data-lucide="list-plus"></i><span>Override</span></button>
+          </div>
+          <div class="hint" id="permHint">—</div>
+          <div class="undoBar" id="undoBar">
+            <span id="undoText">Undo available</span>
+            <button class="btn" id="undoBtn" type="button">Undo</button>
+          </div>
 
           <div class="list" style="margin-top:14px;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
               <div style="color:var(--muted); font-size:12px;">Tickets (WAITING + CALLED)</div>
               <div class="filterBar">
-                <input id="queueSearch" class="searchInput" type="search" placeholder="Search code / name / pax" />
+                <input id="queueSearch" class="searchInput" type="search" placeholder="Search code / name / pax"
+                  autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
                 <div class="filterPills" id="ticketFilterPills">
                   <button type="button" class="fPill active" data-filter="ALL">All</button>
                   <button type="button" class="fPill" data-filter="WAITING">Waiting</button>
@@ -750,12 +818,16 @@
               </div>
             </div>
             <div id="queueList"></div>
+            <div class="pagination" id="ticketPagination">
+              <div class="hint" id="ticketPageInfo"></div>
+              <div class="pageButtons" id="ticketPageButtons"></div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- RIGHT: Actions + Audit -->
-      <div class="card">
+      <div class="card" style="display:none;">
         <div class="card-h">
           <h2>Actions</h2>
           <div class="hdrTools">
@@ -772,27 +844,10 @@
           <div class="field" style="margin-top:0;">
             <label>Group</label>
             <div class="groupPills" id="groupPickPills">
-              <button type="button" class="gPill" data-group="A">1 Pax</button>
-              <button type="button" class="gPill" data-group="B">2–3 Pax</button>
-              <button type="button" class="gPill" data-group="C">4–5 Pax</button>
-              <button type="button" class="gPill" data-group="D">6++ Pax</button>
+              <button type="button" class="gPill" data-group="A">1–2 Pax</button>
+              <button type="button" class="gPill" data-group="B">3–5 Pax</button>
+              <button type="button" class="gPill" data-group="C">6++ Pax</button>
             </div>
-          </div>
-
-          <div class="actions" style="margin-top:12px;">
-            <button class="btn primary" id="callNextBtn">Re-Call Current</button>
-            <button class="btn" id="callPriorityBtn">Call Next Priority</button>
-            <button class="btn" id="callRegularBtn">Call Next Regular</button>
-            <button class="btn" id="seatBtn">Mark Seated</button>
-            <button class="btn" id="skipBtn">Skip</button>
-            <button class="btn" id="clearBtn">Return to Waiting</button>
-            <button class="btn" id="overrideBtn">Call Specific Ticket</button>
-          </div>
-
-          <div class="hint" id="permHint">—</div>
-          <div class="undoBar" id="undoBar">
-            <span id="undoText">Undo available</span>
-            <button class="btn" id="undoBtn" type="button">Undo</button>
           </div>
 
           <div style="margin-top:14px; border-top:1px solid rgba(0,0,0,.10); padding-top:14px; display:none">
@@ -850,6 +905,7 @@
 
   <script src="./app-boot.js"></script>
   <script src="./socket.io/socket.io.js"></script>
+  <script src="./static/js/lucide.min.js"></script>
   <script>
     function $(id){ return document.getElementById(id); }
 
@@ -887,12 +943,11 @@
     function bucketFromPax(pax){
       const p = Number(pax);
       if (Number.isFinite(p) && p > 0){
-        if (p <= 1) return "A";
-        if (p <= 3) return "B";
-        if (p <= 5) return "C";
-        return "D";
+        if (p <= 2) return "A";
+        if (p <= 5) return "B";
+        return "C";
       }
-      return "B";
+      return "A";
     }
 
     function formatTime(ts){
@@ -1008,9 +1063,11 @@ function waitingMins(r){
       lastRows: [],
       queueTools: null,
       queueToolsTab: "forecast",
-      selectedGroup: "B", // default: 2–3 pax
+      selectedGroup: "A",
       ticketFilter: "ALL",
       queueSearch: "",
+      ticketPage: 1,
+      expandedTicketId: "",
       displayTargets: [],
       displayOn: false,
       pendingDisplayId: "",
@@ -1380,7 +1437,7 @@ function getQueuedMs(item) {
       $("overrideBtn").disabled = false;
     }
 
-    function groupPick(){ return state.selectedGroup || "B"; }
+    function groupPick(){ return state.selectedGroup || "A"; }
 
     function currentDisplayId(){
       const v = $("displayTarget")?.value ?? "";
@@ -1389,7 +1446,7 @@ function getQueuedMs(item) {
 
     function currentGroupRows(){
       const rows = Array.isArray(state.lastRows) ? state.lastRows : [];
-      const g = String(groupPick() || "B").toUpperCase();
+      const g = String(groupPick() || "A").toUpperCase();
       return rows.filter(r => String(r.groupCode || "").toUpperCase() === g);
     }
 
@@ -1450,12 +1507,16 @@ function getQueuedMs(item) {
       for (const b of btns){
         b.addEventListener("click", () => {
           setActive(String(b.getAttribute("data-filter") || "ALL").toUpperCase());
+          state.ticketPage = 1;
+          state.expandedTicketId = "";
           renderGroupView();
         });
       }
 
       search?.addEventListener("input", () => {
         state.queueSearch = search.value || "";
+        state.ticketPage = 1;
+        state.expandedTicketId = "";
         renderGroupView();
       });
     }
@@ -1473,13 +1534,15 @@ function getQueuedMs(item) {
       }
 
       // initial
-      const initial = state.selectedGroup || "B";
+      const initial = state.selectedGroup || "A";
       setActive(initial);
 
       for (const b of btns){
         b.addEventListener("click", async () => {
-          const g = b.getAttribute("data-group") || "B";
+          const g = b.getAttribute("data-group") || "A";
           setActive(g);
+          state.ticketPage = 1;
+          state.expandedTicketId = "";
           renderGroupView();
           await loadQueueTools();
         });
@@ -1512,15 +1575,14 @@ function getQueuedMs(item) {
     }
 
     function renderSummary(rows){
-      const groups = ["A","B","C","D"]; // Priority is now inside A/B/C/D
+      const groups = ["A","B","C"];
       const el = $("groupSummary");
       el.innerHTML = "";
 
       const label = {
-        A: "1 Pax",
-        B: "2–3 Pax",
-        C: "4–5 Pax",
-        D: "6++ Pax"
+        A: "1–2 Pax",
+        B: "3–5 Pax",
+        C: "6++ Pax"
       };
 
       for (const g of groups){
@@ -1528,7 +1590,9 @@ function getQueuedMs(item) {
         const called = rows.find(r => r.groupCode === g && r.status === "CALLED");
 
         const node = document.createElement("div");
-        node.className = "gcard";
+        node.className = "gcard" + (state.selectedGroup === g ? " active" : "");
+        node.setAttribute("role", "button");
+        node.setAttribute("tabindex", "0");
         node.innerHTML = `
           <div class="ghead">
             <div class="gname">${label[g] || `Group ${g}`}</div>
@@ -1539,6 +1603,21 @@ function getQueuedMs(item) {
             <strong>${called ? codeFor(called) : "—"}</strong>
           </div>
         `;
+        const selectGroup = async () => {
+          state.selectedGroup = g;
+          state.ticketPage = 1;
+          state.expandedTicketId = "";
+          renderSummary(rows);
+          renderGroupView();
+          await loadQueueTools();
+        };
+        node.addEventListener("click", selectGroup);
+        node.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectGroup();
+          }
+        });
         el.appendChild(node);
       }
     }
@@ -1546,9 +1625,13 @@ function getQueuedMs(item) {
     function renderList(rows){
       const wrap = $("queueList");
       wrap.innerHTML = "";
+      const pagination = $("ticketPagination");
+      const pageInfo = $("ticketPageInfo");
+      const pageButtons = $("ticketPageButtons");
 
       if (!rows.length){
         wrap.innerHTML = `<div style="color:var(--muted); font-size:13px; padding:10px;">No tickets for today.</div>`;
+        if (pagination) pagination.style.display = "none";
         return;
       }
 
@@ -1563,9 +1646,16 @@ function getQueuedMs(item) {
         return an - bn;
       });
 
-      for (const r of sorted){
+      const pageSize = 10;
+      const total = sorted.length;
+      const pageCount = Math.max(1, Math.ceil(total / pageSize));
+      state.ticketPage = Math.min(Math.max(1, Number(state.ticketPage || 1)), pageCount);
+      const start = (state.ticketPage - 1) * pageSize;
+      const visibleRows = sorted.slice(start, start + pageSize);
+
+      for (const r of visibleRows){
         const node = document.createElement("div");
-        node.className = "row";
+        node.className = "row" + (state.expandedTicketId === r.id ? " expanded" : "");
         const code = codeFor(r);
         const prio = String(r.priorityType || "NONE").toUpperCase();
         const isPrio = prio !== "NONE";
@@ -1574,28 +1664,88 @@ function getQueuedMs(item) {
         const cc = callCount(r);
 
         node.innerHTML = `
-          <div class="left">
-            <div class="code">${escapeHtml(code)}</div>
-            <div class="meta">
-            ${escapeHtml(r.name || "Guest")} • ${Number(r.pax||1)} pax
-            ${getQueuedTs(r)
-              ? ` • <span style="opacity:.7">Queued: ${formatTime(getQueuedTs(r))}</span>`
-              : ``}
-            ${wm !== null
-              ? ` • <span style="opacity:.7">Waiting: ${wm} min</span>`
-              : ``}
-            ${cc > 0
-              ? ` • <span style="opacity:.7">Called: ${cc}×</span>`
-              : ``}
+          <div class="rowMain">
+            <div class="left">
+              <div class="code">${escapeHtml(code)}</div>
+              <div class="meta">
+              ${escapeHtml(r.name || "Guest")} • ${Number(r.pax||1)} pax
+              ${getQueuedTs(r)
+                ? ` • <span style="opacity:.7">Queued: ${formatTime(getQueuedTs(r))}</span>`
+                : ``}
+              ${wm !== null
+                ? ` • <span style="opacity:.7">Waiting: ${wm} min</span>`
+                : ``}
+              ${cc > 0
+                ? ` • <span style="opacity:.7">Called: ${cc}×</span>`
+                : ``}
+              </div>
             </div>
-
+            <div class="right">
+              ${isPrio ? `<span class="tag prio">${escapeHtml(prio)}</span>` : ``}
+              <span class="tag ${isCalled ? "called" : ""}">${escapeHtml(r.status)}</span>
+            </div>
           </div>
-          <div class="right">
-            ${isPrio ? `<span class="tag prio">${escapeHtml(prio)}</span>` : ``}
-            <span class="tag ${isCalled ? "called" : ""}">${escapeHtml(r.status)}</span>
+          <div class="rowActions">
+            <button class="btn rowAction remove" type="button" data-remove-ticket="${escapeHtml(r.id)}">Remove from Queue</button>
+            <button class="btn rowAction seat" type="button" data-seat-ticket="${escapeHtml(r.id)}">Seat Guest</button>
           </div>
         `;
+        node.addEventListener("click", () => {
+          state.expandedTicketId = state.expandedTicketId === r.id ? "" : r.id;
+          renderList(rows);
+        });
+        node.querySelector("[data-remove-ticket]")?.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          if (!hasPerm("QUEUE_SKIP")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+          if (!window.confirm(`Remove ${code} from the queue?`)) return;
+          await doAction("/api/staff/remove-ticket", { id: r.id }, "Removed from queue");
+        });
+        node.querySelector("[data-seat-ticket]")?.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          if (!hasPerm("QUEUE_SEAT")) return toast("Not allowed", "bad", "Ask supervisor for permission.");
+          if (!window.confirm(`Seat guest ${code}?`)) return;
+          let reason = "";
+          const activeRows = currentGroupRows().slice().sort((a, b) => {
+            const statusOrder = (row) => String(row.status || "").toUpperCase() === "CALLED" ? 0 : 1;
+            const statusDiff = statusOrder(a) - statusOrder(b);
+            if (statusDiff) return statusDiff;
+            const priorityOrder = (row) => String(row.priorityType || "NONE").toUpperCase() === "NONE" ? 1 : 0;
+            const priorityDiff = priorityOrder(a) - priorityOrder(b);
+            if (priorityDiff) return priorityDiff;
+            return Number(a.queueNum || 0) - Number(b.queueNum || 0);
+          });
+          const firstActive = activeRows[0];
+          if (firstActive && firstActive.id !== r.id) {
+            reason = String(window.prompt("Reason for seating this guest out of queue order:") || "").trim();
+            if (!reason) return toast("Reason is required", "bad");
+          }
+          await doAction("/api/staff/seat-ticket", { id: r.id, reason }, "Guest seated");
+        });
         wrap.appendChild(node);
+      }
+
+      if (pagination && pageInfo && pageButtons) {
+        pagination.style.display = total > pageSize ? "flex" : "none";
+        pageInfo.textContent = `Showing ${start + 1}-${Math.min(start + pageSize, total)} of ${total}`;
+        pageButtons.innerHTML = "";
+        const addPageButton = (label, page, disabled, active) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "btn pageBtn" + (active ? " active" : "");
+          button.textContent = label;
+          button.disabled = disabled;
+          button.addEventListener("click", () => {
+            state.ticketPage = page;
+            state.expandedTicketId = "";
+            renderList(rows);
+          });
+          pageButtons.appendChild(button);
+        };
+        addPageButton("‹", state.ticketPage - 1, state.ticketPage <= 1, false);
+        for (let page = 1; page <= pageCount; page++) {
+          addPageButton(String(page), page, false, page === state.ticketPage);
+        }
+        addPageButton("›", state.ticketPage + 1, state.ticketPage >= pageCount, false);
       }
     }
 
@@ -1889,6 +2039,7 @@ function getQueuedMs(item) {
       applyPermsToButtons();
       applyGroupPills();
       applyTicketFilterPills();
+      try { window.lucide?.createIcons(); } catch {}
 
       await refreshServerStatus();
       setInterval(refreshServerStatus, 2000);

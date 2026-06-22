@@ -1,5 +1,84 @@
 # Phase Test Instructions
 
+## Online Queue Grouping Update
+
+Scope:
+- A/B/C grouping in `server/server.js`, guest formatting, Admin dashboard, reports, schema comments, and demo seeding.
+- Group A is 1-2 pax, Group B is 3-5 pax, and Group C is 6++ pax.
+- Priority and regular numbering remain separate within each group.
+
+Validation flows:
+- Register regular and priority guests at pax 1, 2, 3, 5, 6, and 10.
+- Confirm pax 1-2 receive A/PA, pax 3-5 receive B/PB, and pax 6+ receive C/PC.
+- Confirm regular and priority counters start independently at 01.
+- Open Admin Dashboard and confirm only A, B, and C appear with the new pax labels.
+- Generate report previews and CSV files and confirm the pax buckets are `1-2`, `3-5`, and `6++`.
+- Run the demo seed and confirm it creates only A/B/C records.
+
+Expected results:
+- D/PD is not generated, displayed, accepted by staff actions, or included in current reports.
+- CSV preserves `1-2` and `3-5` as text values.
+- Existing branch isolation and realtime updates remain unchanged.
+
+Known limitations:
+- Existing development records using D/PD should be cleared or reseeded before UI testing.
+
+## Online Staff Queue Workflow Update
+
+Scope:
+- Clickable A/B/C summary cards and compact Lucide action toolbar in `server/static/staff.html`.
+- Expandable ticket rows with Remove from Queue and Seat Guest.
+- Server-side direct-seat and remove endpoints in `server/server.js`.
+- Ten-ticket filtered pagination.
+
+Validation flows:
+- Click each summary card and confirm the ticket list filters to the selected group without scrolling.
+- Confirm the toolbar shows local Lucide icons for all seven existing staff actions.
+- Search and change status filters, then confirm the current page resets to page 1.
+- Create 11 or more tickets in one group and confirm only 10 appear per page with previous, next, and numbered controls.
+- Expand a WAITING or CALLED row and confirm both row actions appear.
+- Remove a ticket and confirm it becomes SKIPPED, creates `QUEUE_REMOVE`, and offers a 30-second Undo.
+- Seat the current called ticket and the next eligible waiting ticket without an override reason.
+- Seat a different waiting ticket and confirm a reason is required by both the UI and server.
+- Confirm normal direct seating audits as `QUEUE_SEAT` and out-of-order seating audits as `QUEUE_SEAT_OVERRIDE`.
+- Test the actions with users lacking `QUEUE_SKIP` or `QUEUE_SEAT`.
+
+Expected results:
+- Pagination appears only when filtered results exceed 10.
+- Row expansion does not move or scroll the page.
+- Permission checks, audit records, realtime refresh, and Undo remain active.
+
+Known limitations:
+- Confirmation and override-reason entry currently use browser dialogs.
+
+## Online Landscape and Portrait Displays
+
+Scope:
+- Three-group landscape and portrait layouts.
+- One global Now Serving panel.
+- Stable priority and regular visible membership with hidden P/R counts.
+- Guest queue QR only; Wi-Fi QR is not shown.
+
+Validation flows:
+- Open both display orientations with video enabled and disabled.
+- Confirm Group A shows 1-2 pax, B shows 3-5 pax, and C shows 6++ pax.
+- Confirm landscape shows up to 5 priority and 10 regular tickets per group.
+- Confirm portrait shows up to 10 priority and 20 regular tickets per group.
+- Add overflow tickets and confirm hidden counts exclude visible tickets.
+- Call, seat, skip, or remove a visible ticket and confirm the oldest hidden ticket of the same type fills the opening.
+- Reload and reconnect the display and confirm visible ticket membership remains stable.
+- Change from a larger saved capacity to the current capacity and confirm no extra columns appear.
+- Confirm only the Scan to Join Queue QR is displayed and it opens the current branch guest registration page.
+- Confirm the latest called ticket across A/B/C appears in the global panel with priority green and regular maroon.
+- Confirm queue-only mode removes video and reallocates the available space.
+
+Expected results:
+- No D/PD, ellipsis tiles, Wi-Fi QR, clipping, overlap, text selection, or horizontal scrolling appears.
+- Recall replays the existing pulse and announcement behavior.
+
+Known limitations:
+- Exact TV typography and media crop should be visually checked on the target landscape and portrait resolutions.
+
 ## Admin Licensing Dashboard Update
 
 Scope:

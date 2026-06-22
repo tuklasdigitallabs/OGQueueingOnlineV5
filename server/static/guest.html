@@ -325,12 +325,11 @@
       function bucketFromPax(pax){
         const p = Number(pax);
         if (Number.isFinite(p) && p > 0){
-          if (p <= 1) return "A";
-          if (p <= 3) return "B";
-          if (p <= 5) return "C";
-          return "D";
+          if (p <= 2) return "A";
+          if (p <= 5) return "B";
+          return "C";
         }
-        return "B";
+        return "A";
       }
 
       // Unified ticket label (used on any guest-side confirmation that shows the code)

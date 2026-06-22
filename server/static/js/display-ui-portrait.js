@@ -1,251 +1,106 @@
-/* display-ui-portrait.js (CLEAN)
-   Portrait renderer used by display-core.js
-*/
-(function(){
-  'use strict';
+(function () {
+  "use strict";
 
+  const GROUPS = ["A", "B", "C"];
   const $ = (id) => document.getElementById(id);
-  const TOTAL_SLOTS = 6;   // 3x2 tiles per bucket
-  const PRI_MAX = 3;         // show up to first 3 priority tickets
-  
-  // Hero timing (letter shows first, number follows after this delay)
-const HERO_NUM_DELAY_MS = 100;
-let __heroNumTimer = null;
+  let recalledCode = "";
+  let recalledAt = 0;
 
-
-  function upper(s){ return String(s || '').toUpperCase(); }
-
-  function isPriorityGroupCode(gc){
-    const g = upper(gc);
-    return g.startsWith('P'); // PA/PB/PC/PD
+  function upper(value) {
+    return String(value || "").toUpperCase();
   }
 
-  function bucketFromGroupCode(gc){
-    const g = upper(gc);
-    if (g.startsWith('P')) return g.slice(1,2) || 'B';
-    if (['A','B','C','D'].includes(g)) return g;
-    return 'B';
+  function codeFor(row, helpers) {
+    return helpers.ticketText(row).replace("-", "");
   }
 
-  function pad2(n){
-    const x = Number(n);
-    if (!Number.isFinite(x)) return '';
-    return String(x).padStart(2, '0');
+  function pickGlobalCalled(rows) {
+    return (rows || [])
+      .filter((row) => upper(row.status) === "CALLED")
+      .sort((a, b) => Number(b.calledAt || 0) - Number(a.calledAt || 0))[0] || null;
   }
 
-  function splitCodeParts(row){
-    const raw = String(row?.code || '').trim();
-    const qn = pad2(row?.queueNum);
-    const gc = upper(row?.groupCode);
-    const code = raw || (gc && qn ? `${gc}-${qn}` : '');
-
-    const parts = code.split('-');
-    if (parts.length >= 2) return { letters: upper(parts[0]), num: parts[1] };
-    return { letters: gc || '—', num: qn || '—' };
-  }
-
-  function pickGlobalCalled(rows){
-    const called = (rows || []).filter(r => upper(r?.status) === 'CALLED');
-    if (!called.length) return null;
-
-    // Show the most recently active called ticket.
-    // latestCallAt is updated on both CALL and CALL AGAIN when available.
-    const scored = called.map(r => {
-      const latestCallAt = Number(r?.latestCallAt || 0);
-      const calledAt = Number(r?.calledAt || 0);
-      const latestTs = (Number.isFinite(latestCallAt) && latestCallAt > 0)
-        ? latestCallAt
-        : ((Number.isFinite(calledAt) && calledAt > 0) ? calledAt : -1);
-      const calledTs = (Number.isFinite(calledAt) && calledAt > 0) ? calledAt : -1;
-      const qn = Number(r?.queueNum || 0);
-      return { r, latestTs, calledTs, qn };
-    });
-
-    scored.sort((a,b) => (b.latestTs - a.latestTs) || (b.calledTs - a.calledTs) || (a.qn - b.qn));
-    return scored[0]?.r || null;
-  }
-
-  function sortByQueueNum(a,b){ return (Number(a?.queueNum || 0) - Number(b?.queueNum || 0)); }
-
-  function makeTile(row, isPrioritySlot){
-    const el = document.createElement('div');
-    el.className = 'qTile' + (isPrioritySlot ? ' priSlot' : '');
-
-    if (row && row.__ellipsis){
-      el.className += ' ellipsis';
-      el.innerHTML = `<div class="qLetter">…</div><div class="qNum">…</div>`;
-      return el;
-    }
-
-    if (!row){
-      el.className += ' empty';
-      el.innerHTML = `<div class="qLetter">&nbsp;</div><div class="qNum">&nbsp;</div>`;
-      return el;
-    }
-
-    const p = splitCodeParts(row);
-    el.innerHTML = `<div class="qLetter">${p.letters}</div><div class="qNum">${p.num}</div>`;
-    return el;
-  }
-
-  function buildGroup(container, priRows, regularRows){
-    if (!container) return;
-    container.innerHTML = '';
-
-    const pri = Array.isArray(priRows) ? priRows.slice(0) : [];
-    const regs = Array.isArray(regularRows) ? regularRows.slice(0) : [];
-
-    pri.sort(sortByQueueNum);
-    regs.sort(sortByQueueNum);
-
-    const hasPriority = pri.length > 0;
-    const priVis = hasPriority ? pri.slice(0, PRI_MAX) : [];
-
-    const tiles = [];
-
-    // Priority tiles first (only if there is at least 1 priority in queue)
-    for (const r of priVis){
-      tiles.push({ row: r, isPri: true });
-    }
-
-    // Fill remaining tiles with regular queue
-    const remaining = TOTAL_SLOTS - tiles.length;
-    let regVis = regs.slice(0, Math.max(0, remaining));
-    const overflow = regs.length > remaining;
-
-    if (overflow && remaining > 0){
-      regVis = regVis.slice(0, Math.max(0, remaining - 1));
-      regVis.push({ __ellipsis: true });
-    }
-
-    for (const r of regVis){
-      tiles.push({ row: r, isPri: false });
-    }
-
-    // If no priorities at all: regular fills all slots (no green)
-    if (!hasPriority){
-      tiles.length = 0;
-      let vis = regs.slice(0, TOTAL_SLOTS);
-      const ov = regs.length > TOTAL_SLOTS;
-
-      if (ov && TOTAL_SLOTS > 0){
-        vis = vis.slice(0, Math.max(0, TOTAL_SLOTS - 1));
-        vis.push({ __ellipsis: true });
-      }
-
-      for (const r of vis){
-        tiles.push({ row: r, isPri: false });
-      }
-    }
-
-    // Pad empties
-    while (tiles.length < TOTAL_SLOTS){
-      tiles.push({ row: null, isPri: false });
-    }
-
-    for (const t of tiles.slice(0, TOTAL_SLOTS)){
-      container.appendChild(makeTile(t.row, t.isPri));
+  function renderCodes(target, rows, helpers) {
+    if (!target) return;
+    target.innerHTML = "";
+    for (const row of rows) {
+      const item = document.createElement("div");
+      item.className = "queueCode";
+      item.textContent = codeFor(row, helpers);
+      target.appendChild(item);
     }
   }
 
-  function setBranchName(state){
-    const el = $('branchName');
-    if (!el) return;
-    const name = String(state?.branchName || '').trim();
-    el.textContent = name || 'BRANCH NAME';
+  function setGuestQr() {
+    const image = $("guestQr");
+    if (!image || image.dataset.ready === "1") return;
+    const query = new URLSearchParams(window.location.search);
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const branchIndex = pathParts.findIndex((part) => part.toLowerCase() === "b");
+    const branchCode = upper(query.get("branchCode") || (branchIndex >= 0 ? pathParts[branchIndex + 1] : ""));
+    const base = typeof window.appUrl === "function" ? window.appUrl("/qr/guest") : "/qr/guest";
+    image.src = branchCode ? `${base}?branchCode=${encodeURIComponent(branchCode)}` : base;
+    image.dataset.ready = "1";
   }
 
-  function setGlobalCalled(rows){
-  const letterEl = document.getElementById('heroLetter');
-  const numEl = document.getElementById('heroNum');
-  const calledEl = document.getElementById('calledGlobal');
-
-  if (!letterEl || !numEl || !calledEl) return;
-
-  // cancel any pending delayed update (avoid wrong numbers on rapid calls)
-  if (__heroNumTimer) {
-    clearTimeout(__heroNumTimer);
-    __heroNumTimer = null;
+  function forceHeroPulse() {
+    const hero = $("globalServing");
+    if (!hero) return;
+    hero.classList.remove("pulse");
+    void hero.offsetWidth;
+    hero.classList.add("pulse");
   }
 
-  const r = pickGlobalCalled(rows);
-  if (!r){
-    letterEl.textContent = '—';
-    numEl.textContent = '—';
-    calledEl.classList.remove('isPriorityCalled');
-    return;
+  function showRecalledCode(code, payload) {
+    const hero = $("globalServing");
+    if (!hero || !code) return;
+    const normalized = String(code).replace("-", "").toUpperCase();
+    recalledCode = normalized;
+    recalledAt = Number(payload?.at || Date.now());
+    hero.textContent = normalized;
+    hero.classList.toggle("priority", normalized.startsWith("P"));
   }
 
-  const p = splitCodeParts(r);
-
-  // Update LETTER immediately
-  letterEl.textContent = p.letters || '—';
-
-  // Update NUMBER after 0.4s
-  __heroNumTimer = setTimeout(() => {
-    numEl.textContent = p.num || '—';
-    __heroNumTimer = null;
-  }, HERO_NUM_DELAY_MS);
-
-  // Priority detection still uses letters (safe to do immediately)
-  const isPriorityCalled = String(p.letters || '').toUpperCase().startsWith('P');
-  calledEl.classList.toggle('isPriorityCalled', isPriorityCalled);
-}
-
-
-
-
-  function renderWaiting(rows){
-    const waiting = (rows || []).filter(r => upper(r?.status) === 'WAITING');
-
-    const byBucket = { A: [], B: [], C: [], D: [] };
-    const priByBucket = { A: [], B: [], C: [], D: [] };
-
-    for (const r of waiting){
-      const b = bucketFromGroupCode(r?.groupCode);
-      if (!byBucket[b]) continue;
-      if (isPriorityGroupCode(r?.groupCode)) priByBucket[b].push(r);
-      else byBucket[b].push(r);
+  function render(rows, state, helpers) {
+    setGuestQr();
+    const calledRows = (rows || []).filter((row) => upper(row.status) === "CALLED");
+    const recalledRow = calledRows.find((row) => codeFor(row, helpers) === recalledCode);
+    const newerCallExists = calledRows.some((row) => Number(row.calledAt || 0) > recalledAt);
+    if (!recalledRow || newerCallExists) {
+      recalledCode = "";
+      recalledAt = 0;
+    }
+    const called = recalledCode ? recalledRow : pickGlobalCalled(rows);
+    const hero = $("globalServing");
+    const code = recalledCode || (called ? codeFor(called, helpers) : "—");
+    if (hero) {
+      if (hero.textContent !== code && code !== "—") forceHeroPulse();
+      hero.textContent = code;
+      hero.classList.toggle("priority", !!called && helpers.isPriorityRow(called));
     }
 
-    for (const b of ['A','B','C','D']){
-      const total = priByBucket[b].length + byBucket[b].length;
-      const c = document.getElementById('count-' + b);
-      if (c) c.textContent = `WAITING: ${total}`;
-    }
-
-    for (const b of ['A','B','C','D']){
-      priByBucket[b].sort(sortByQueueNum);
-      byBucket[b].sort(sortByQueueNum);
-      buildGroup(document.getElementById('list-' + b), priByBucket[b], byBucket[b]);
+    for (const group of GROUPS) {
+      const waiting = (rows || []).filter((row) =>
+        upper(row.status) === "WAITING" && helpers.paxToBucket(row) === group
+      );
+      const allocation = helpers.stableWaitingColumns(group, waiting, {
+        layoutKey: "portrait",
+        priorityCapacity: 10,
+        regularCapacity: 20,
+      });
+      renderCodes($(`priority-${group}`), allocation.visiblePriority, helpers);
+      renderCodes($(`regular-${group}`), allocation.visibleRegular, helpers);
+      const hidden = $(`hidden-${group}`);
+      if (hidden) hidden.textContent = `P: ${allocation.hiddenPriority} | R: ${allocation.hiddenRegular}`;
     }
   }
 
-  // Public API expected by display-core.js
   window.DisplayUI = {
-    render(rows, state){
-      setBranchName(state);
-      setGlobalCalled(rows);
-      renderWaiting(rows);
-    },
-    getStatusEl(){ return $('status'); },
-    getAdPlayerEl(){ return $('adPlayer'); },
-    getChimeEl(){ return $('chime'); }
+    render,
+    forceHeroPulse,
+    showRecalledCode,
+    getStatusEl: () => $("status"),
+    getAdPlayerEl: () => $("adPlayer"),
+    getChimeEl: () => $("chime"),
   };
-
-
-// === Recall support: force hero pulse (imperative, no state change) ===
-function forceHeroPulse(){
-  const el = document.getElementById("calledGlobal") || document.querySelector(".nowServing");
-  if (!el) return;
-
-  // Restart CSS animation reliably
-  el.classList.remove("qsysPulse");
-  void el.offsetWidth; // force reflow
-  el.classList.add("qsysPulse");
-}
-
-// expose to core
-window.DisplayUI = window.DisplayUI || {};
-window.DisplayUI.forceHeroPulse = forceHeroPulse;
 })();

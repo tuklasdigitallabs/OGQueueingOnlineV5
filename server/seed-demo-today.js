@@ -84,10 +84,9 @@ function clamp(n, lo, hi) {
 
 function computeGroupCodeFromPax(pax) {
   const n = Number(pax || 1);
-  if (n <= 1) return "A";
-  if (n <= 3) return "B";
-  if (n <= 5) return "C";
-  return "D";
+  if (n <= 2) return "A";
+  if (n <= 5) return "B";
+  return "C";
 }
 
 function minutes(n) {
@@ -197,7 +196,7 @@ function main() {
   }
 
   function sampleWaitMinutes(groupCode, priorityType) {
-    const base = { A: 12, B: 14, C: 18, D: 24 }[groupCode] || 14;
+    const base = { A: 12, B: 16, C: 24 }[groupCode] || 14;
     const noise = (Math.random() - 0.5) * 10;
     const prBoost = (priorityType !== "NONE") ? -4 : 0;
     return clamp(base + noise + prBoost, 3, 50);
@@ -212,7 +211,7 @@ function main() {
       { v: 2, w: 13 },
       { v: 3, w: 5 },
     ]);
-    const groupAdj = groupCode === "D" ? (Math.random() < 0.22 ? 1 : 0) : 0;
+    const groupAdj = groupCode === "C" ? (Math.random() < 0.22 ? 1 : 0) : 0;
     const prAdj = priorityType !== "NONE" ? (Math.random() < 0.10 ? -1 : 0) : 0;
     return clamp(base + groupAdj + prAdj, 0, 4);
   }
@@ -240,7 +239,6 @@ function main() {
       A: { reg: 0, pr: 0 },
       B: { reg: 0, pr: 0 },
       C: { reg: 0, pr: 0 },
-      D: { reg: 0, pr: 0 },
     };
 
     const isToday = ymd === today;
@@ -248,7 +246,6 @@ function main() {
       A: { reg: 0, call: 0, seat: 0, skip: 0, waitSum: 0, waitN: 0 },
       B: { reg: 0, call: 0, seat: 0, skip: 0, waitSum: 0, waitN: 0 },
       C: { reg: 0, call: 0, seat: 0, skip: 0, waitSum: 0, waitN: 0 },
-      D: { reg: 0, call: 0, seat: 0, skip: 0, waitSum: 0, waitN: 0 },
     };
 
     let seatedCount = 0;
@@ -331,7 +328,7 @@ function main() {
       else waitingCount++;
     }
 
-    for (const g of ["A", "B", "C", "D"]) {
+    for (const g of ["A", "B", "C"]) {
       const s = dayStats[g];
       if (!s.reg) continue;
       insDaily.run(
