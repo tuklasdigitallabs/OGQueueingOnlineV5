@@ -15,7 +15,7 @@
     #nowServingHeader{font-size:clamp(22px,3vw,38px);font-weight:950;letter-spacing:.08em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .kioskTools{display:flex;gap:8px}.kioskTools button{border:1px solid rgba(0,0,0,.14);border-radius:16px;background:rgba(255,255,255,.32);padding:9px 13px;font-weight:900}
     .layout{min-height:0;display:grid;grid-template-columns:53% 47%;gap:var(--gap)}
-    .left{min-height:0;display:grid;grid-template-rows:39% minmax(0,1fr) 16%;gap:var(--gap)}
+    .left{min-height:0;display:grid;grid-template-rows:30% 45% 25%;gap:var(--gap)}
     .card{background:var(--panel);border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.45)}
     .servingCard{padding:14px;display:flex;flex-direction:column}
     .servingTitle{text-align:center;font-size:clamp(34px,5vw,64px);font-weight:950;letter-spacing:.08em}
@@ -23,9 +23,11 @@
     #globalServing.priority{background:var(--priority)}
     .pulse{animation:pulse .75s ease}@keyframes pulse{50%{transform:scale(1.025);filter:brightness(1.2)}}
     .videoCard{position:relative;background:#130b08}.videoCard video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-    .qrCard{padding:10px;display:grid;grid-template-columns:40% 60%;align-items:center}
-    .qrCopy{display:flex;align-items:center;gap:8px}.step{font-size:clamp(52px,9vw,104px);font-weight:950}.instruction{font-size:clamp(16px,2.6vw,32px);font-weight:950;line-height:1.05}
-    #guestQr{width:100%;height:100%;object-fit:contain;background:#fff;border-radius:12px;padding:7px}
+    .qrCard{min-height:0;padding:10px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:6px}
+    .qrCopy{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 6px}
+    .step{font-size:clamp(24px,3.8vw,44px);font-weight:950}
+    .instruction{font-size:clamp(18px,2.8vw,34px);font-weight:950;line-height:1;white-space:nowrap}
+    #guestQr{display:block;width:100%;height:100%;min-height:0;object-fit:contain;background:#fff;border-radius:12px;padding:4px}
     .groups{min-height:0;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:var(--gap)}
     .groupCard{padding:12px;display:grid;grid-template-rows:auto minmax(0,1fr)}
     .groupHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.groupName{font-size:clamp(22px,3.5vw,42px);font-weight:950}
@@ -50,7 +52,7 @@
       <div class="left">
         <article class="card servingCard"><div class="servingTitle">NOW SERVING</div><div id="globalServing">—</div></article>
         <article class="card videoCard"><video id="adPlayer" autoplay playsinline preload="auto"></video></article>
-        <article class="card qrCard"><div class="qrCopy"><span class="step">1</span><span class="instruction">Scan to<br>join queue</span></div><img id="guestQr" alt="Guest queue QR code" /></article>
+        <article class="card qrCard"><div class="qrCopy"><span class="step">1</span><span class="instruction">SCAN TO JOIN QUEUE</span></div><img id="guestQr" alt="Guest queue QR code" /></article>
       </div>
       <section class="groups">
         <article class="card groupCard"><div class="groupHeader"><div class="groupName">1–2 PAX</div><div class="hidden" id="hidden-A">P: 0 | R: 0</div></div><div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-A"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-A"></div></div></div></article>

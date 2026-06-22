@@ -69,6 +69,10 @@ Validation flows:
 - Reload and reconnect the display and confirm visible ticket membership remains stable.
 - Change from a larger saved capacity to the current capacity and confirm no extra columns appear.
 - Confirm only the Scan to Join Queue QR is displayed and it opens the current branch guest registration page.
+- In landscape, confirm Now Serving and the guest QR use a 60/40 vertical split.
+- Confirm the landscape queue instruction is above the QR and the QR fills the remaining tile space.
+- In portrait, confirm Now Serving, video, and guest QR use a 30/45/25 vertical split.
+- Confirm the portrait queue instruction is above the QR and the QR fills the remaining tile space without overlapping.
 - Confirm the latest called ticket across A/B/C appears in the global panel with priority green and regular maroon.
 - Confirm queue-only mode removes video and reallocates the available space.
 

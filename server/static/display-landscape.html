@@ -23,7 +23,7 @@
     .kioskTools{display:flex;gap:7px}
     .kioskTools button{border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(80,0,0,.4);color:#fff;padding:7px 11px;font-weight:700}
     .layout{min-height:0;display:grid;grid-template-columns:30% 35.5% 34.5%;gap:var(--gap)}
-    .left{min-height:0;display:grid;grid-template-rows:45% 55%;gap:var(--gap)}
+    .left{min-height:0;display:grid;grid-template-rows:60% 40%;gap:var(--gap)}
     .card{background:var(--panel);border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.45)}
     .servingCard{padding:14px;display:flex;flex-direction:column}
     .servingTitle{text-align:center;font-size:clamp(30px,3.3vw,56px);font-weight:950;letter-spacing:.08em}
@@ -31,11 +31,11 @@
     #globalServing.priority{background:var(--priority)}
     .pulse{animation:pulse .75s ease}
     @keyframes pulse{50%{transform:scale(1.025);filter:brightness(1.2)}}
-    .qrCard{padding:12px;display:grid;grid-template-columns:42% 58%;align-items:center}
-    .qrCopy{display:flex;align-items:center;gap:10px;padding:10px}
-    .step{font-size:clamp(60px,7vw,120px);font-weight:950}
-    .instruction{font-size:clamp(18px,2.2vw,38px);font-weight:900;line-height:1.05}
-    #guestQr{width:100%;height:100%;object-fit:contain;background:#fff;border-radius:12px;padding:8px}
+    .qrCard{min-height:0;padding:10px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:5px}
+    .qrCopy{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 6px}
+    .step{font-size:clamp(24px,2.5vw,42px);font-weight:950}
+    .instruction{font-size:clamp(18px,1.8vw,32px);font-weight:950;line-height:1;white-space:nowrap}
+    #guestQr{display:block;width:100%;height:100%;min-height:0;object-fit:contain;background:#fff;border-radius:12px;padding:4px}
     .groups{min-height:0;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:var(--gap)}
     .groupCard{padding:10px;display:grid;grid-template-rows:auto minmax(0,1fr)}
     .groupHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
@@ -78,7 +78,7 @@
           <div id="globalServing">—</div>
         </article>
         <article class="card qrCard">
-          <div class="qrCopy"><span class="step">1</span><span class="instruction">Scan to<br>join queue</span></div>
+          <div class="qrCopy"><span class="step">1</span><span class="instruction">SCAN TO JOIN QUEUE</span></div>
           <img id="guestQr" alt="Guest queue QR code" />
         </article>
       </div>
