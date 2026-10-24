@@ -4,113 +4,1497 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>QSys Display</title>
+  <title>QSys Landscape Display</title>
   <style>
-    :root{
-      --gap:10px;
-      --brand:#900000;
-      --regular:#a40000;
-      --priority:#008f4c;
-      --panel:#f2e2e2;
-      --ink:#050505;
-    }
-    *{box-sizing:border-box;user-select:none}
-    html,body{width:100%;height:100%;margin:0;overflow:hidden}
-    body{font-family:Arial,Helvetica,sans-serif;background:var(--brand);color:var(--ink)}
-    .shell{height:100%;padding:12px;display:grid;grid-template-rows:48px minmax(0,1fr);gap:var(--gap)}
-    .topbar{display:flex;align-items:center;justify-content:space-between;color:#fff;padding:0 10px}
-    #nowServingHeader{margin:0;font-size:clamp(20px,2vw,34px);font-weight:900;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .kioskTools{display:flex;gap:7px}
-    .kioskTools button{border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(80,0,0,.4);color:#fff;padding:7px 11px;font-weight:700}
-    .layout{min-height:0;display:grid;grid-template-columns:30% 35.5% 34.5%;gap:var(--gap)}
-    .left{min-height:0;display:grid;grid-template-rows:60% 40%;gap:var(--gap)}
-    .card{background:var(--panel);border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.45)}
-    .servingCard{padding:14px;display:flex;flex-direction:column}
-    .servingTitle{text-align:center;font-size:clamp(30px,3.3vw,56px);font-weight:950;letter-spacing:.08em}
-    #globalServing{flex:1;margin-top:12px;border-radius:14px;background:#a83a3a;color:#fff;display:grid;place-items:center;font-size:clamp(70px,9vw,170px);font-weight:950;letter-spacing:.04em}
-    #globalServing.priority{background:var(--priority)}
-    .pulse{animation:pulse .75s ease}
-    @keyframes pulse{50%{transform:scale(1.025);filter:brightness(1.2)}}
-    .qrCard{min-height:0;padding:10px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:5px}
-    .qrCopy{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 6px}
-    .step{font-size:clamp(24px,2.5vw,42px);font-weight:950}
-    .instruction{font-size:clamp(18px,1.8vw,32px);font-weight:950;line-height:1;white-space:nowrap}
-    #guestQr{display:block;width:100%;height:100%;min-height:0;object-fit:contain;background:#fff;border-radius:12px;padding:4px}
-    .groups{min-height:0;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:var(--gap)}
-    .groupCard{padding:10px;display:grid;grid-template-rows:auto minmax(0,1fr)}
-    .groupHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-    .groupName{font-size:clamp(22px,2.3vw,42px);font-weight:950}
-    .hidden{text-align:right;font-size:clamp(14px,1.25vw,23px);font-weight:900;line-height:1.05}
-    .hidden:before{content:"WAITING";display:block;font-size:.7em}
-    .columns{min-height:0;margin-top:8px;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:8px}
-    .queueColumn{min-height:0;border-radius:12px;padding:6px;border:2px solid rgba(0,0,0,.15);overflow:hidden}
-    .queueColumn.priority{border-color:rgba(0,143,76,.55);background:rgba(0,143,76,.06)}
-    .queueColumn.regular{border-color:rgba(164,0,0,.35);background:rgba(164,0,0,.06)}
-    .columnTitle{text-align:center;font-size:clamp(17px,1.55vw,28px);font-weight:950}
-    .queueCodes{display:grid;align-content:start;grid-auto-rows:min-content;gap:0}
-    .regular .queueCodes{grid-template-columns:1fr 1fr}
-    .queueCode{text-align:center;font-size:clamp(24px,2.4vw,46px);font-weight:950;line-height:1.05;color:var(--regular)}
-    .priority .queueCode{color:var(--priority)}
-    .videoCard{position:relative;background:#130b08}
-    .videoCard video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s}
-    .videoCard video.isActive{opacity:1}
-    body.mode-grid .layout{grid-template-columns:38% 62%}
-    body.mode-grid .videoCard{display:none}
-    body.mode-grid .queueCode{font-size:clamp(28px,3vw,58px)}
-    #status{position:fixed;left:8px;bottom:3px;color:rgba(255,255,255,.55);font-size:10px}
-    #settingsPanel{display:none}
-  </style>
-</head>
-<body class="mode-video orient-landscape">
-  <main class="shell">
-    <header class="topbar">
-      <h1 id="nowServingHeader">Branch</h1>
-      <div class="kioskTools">
-        <button id="btnMove" type="button">Move</button>
-        <button id="btnFull" type="button">Fullscreen</button>
-        <button id="btnClose" type="button">Close</button>
-      </div>
-    </header>
-    <section class="layout">
-      <div class="left">
-        <article class="card servingCard">
-          <div class="servingTitle">NOW SERVING</div>
-          <div id="globalServing">—</div>
-        </article>
-        <article class="card qrCard">
-          <div class="qrCopy"><span class="step">1</span><span class="instruction">SCAN TO JOIN QUEUE</span></div>
-          <img id="guestQr" alt="Guest queue QR code" />
-        </article>
-      </div>
-      <section class="groups">
-        <article class="card groupCard">
-          <div class="groupHeader"><div class="groupName">1–2 PAX</div><div class="hidden" id="hidden-A">P: 0 | R: 0</div></div>
-          <div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-A"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-A"></div></div></div>
-        </article>
-        <article class="card groupCard">
-          <div class="groupHeader"><div class="groupName">3–5 PAX</div><div class="hidden" id="hidden-B">P: 0 | R: 0</div></div>
-          <div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-B"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-B"></div></div></div>
-        </article>
-        <article class="card groupCard">
-          <div class="groupHeader"><div class="groupName">6++ PAX</div><div class="hidden" id="hidden-C">P: 0 | R: 0</div></div>
-          <div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-C"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-C"></div></div></div>
-        </article>
-      </section>
-      <article class="card videoCard">
-        <video id="adPlayerA" class="isActive" autoplay playsinline preload="auto"></video>
-        <video id="adPlayerB" autoplay playsinline preload="auto"></video>
-      </article>
-    </section>
-  </main>
-  <div id="settingsPanel"></div>
-  <div id="status">Connecting…</div>
-  <audio id="chime" preload="auto"></audio>
+      :root {
+        --bg: #800000;
+        --panel: #1c1c1c;
+        --line: #333;
+        --text: #fff;
+        --uiScale: 1;
+        --rhythm: clamp(6px, 0.85vh, 10px);  /* ONE token to rule vertical spacing */
+        --gap: var(--rhythm);              /* keep existing code working */
+        --tile: clamp(64px, 8.0vh, 130px);   /* waiting-tile square size */
+        --serveMinH: clamp(140px, 18vh, 260px); /* Now Serving minimum height */
+
+        /* Label sizes */
+        /* Height-based scaling (uses vh, not vw) */
+        --labelSize: clamp(16px, 2.4vh, 40px);
+        --basePx: clamp(14px, 1.5vh, 22px);
+        --calledSize: clamp(64px, 9.4vmin, 165px);
+
+        /* Now Serving panel (same as root bg @ 75% opacity) */
+        --servePanelBg: rgba(128, 0, 0, 0.75);
+        --servePanelBorder: rgba(255, 255, 255, 0.22);
+
+        /* Priority waiting tile color */
+        --priorityTileBg: #007a3f;
+
+        --topbarH: clamp(44px, 6.2vh, 64px);
+      }
+
+      html {
+        font-size: calc(var(--basePx) * var(--uiScale));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, sans-serif;
+        height: 100vh;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      body,
+      body * {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+      }
+
+      body.display-locked,
+      body.display-locked * {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+      }
+
+      body.display-locked * {
+        pointer-events: none !important;
+      }
+
+      body.display-locked [data-display-interactive],
+      body.display-locked [data-display-interactive] * {
+        pointer-events: auto !important;
+      }
+
+      header {
+        display: none;
+      }
+
+
+      footer {
+        padding: 0.7rem 1rem;
+        font-size: 0.85rem;
+        opacity: 0.6;
+        border-top: 1px solid var(--line);
+        background: #111;
+      }
+
+  .layout {
+  display: grid;
+  height: 100vh;
+}
+
+
+
+      /* ===== Hybrid middle container (Queue + Video) ===== */
+      .mid {
+  /* fill the remaining viewport below the top bar */
+  height: calc(100vh - var(--topbarH));
+
+  /* uniform spacing token */
+  padding: var(--gap);
+
+  min-height: 0;
+  display: grid;
+  gap: var(--gap);
+  align-items: stretch;
+
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+
+      .mid,
+      .wrap,
+      .videoWrap,
+      .videoBox {
+        min-height: 0;
+      }
+
+      .cell {
+        min-height: 0;
+      }
+
+      /* ===== Queue grid ===== */
+      .wrap {
+        height: 100%;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: var(--gap);
+        overflow: hidden;
+
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+      }
+
+      /* ===== Card base ===== */
+      .cell {
+        border-radius: 18px;
+        padding: var(--rhythm);
+        text-align: center;
+        overflow: hidden;
+
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(252, 243, 218, 0.35);
+        color: #000;
+
+        display: flex;
+        flex-direction: column;
+        padding: var(--rhythm);
+        min-height: 0;
+
+      }
+
+      /* ===== Top split area (Group | Now Serving) ===== */
+      .topSplit {
+        display: grid;
+        grid-template-columns: 1fr 1.35fr;
+        gap: 12px;
+        align-items: stretch;
+
+        flex: 0 0 42%;
+        min-height: 0;
+      }
+
+      .groupBox {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        min-height: 0;
+      }
+
+      .group {
+        font-size: clamp(24px, 3.4vw, 64px);
+        font-weight: 950;
+        letter-spacing: 0.4px;
+        opacity: 0.9;
+        line-height: 1.05;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .serveBox {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        align-items: center;
+        justify-items: center;
+        min-height: 0;
+
+        padding: 10px 12px;
+        border-radius: 14px;
+
+        background: var(--servePanelBg);
+        border: 1px solid var(--servePanelBorder);
+        color: #fff;
+        overflow: hidden;
+        flex: 1 1 auto;
+      }
+
+      /* Match portrait behavior: called priority uses green hero background. */
+      .serveBox.isPriorityCalled {
+        background: var(--priorityTileBg) !important;
+        border-color: rgba(255, 255, 255, 0.45) !important;
+      }
+
+      .serveLabel {
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        text-transform: none;
+        opacity: 0.95;
+        font-size: clamp(24px, 2.5vw, 35px) !important;
+        line-height: 1.15;
+        margin: 0;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        align-self: start;
+        padding-bottom: 0.18em;   /* prevents â€œgâ€ clipping */
+      }
+
+      /* === NEW: Now Serving becomes the big middle block === */
+.serveBox.serveMain{
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  padding: calc(var(--gap) * 0.6);
+  padding-top: calc(var(--gap) * 1.6); /* space for label */
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.serveMainLabel{
+  position: absolute;
+  top: calc(var(--gap) * 0.6);
+  left: 50%;
+  transform: translateX(-50%);
+
+  font-size: clamp(12px, 1.3vh, 20px);
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  opacity: 0.9;
+
+  pointer-events: none;
+}
+
+
+
+.serveMainValue{
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: clamp(300px, 30vh, 600px);
+  font-weight: 950;
+  line-height: 0.85;
+  letter-spacing: 1px;
+
+  transform: translateY(4%); /* optical centering */
+}
+
+
+
+      .big.calledBig {
+        flex: 1; /* fill the red tile */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-size: var(--calledSize);
+        font-weight: 950;
+        line-height: 0.82;
+        letter-spacing: 2px;
+
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .guestName {
+        font-size: var(--nameSize);
+        font-weight: 700;
+        opacity: 0.95;
+        margin-top: 4px;
+        max-width: 100%;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        align-self: end;
+      }
+
+      .dash {
+        opacity: 0.25;
+      }
+
+      /* ===== Waiting header row ===== */
+      .waitHeader {
+  margin-top: 12px;
+  padding: 0; /* remove extra padding */
+  display: block;
+}
+
+
+      .countRow {
+        width: 100%;
+        background: #000;
+        color: #fff;
+        padding: 0.65rem 0.9rem;
+        border-radius: 12px;
+        font-size: clamp(15px, 1.8vw, 34px); /* slightly smaller */
+        font-weight: 900;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .countRow strong {
+        color: #fff;
+        font-weight: 950;
+      }
+
+      /* === NEW: [PAX | WAITING] header row === */
+.countRow.countSplit{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.55rem 0.9rem; /* uniform top/bottom */
+}
+
+
+.countRow .paxLabel{
+  text-align: left;
+  font-weight: 950;
+  letter-spacing: 0.4px;
+}
+
+.countRow .waitLabel{
+  text-align: right;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.waitLabelTitle{
+  display:block;
+  font-size:0.72em;
+  text-transform:uppercase;
+}
+
+.waitLabelBreakdown{
+  display:block;
+  margin-top:0.18rem;
+  font-size:0.82em;
+}
+
+      /* ===== WAITING list: 4 columns (P + 3 regular) ===== */
+     .queueList {
+  margin-top: var(--rhythm);
+
+  padding: 0;
+
+  flex: 0 0 auto;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--rhythm);
+
+   /* force a single row of 4 square tiles */
+  grid-auto-rows: var(--tile);
+  align-content: start;
+
+  align-content: start;
+  justify-content: stretch;
+  place-items: stretch;
+
+  overflow: hidden;
+}
+
+
+      .queueList .qItem,
+.queueList .qEmpty {
+  width: 100%;
+   height: var(--tile);
+  aspect-ratio: 1 / 1;  /* makes them square */
+
+  min-height: 0;
+  border-radius: 16px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+}
+
+
+      /* 2-line ticket format: group on top, number at bottom */
+      .queueList .qGroup {
+        font-weight: 900;
+        font-size: clamp(18px, 2.2vmin, 40px);
+        line-height: 1;
+      }
+
+      .cell.placeholder {
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .queueList .qNum {
+        font-weight: 950;
+        font-size: clamp(28px, 3.9vmin, 66px);
+        line-height: 1;
+      }
+
+      .queueList .qItem {
+        background: #000;
+        color: #fff;
+      }
+
+      .queueList .qItem.priority {
+        background: var(--priorityTileBg);
+        color: #fff;
+      }
+
+      .queueList .qEmpty {
+        background: rgba(0, 0, 0, 0.08);
+        border: 3px dashed rgba(0, 0, 0, 0.55);
+        color: rgba(0, 0, 0, 0.45);
+      }
+
+      /* First slot is always Priority slot (green accent even if empty) */
+      .queueList .prioritySlot {
+        background: rgba(0, 122, 63, 0.1);
+        border-color: rgba(0, 122, 63, 0.55);
+      }
+
+      .queueList .qItem.ellipsis {
+        opacity: 0.75;
+      }
+
+      /* ===== Video area ===== */
+      .videoWrap {
+        height: 100%;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+      }
+
+      .videoBox {
+        height: 100%;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #000;
+        border: 1px solid var(--line);
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #000;
+      }
+      .videoBox { position: relative; }
+
+.adVid{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+
+  opacity: 0;
+  transition: opacity 180ms linear;
+}
+
+.adVid.isActive{
+  opacity: 1;
+}
+
+
+      @keyframes cardFlash {
+        0% {
+          box-shadow:
+            0 0 0 rgba(255, 255, 255, 0),
+            inset 0 0 0 rgba(255, 255, 255, 0);
+          transform: scale(1);
+        }
+        30% {
+          box-shadow:
+            0 0 22px rgba(255, 255, 255, 0.18),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+          transform: scale(1.015);
+        }
+        100% {
+          box-shadow:
+            0 0 0 rgba(255, 255, 255, 0),
+            inset 0 0 0 rgba(255, 255, 255, 0);
+          transform: scale(1);
+        }
+      }
+
+      .cell.flash {
+        animation: cardFlash 1.2s ease-out;
+      }
+
+      /* ===== Top Overlay Bar (Settings left, window controls right) ===== */
+      .topOverlay {
+        position: fixed;
+        top: var(--gap);
+        left: var(--gap);
+        right: var(--gap);
+
+        /* internal padding so right controls never touch screen edge */
+        padding: 0 var(--gap);
+
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+
+        pointer-events: auto;
+        -webkit-app-region: no-drag;
+        height: var(--topbarH);
+
+      }
+      .topOverlay .leftTools,
+      .topOverlay .rightTools {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+
+        justify-content: flex-end;
+        min-width: 0;
+      }
+
+      .topOverlay .leftTools:empty {
+        display: none;
+      }
+
+      /* ===== Top bar center title ===== */
+      .topOverlay{
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+      }
+
+      /* Centered branch name */
+      .centerTitle{
+        justify-self: center;
+        text-align: center;
+        min-width: 0;
+        max-width: min(72vw, 100%);
+        padding: 0 8px;
+
+        font-weight: 900;
+        font-size: clamp(14px, 1.45vw, 28px);
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        pointer-events: none; /* title should not block buttons */
+      }
+
+
+      /* Hidden legacy settings panel; no visible launcher on landscape display */
+      .settingsPanel {
+        position: fixed;
+        top: calc(var(--gap) * 6); /* below header/title */
+        left: var(--gap);
+
+        display: none; /* default closed; JS toggles */
+        width: 260px;
+
+        padding: 14px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        color: #fff;
+
+        pointer-events: auto;
+        z-index: 1000001;
+        -webkit-app-region: no-drag;
+      }
+
+      .settingsTitle {
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+
+      .toggleRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+        font-size: 14px;
+      }
+
+      .settingsClose {
+        width: 100%;
+        padding: 8px;
+        border-radius: 10px;
+        border: 1px solid #444;
+        background: #111;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      .settingsClose:hover {
+        background: #222;
+      }
+
+      /* Top bar padding fix */
+      .kioskRightBar {
+        margin-right: 0;
+      }
+
+      .kioskRightBar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        -webkit-app-region: no-drag;
+        max-width: 100%;
+        overflow: hidden;
+      }
+
+      .kioskRightBar button {
+        -webkit-app-region: no-drag;
+      }
+
+      .kioskDrag {
+        width: 26px;
+        height: 18px;
+        border-radius: 10px;
+        border: 1px dashed rgba(255, 255, 255, 0.25);
+        opacity: 0.55;
+        margin-right: 2px;
+        -webkit-app-region: drag;
+      }
+
+      .kbtn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #fff;
+        font-size: clamp(12px, 1.25vw, 14px);
+        padding: 5px 9px;
+        border-radius: 10px;
+        cursor: pointer;
+        opacity: 0.85;
+      }
+
+      .kbtn:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .kbtn.danger {
+        border-color: rgba(255, 80, 80, 0.4);
+      }
+
+      .closeBtn {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        color: #fff;
+        font-size: clamp(12px, 1.25vw, 14px);
+        padding: 5px 9px;
+        border-radius: 10px;
+        cursor: pointer;
+        opacity: 0.6;
+      }
+
+      .closeBtn:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.18);
+      }
+
+      body.mode-grid .mid {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+      }
+
+      body.mode-grid .videoWrap {
+        display: none !important;
+      }
+      body.mode-video .videoWrap {
+        display: block !important;
+      }
+
+      body.mode-video.orient-landscape .mid {
+        grid-template-columns: 2fr 1fr;
+        grid-template-rows: 1fr;
+        grid-template-areas: "queue video";
+      }
+
+      body.mode-video.orient-landscape .wrap {
+        grid-area: queue;
+      }
+      body.mode-video.orient-landscape .videoWrap {
+        grid-area: video;
+      }
+
+      body.mode-video.orient-portrait .mid {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 2fr;
+        grid-template-areas: "queue" "video";
+      }
+
+      body.mode-video.orient-portrait .wrap {
+        grid-area: queue;
+      }
+      body.mode-video.orient-portrait .videoWrap {
+        grid-area: video;
+      }
+
+      body.mode-video.orient-portrait .wrap {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-rows: minmax(0, 1fr) !important;
+        gap: 10px;
+        overflow: hidden;
+      }
+
+      body.mode-video.orient-portrait .cell {
+        padding: 10px;
+        border-radius: 16px;
+      }
+
+      body.mode-video.orient-portrait .topSplit {
+        grid-template-columns: 1fr 1.2fr;
+        gap: 8px;
+        flex: 0 0 46%;
+      }
+
+      body.mode-video.orient-portrait .groupBox {
+        padding: 8px;
+      }
+
+      body.mode-video.orient-portrait .group {
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      body.mode-video.orient-portrait .serveLabel {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+      body.mode-video.orient-portrait .big.calledBig {
+        font-size: clamp(40px, 4vw, 64px);
+      }
+      body.mode-video.orient-portrait .guestName {
+        display: none;
+      }
+      body.mode-video.orient-portrait .waitHeader {
+        margin-top: 8px;
+      }
+      body.mode-video.orient-portrait .queueList {
+        gap: 10px;
+        align-content: center;
+      }
+
+      body.mode-video.orient-portrait .queueList .qItem,
+      body.mode-video.orient-portrait .queueList .qEmpty {
+        font-size: clamp(18px, 2.4vw, 44px);
+      }
+
+      body.mode-video.orient-portrait header {
+        font-size: 24px;
+        padding: 14px 16px;
+      }
+
+      /* Compact landscape profile (e.g., 1366x768 TVs) */
+      @media (orientation: landscape) and (max-width: 1400px), (orientation: landscape) and (max-height: 800px) {
+        :root {
+          --rhythm: clamp(5px, 0.7vh, 8px);
+          --tile: clamp(56px, 6.6vh, 102px);
+          --calledSize: clamp(54px, 8.2vmin, 128px);
+          --topbarH: clamp(40px, 5.2vh, 52px);
+          --basePx: clamp(12px, 1.25vh, 18px);
+        }
+
+        .mid {
+          grid-template-columns: 1.85fr 1fr;
+        }
+
+        .cell {
+          border-radius: 14px;
+        }
+
+        .countRow {
+          padding: 0.45rem 0.65rem;
+          border-radius: 10px;
+          font-size: clamp(12px, 1.35vw, 22px);
+        }
+
+        .serveMainLabel {
+          font-size: clamp(10px, 1.05vh, 16px);
+        }
+
+        .centerTitle {
+          max-width: min(68vw, 100%);
+          font-size: clamp(12px, 1.2vw, 22px);
+        }
+
+        .kioskRightBar {
+          gap: 6px;
+          padding: 4px 8px;
+        }
+
+        .kioskDrag {
+          width: 20px;
+          height: 14px;
+        }
+
+        .kbtn,
+        .closeBtn,
+        .settingsBtn {
+          font-size: clamp(11px, 1.05vw, 13px);
+          padding: 4px 7px;
+        }
+      }
+
+      /* =============================
+         CLICK FIX: TOP UI MUST WIN
+         ============================= */
+      header,
+      #nowServingHeader,
+      .topOverlay,
+      .kioskRightBar {
+        position: relative;
+        z-index: 1000000;
+        pointer-events: auto;
+      }
+
+      .mid,
+      .wrap,
+      .videoWrap,
+      .videoBox {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Make each grid slot a real box */
+      .queueList {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: var(--gap);
+        place-items: stretch; /* IMPORTANT: children stretch */
+      }
+
+      /* Slot items (empty + filled) must stretch to fill the grid cell */
+      .queueList .qItem,
+      .queueList .qEmpty {
+        width: 100%;
+        height: var(--tile);
+        aspect-ratio: 1 / 1; /* keep square */
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 16px;
+
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        margin: 0; /* IMPORTANT: kill any default margins */
+        padding: 0; /* IMPORTANT: don't shrink the box */
+        box-sizing: border-box;
+      }
+
+      /* FILLED: the BLACK should be the whole tile */
+      .queueList .qItem {
+        background: #000;
+        color: #fff;
+      }
+
+      /* Priority filled tile (green) */
+      .queueList .qItem.priority,
+      .queueList .qItem.prioritySlot {
+        background: var(--priorityTileBg);
+        color: #fff;
+      }
+
+      /* EMPTY tiles should also fill the whole slot */
+      .queueList .qEmpty {
+        background: rgba(255, 255, 255, 0.1);
+        border: 3px dashed rgba(0, 0, 0, 0.55);
+        color: rgba(0, 0, 0, 0.55);
+      }
+
+      /* Two-line layout scales inside the tile without overflow */
+      .queueList .qGroup {
+        font-weight: 950;
+        line-height: 1;
+        font-size: clamp(18px, 2.2vmin, 34px);
+        margin: 0;
+      }
+      .queueList .qNum {
+        font-weight: 950;
+        line-height: 1;
+        font-size: clamp(28px, 4.2vmin, 62px);
+        margin: 0;
+      }
+
+      /* NOW SERVING number â€“ large, single-line */
+      /* NOW SERVING â€“ big, dominant */
+      .nowServingValue {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-weight: 900;
+        font-size: clamp(64px, 8.5vmin, 160px);
+        line-height: 0.82;
+        letter-spacing: 2px;
+
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      /* Remove any secondary text spacing */
+      .nowServingValue + * {
+        display: none;
+      }
+
+      /* === PATCH: Priority reserved slot must be green (even if empty) === */
+      .queueList .prioritySlot {
+        background: var(--priorityTileBg) !important;
+        border-color: rgba(255, 255, 255, 0.45) !important;
+        color: #fff !important;
+      }
+      .queueList .prioritySlot.qEmpty {
+        background: var(--priorityTileBg) !important;
+        border: 3px dashed rgba(255, 255, 255, 0.55) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+
+      /* === DEBUG OVERLAY (remove in prod) === */
+      #qsysDbgWrap {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        width: min(720px, calc(100vw - 24px));
+        max-height: 38vh;
+        z-index: 99999;
+        background: rgba(0, 0, 0, 0.78);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 12px;
+        overflow: hidden;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        display: none;
+      }
+      #qsysDbgTop {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      #qsysDbgTitle {
+        font-weight: 800;
+        font-size: 12px;
+        opacity: 0.95;
+      }
+      #qsysDbgBtns {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+      }
+      #qsysDbgBtns button {
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        cursor: pointer;
+      }
+      #qsysDbgBody {
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.25;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #qsysDbgPill {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 99998;
+        background: rgba(0, 0, 0, 0.65);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        cursor: pointer;
+        user-select: none;
+      }
+      video {
+        opacity: 1;
+        transition: opacity 140ms linear;
+      }
+
+      video.isLoading {
+        opacity: 0;
+      }
+
+      /* Three queue columns with QR access strip below. */
+      body .mid,
+      body.mode-grid .mid,
+      body.mode-video.orient-landscape .mid,
+      body.mode-video.orient-portrait .mid {
+        grid-template-columns: 2fr 1fr !important;
+        grid-template-rows: minmax(0, 1fr) clamp(150px, 22vh, 220px) !important;
+        grid-template-areas:
+          "queue video"
+          "qr video" !important;
+      }
+
+      body .wrap,
+      body.mode-video.orient-portrait .wrap {
+        grid-area: queue;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        grid-template-rows: minmax(0, 1fr) !important;
+      }
+
+      body .cell {
+        gap: var(--rhythm);
+      }
+
+      body .waitHeader,
+      body.mode-video.orient-portrait .waitHeader {
+        margin: 0;
+      }
+
+      body .queueList,
+      body.mode-video.orient-portrait .queueList {
+        margin: 0;
+        flex: 0 0 42%;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+        grid-auto-rows: minmax(0, 1fr);
+      }
+
+      body .queueList .qItem,
+      body .queueList .qEmpty {
+        height: 100%;
+        aspect-ratio: auto;
+      }
+
+      .qrStrip {
+        grid-area: qr;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--gap);
+      }
+
+      .qrCard {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: auto auto 1fr;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(14px, 2vw, 30px);
+        padding: clamp(10px, 1.3vh, 18px) clamp(20px, 2vw, 36px);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(252, 243, 218, 0.35);
+        color: #000;
+        overflow: hidden;
+      }
+
+      .qrStep {
+        width: clamp(105px, 9vw, 165px);
+        height: clamp(105px, 9vw, 165px);
+        display: grid;
+        place-items: center;
+        font-size: clamp(78px, 8vw, 145px);
+        font-weight: 1000;
+        line-height: 1;
+      }
+
+      body .videoWrap,
+      body.mode-grid .videoWrap,
+      body.mode-video .videoWrap,
+      body.mode-video.orient-landscape .videoWrap,
+      body.mode-video.orient-portrait .videoWrap {
+        display: block !important;
+        grid-area: video;
+      }
+
+      .qrCard img {
+        width: clamp(105px, 9vw, 165px);
+        height: clamp(105px, 9vw, 165px);
+        padding: 5px;
+        border-radius: 10px;
+        background: #fff;
+        object-fit: contain;
+      }
+
+      .qrTitle {
+        font-size: clamp(20px, 2vw, 34px);
+        font-weight: 950;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+
+      .qrHint {
+        margin-top: 9px;
+        font-size: clamp(14px, 1.25vw, 22px);
+        font-weight: 800;
+        opacity: 0.75;
+      }
+
+      /* Global Now Serving + video/QR left, A/B/C queue lists right. */
+      body .mid,
+      body.mode-grid .mid,
+      body.mode-video.orient-landscape .mid,
+      body.mode-video.orient-portrait .mid {
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.35fr) !important;
+        grid-template-rows: 1fr !important;
+        grid-template-areas: "left queues" !important;
+      }
+      .landLeft {
+        grid-area:left;
+        min-height:0;
+        display:grid;
+        grid-template-rows:0.34fr 0.46fr 0.20fr;
+        grid-template-columns:minmax(0,1fr);
+        gap:var(--gap);
+      }
+      .landLeft > .globalServing {
+        grid-row:1;
+        grid-column:1;
+      }
+      .landLeft > .landVideo {
+        grid-area:auto !important;
+        grid-row:2;
+        grid-column:1;
+      }
+      .landLeft > .landQr {
+        grid-row:3;
+        grid-column:1;
+      }
+      .landQueues {
+        grid-area:queues;
+        min-height:0;
+        display:grid;
+        grid-template-rows:repeat(3, minmax(0,1fr));
+        gap:var(--gap);
+      }
+      .globalServing,
+      .landGroup {
+        min-height:0;
+        border-radius:18px;
+        border:1px solid rgba(252,243,218,.35);
+        background:rgba(255,255,255,.86);
+        overflow:hidden;
+      }
+      .globalServing {
+        display:grid;
+        grid-template-rows:auto 1fr;
+        gap:var(--rhythm);
+        padding:var(--rhythm);
+      }
+      .globalServingTitle {
+        text-align:center;
+        color:#000;
+        font-size:clamp(22px,2.2vw,38px);
+        font-weight:1000;
+        letter-spacing:.08em;
+        text-transform:uppercase;
+      }
+      .globalTicket {
+        min-height:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:.08em;
+        border-radius:14px;
+        background:var(--servePanelBg);
+        color:#fff;
+        font-size:clamp(82px,10vmin,180px);
+        font-weight:1000;
+        line-height:.85;
+      }
+      .globalTicket.isPriorityCalled { background:var(--priorityTileBg); }
+      .globalTicket .heroLetter,
+      .globalTicket .heroNum { font:inherit; line-height:inherit; color:inherit; }
+      .landVideo { min-height:0; }
+      .landVideo .videoBox { height:100%; }
+      .landQr {
+        min-height:0;
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:var(--gap);
+      }
+      .landQr .qrCard {
+        grid-template-columns:auto 1fr;
+        gap:clamp(8px,1vw,16px);
+        padding:clamp(6px,.8vh,10px);
+      }
+      .landQr .qrCard img {
+        width:clamp(90px,8vw,140px);
+        height:clamp(90px,8vw,140px);
+      }
+      .landQr .qrHeading { min-width:0; }
+      .landQr .qrStep { width:auto; height:auto; font-size:clamp(30px,3vw,52px); }
+      .landQr .qrTitle { font-size:clamp(14px,1.4vw,23px); }
+      .landQr .qrHint { font-size:clamp(10px,1vw,16px); }
+      .landGroup {
+        display:grid;
+        grid-template-rows:clamp(42px,5.2vh,64px) minmax(0,1fr);
+        gap:clamp(5px,.65vh,9px);
+        padding:clamp(7px,.85vh,11px);
+      }
+      .landGroupHeader {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:var(--gap);
+        color:#000;
+      }
+      .landGroupName {
+        font-size:clamp(20px,2vw,34px);
+        font-weight:1000;
+        text-transform:uppercase;
+      }
+      .landHiddenCount {
+        text-align:center;
+        font-weight:1000;
+        line-height:1.05;
+      }
+      .landHiddenCount span { display:block; font-size:clamp(10px,.9vw,14px); text-transform:uppercase; }
+      .landHiddenCount strong { display:block; margin-top:2px; font-size:clamp(15px,1.4vw,22px); }
+      .landWaitingColumns {
+        min-height:0;
+        display:grid;
+        grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+        gap:calc(var(--rhythm)*.7);
+      }
+      .landWaitingColumn {
+        min-height:0;
+        display:grid;
+        grid-template-rows:clamp(24px,2.8vh,34px) minmax(0,1fr);
+        padding:clamp(5px,.6vh,8px);
+        border:2px solid rgba(0,0,0,.18);
+        border-radius:12px;
+        overflow:hidden;
+      }
+      .landWaitingColumn.priority { background:rgba(0,122,63,.10); border-color:rgba(0,122,63,.42); }
+      .landWaitingColumn.regular { background:rgba(141,6,1,.08); border-color:rgba(141,6,1,.34); }
+      .landColumnTitle {
+        text-align:center;
+        color:#000;
+        font-size:clamp(15px,1.35vw,22px);
+        font-weight:1000;
+        text-transform:uppercase;
+      }
+      .landWaitingList {
+        min-height:0;
+        display:grid;
+        grid-template-rows:repeat(5,minmax(0,1fr));
+        grid-auto-flow:column;
+        overflow:hidden;
+      }
+      .landWaitingColumn.priority .landWaitingList { grid-template-columns:1fr; }
+      .landWaitingColumn.regular .landWaitingList { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .landWaitingItem {
+        min-height:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:clamp(30px,4.1vmin,56px);
+        font-weight:1000;
+        line-height:1;
+      }
+      .landWaitingColumn.priority .landWaitingItem { color:var(--priorityTileBg); }
+      .landWaitingColumn.regular .landWaitingItem { color:rgb(141,6,1); }
+
+      /* Final landscape placement:
+         [Now Serving | A | Video]
+         [Wi-Fi QR    | B | Video]
+         [Queue QR    | C | Video] */
+      body .mid,
+      body.mode-grid .mid,
+      body.mode-video.orient-landscape .mid,
+      body.mode-video.orient-portrait .mid {
+        grid-template-columns:minmax(0,.87fr) minmax(0,1.03fr) minmax(0,1fr) !important;
+        grid-template-rows:repeat(3,minmax(0,1fr)) !important;
+        grid-template-areas:
+          "left groupA video"
+          "left groupB video"
+          "left groupC video" !important;
+      }
+      .landLeft,
+      .landQr {
+        display:grid;
+      }
+      .landLeft {
+        grid-area:left;
+        grid-template-columns:minmax(0,1fr);
+        grid-template-rows:minmax(0,45fr) minmax(0,27.5fr) minmax(0,27.5fr);
+        gap:var(--gap);
+      }
+      .landLeft > .globalServing {
+        grid-area:auto;
+        grid-row:1;
+      }
+      .landLeft > .landQr {
+        display:contents;
+      }
+      .landQr > .qrCard:first-child {
+        grid-area:auto;
+        grid-row:2;
+      }
+      .landQr > .qrCard:last-child {
+        grid-area:auto;
+        grid-row:3;
+      }
+      .landQueues {
+        display:contents;
+      }
+      .landQueues > .landGroup:nth-child(1) {
+        grid-area:groupA;
+      }
+      .landQueues > .landGroup:nth-child(2) {
+        grid-area:groupB;
+      }
+      .landQueues > .landGroup:nth-child(3) {
+        grid-area:groupC;
+      }
+      .landQr .qrCard {
+        display:grid;
+        grid-template-columns:minmax(0,.44fr) minmax(0,.56fr);
+        align-items:center;
+        justify-content:center;
+        gap:clamp(6px,.7vw,12px);
+        padding:clamp(7px,.8vw,13px);
+        box-sizing:border-box;
+      }
+      .landQr .qrCard img {
+        grid-column:2;
+        grid-row:1;
+        width:100%;
+        height:100%;
+        max-width:100%;
+        max-height:100%;
+        min-width:0;
+        min-height:0;
+        box-sizing:border-box;
+        justify-self:center;
+        align-self:center;
+        object-fit:contain;
+      }
+      .landQr .qrHeading {
+        grid-column:1;
+        grid-row:1;
+        display:grid;
+        grid-template-columns:auto minmax(0,1fr);
+        align-items:center;
+        justify-content:center;
+        gap:clamp(6px,.6vw,11px);
+        text-align:left;
+      }
+      .landQr .qrStep {
+        font-size:clamp(82px,8vw,145px);
+        line-height:.8;
+      }
+      .landQr .qrTitle {
+        display:none;
+      }
+      .landQr .qrHint {
+        margin:0;
+        max-width:5.5ch;
+        font-size:clamp(17px,1.65vw,28px);
+        text-transform:none;
+        line-height:1.12;
+        white-space:normal;
+      }
+      .globalServingTitle {
+        font-size:clamp(26px,2.8vw,48px);
+      }
+      .globalTicket {
+        font-size:clamp(110px,13vmin,230px);
+      }
+      body.mode-grid .landVideo {
+        display:none !important;
+      }
+      body.mode-grid .mid {
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+        grid-template-areas:
+          "left groupA"
+          "left groupB"
+          "left groupC" !important;
+      }
+
+    </style>
   <script src="./app-boot.js"></script>
-  <script>
-    document.getElementById("chime").src = window.appUrl("/static/chime.mp3");
-    document.write('<script src="' + window.appUrl('/socket.io/socket.io.js') + '"><\/script>');
-    document.write('<script src="' + window.appUrl('/static/js/display-ui-landscape.js?v=20260623') + '"><\/script>');
-    document.write('<script src="' + window.appUrl('/static/js/display-core.js?v=20260623') + '"><\/script>');
-  </script>
+  <script>document.write('<link rel="stylesheet" href="' + window.appUrl('/static/css/display-fit.css?v=20261024') + '" />');</script>
+</head>
+<body class="orient-landscape mode-video">
+<div class="topOverlay" data-display-interactive="1">
+      <div class="leftTools"></div>
+
+      <!-- CENTER: Branch Name -->
+      <div class="centerTitle" id="branchTitle">
+        BRANCH NAME
+      </div>
+
+      <div class="rightTools">
+        <div class="kioskRightBar">
+          <div class="kioskDrag"></div>
+          <button id="btnMove" class="kbtn" type="button">Move</button>
+          <button id="btnFull" class="kbtn" type="button">Fullscreen</button>
+          <button
+            class="closeBtn kbtn danger"
+            id="btnClose"
+            type="button"
+          >
+            X Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="settingsPanel"></div>
+    <div class="layout">
+      <div class="mid">
+        <div class="landLeft">
+          <div class="globalServing">
+            <div class="globalServingTitle">Now Serving</div>
+            <div class="globalTicket" id="calledGlobal"><span class="heroLetter" id="heroLetter">—</span><span class="heroNum" id="heroNum">—</span></div>
+          </div>
+          <div class="landQr">
+            <div class="qrCard"><img id="guestQr" src="" alt="Guest queue QR code" /><div class="qrHeading"><div class="qrStep">1</div><div><div class="qrTitle">Join Queue</div><div class="qrHint">Scan to Join Queue</div></div></div></div>
+          </div>
+        </div>
+        <div class="videoWrap landVideo"><div class="videoBox"><video id="adPlayerA" class="adVid isActive" autoplay playsinline preload="auto"></video><video id="adPlayerB" class="adVid" autoplay playsinline preload="auto"></video></div></div>
+        <div class="landQueues">
+          <div class="landGroup"><div class="landGroupHeader"><div class="landGroupName">1–2 Pax</div><div class="landHiddenCount"><span>Waiting</span><strong id="wait-A">P: 0 | R: 0</strong></div></div><div class="landWaitingColumns"><div class="landWaitingColumn priority"><div class="landColumnTitle">Priority</div><div class="landWaitingList" id="priority-A"></div></div><div class="landWaitingColumn regular"><div class="landColumnTitle">Regular</div><div class="landWaitingList" id="regular-A"></div></div></div></div>
+          <div class="landGroup"><div class="landGroupHeader"><div class="landGroupName">3–5 Pax</div><div class="landHiddenCount"><span>Waiting</span><strong id="wait-B">P: 0 | R: 0</strong></div></div><div class="landWaitingColumns"><div class="landWaitingColumn priority"><div class="landColumnTitle">Priority</div><div class="landWaitingList" id="priority-B"></div></div><div class="landWaitingColumn regular"><div class="landColumnTitle">Regular</div><div class="landWaitingList" id="regular-B"></div></div></div></div>
+          <div class="landGroup"><div class="landGroupHeader"><div class="landGroupName">6++ Pax</div><div class="landHiddenCount"><span>Waiting</span><strong id="wait-C">P: 0 | R: 0</strong></div></div><div class="landWaitingColumns"><div class="landWaitingColumn priority"><div class="landColumnTitle">Priority</div><div class="landWaitingList" id="priority-C"></div></div><div class="landWaitingColumn regular"><div class="landColumnTitle">Regular</div><div class="landWaitingList" id="regular-C"></div></div></div></div>
+        </div>
+      </div>
+    </div>
+
+
+
+<div id="status" role="status">Connecting…</div>
+<audio id="chime" preload="auto"></audio>
+
+<script>
+  document.getElementById("chime").src = window.appUrl("/static/chime.mp3");
+  document.write('<script src="' + window.appUrl('/socket.io/socket.io.js') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-ui-landscape.js?v=20261024') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-fit.js?v=20261024') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-online-bridge.js?v=20261024') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-core.js?v=20260623') + '"><\/script>');
+</script>
 </body>
 </html>

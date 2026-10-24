@@ -1,0 +1,123 @@
+/* Keep browser kiosk controls while fitting the offline display layout. */
+
+
+#branchName, #branchTitle {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+/* Prevent intrinsic text widths from expanding grid tracks or their backgrounds. */
+.main, .leftCol, .rightCol, .card, .nowServing, .nowTicket,
+.landLeft, .globalServing, .globalTicket, .landGroup,
+.landWaitingColumn, .waitingColumn, .landWaitingList, .waitingList {
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.nowServing, .globalServing { grid-template-columns: minmax(0, 1fr); }
+.nowTicket, .globalTicket {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  padding: clamp(6px, 1vmin, 16px);
+}
+.globalTicket { line-height: 1.1; }
+.heroLetter, .heroNum, .nowHdr, .globalServingTitle,
+.landWaitingItem, .waitingItem {
+  min-width: 0;
+  min-height: 0;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.nowTicket {
+  justify-content: center;
+  gap: 0;
+  padding: clamp(4px, .5vmin, 8px);
+}
+.nowTicket .heroLetter, .nowTicket .heroNum {
+  flex: 1 1 0;
+  font-size: clamp(190px, calc(var(--screenH) * 0.19), 580px);
+  letter-spacing: 0.02em;
+  align-items: center;
+  line-height: 1.1;
+  padding: 0;
+}
+.globalTicket .heroLetter, .globalTicket .heroNum { flex-shrink: 0; }
+.landWaitingItem, .waitingItem { overflow: hidden; line-height: 1.1; }
+@media (min-aspect-ratio: 1/1) {
+  .nowTicket {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: .08em;
+    font-size: clamp(110px, 20vmin, 300px);
+    font-weight: 1000;
+    line-height: 1.5;
+  }
+  .nowTicket .heroLetter, .nowTicket .heroNum {
+    flex: 0 0 auto;
+    font: inherit;
+    letter-spacing: 0;
+  }
+}
+/* Instructions above a square QR, using the full card width. */
+.landQr .qrCard, .qrStrip .qrCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(6px, 1vmin, 14px);
+  padding: clamp(8px, 1vmin, 16px);
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.landQr .qrHeading, .qrStrip .qrHeading {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3em;
+  width: 100%;
+  min-width: 0;
+  font-size: clamp(14px, 2.2vmin, 32px);
+  font-weight: 1000;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.landQr .qrStep, .qrStrip .qrStep,
+.landQr .qrHint, .qrStrip .qrHint {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  margin: 0;
+  font: inherit;
+  text-transform: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  opacity: 1;
+}
+.landQr .qrTitle { display: none; }
+.landQr .qrCard img, .qrStrip .qrCard img {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: center;
+  align-self: center;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 4px;
+  box-sizing: border-box;
+  object-fit: contain;
+  background: #fff;
+}
+
+/* The online browser keeps its display controls visible. */
+.landQr{grid-template-columns:minmax(0,1fr)!important}
+.qrStrip{grid-template-columns:minmax(0,1fr)!important}
+/* One guest QR occupies the full lower portion of the online landscape display. */
+.landLeft{grid-template-rows:minmax(0,56fr) minmax(0,44fr)!important}
+.landQr>.qrCard:first-child,.landQr>.qrCard:last-child{grid-row:2!important}

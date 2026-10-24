@@ -1,106 +1,194 @@
-(function () {
-  "use strict";
+/* display-ui-portrait.js (CLEAN)
+   Portrait renderer used by display-core.js
+*/
+(function(){
+  'use strict';
 
-  const GROUPS = ["A", "B", "C"];
   const $ = (id) => document.getElementById(id);
-  let recalledCode = "";
-  let recalledAt = 0;
+  const PRIORITY_CAPACITY = 10;
+  const REGULAR_CAPACITY = 20;
 
-  function upper(value) {
-    return String(value || "").toUpperCase();
+  // Hero timing (letter shows first, number follows after this delay)
+const HERO_NUM_DELAY_MS = 100;
+let __heroNumTimer = null;
+
+
+  function upper(s){ return String(s || '').toUpperCase(); }
+
+  function isPriorityGroupCode(gc){
+    const g = upper(gc);
+    return g.startsWith('P'); // PA/PB/PC
   }
 
-  function codeFor(row, helpers) {
-    return helpers.ticketText(row).replace("-", "");
+  function bucketFromGroupCode(gc){
+    const g = upper(gc);
+    if (g.startsWith('P')) return g.slice(1,2) || 'A';
+    if (['A','B','C'].includes(g)) return g;
+    return 'A';
   }
 
-  function pickGlobalCalled(rows) {
-    return (rows || [])
-      .filter((row) => upper(row.status) === "CALLED")
-      .sort((a, b) => Number(b.calledAt || 0) - Number(a.calledAt || 0))[0] || null;
+  function pad2(n){
+    const x = Number(n);
+    if (!Number.isFinite(x)) return '';
+    return String(x).padStart(2, '0');
   }
 
-  function renderCodes(target, rows, helpers) {
-    if (!target) return;
-    target.innerHTML = "";
-    for (const row of rows) {
-      const item = document.createElement("div");
-      item.className = "queueCode";
-      item.textContent = codeFor(row, helpers);
-      target.appendChild(item);
+  function splitCodeParts(row){
+    const raw = String(row?.code || '').trim();
+    const qn = pad2(row?.queueNum);
+    const gc = upper(row?.groupCode);
+    const code = raw || (gc && qn ? `${gc}-${qn}` : '');
+
+    const parts = code.split('-');
+    if (parts.length >= 2) return { letters: upper(parts[0]), num: parts[1] };
+    return { letters: gc || '—', num: qn || '—' };
+  }
+
+  function pickGlobalCalled(rows){
+    const called = (rows || []).filter(r => upper(r?.status) === 'CALLED');
+    if (!called.length) return null;
+
+    // Show the most recently active called ticket.
+    // latestCallAt is updated on both CALL and CALL AGAIN.
+    const scored = called.map(r => {
+      const latestCallAt = Number(r?.latestCallAt || 0);
+      const calledAt = Number(r?.calledAt || 0);
+      const latestTs = (Number.isFinite(latestCallAt) && latestCallAt > 0)
+        ? latestCallAt
+        : ((Number.isFinite(calledAt) && calledAt > 0) ? calledAt : -1);
+      const calledTs = (Number.isFinite(calledAt) && calledAt > 0) ? calledAt : -1;
+      const qn = Number(r?.queueNum || 0);
+      return { r, latestTs, calledTs, qn };
+    });
+
+    scored.sort((a,b) => (b.latestTs - a.latestTs) || (b.calledTs - a.calledTs) || (a.qn - b.qn));
+    return scored[0]?.r || null;
+  }
+
+  function sortByQueueNum(a,b){ return (Number(a?.queueNum || 0) - Number(b?.queueNum || 0)); }
+
+  function makeListItem(row){
+    const el = document.createElement('div');
+    el.className = 'waitingItem';
+    const p = splitCodeParts(row);
+    el.textContent = `${p.letters}${p.num}`;
+    return el;
+  }
+
+  function buildList(container, rows){
+    if (!container) return;
+    container.innerHTML = '';
+    for (const row of rows || []) container.appendChild(makeListItem(row));
+  }
+
+  function setBranchName(state){
+    const el = $('branchName');
+    if (!el) return;
+    const name = String(state?.branchName || '').trim();
+    el.textContent = name || 'BRANCH NAME';
+  }
+
+  function setGlobalCalled(rows){
+  const letterEl = document.getElementById('heroLetter');
+  const numEl = document.getElementById('heroNum');
+  const calledEl = document.getElementById('calledGlobal');
+
+  if (!letterEl || !numEl || !calledEl) return;
+
+  // cancel any pending delayed update (avoid wrong numbers on rapid calls)
+  if (__heroNumTimer) {
+    clearTimeout(__heroNumTimer);
+    __heroNumTimer = null;
+  }
+
+  const r = pickGlobalCalled(rows);
+  if (!r){
+    letterEl.textContent = '—';
+    numEl.textContent = '—';
+    calledEl.classList.remove('isPriorityCalled');
+    return;
+  }
+
+  const p = splitCodeParts(r);
+
+  // Update LETTER immediately
+  letterEl.textContent = p.letters || '—';
+
+  // Update NUMBER after 0.4s
+  __heroNumTimer = setTimeout(() => {
+    numEl.textContent = p.num || '—';
+    __heroNumTimer = null;
+  }, HERO_NUM_DELAY_MS);
+
+  // Priority detection still uses letters (safe to do immediately)
+  const isPriorityCalled = String(p.letters || '').toUpperCase().startsWith('P');
+  calledEl.classList.toggle('isPriorityCalled', isPriorityCalled);
+}
+
+
+
+
+  function renderWaiting(rows, helpers){
+    const waiting = (rows || []).filter(r => upper(r?.status) === 'WAITING');
+
+    const byBucket = { A: [], B: [], C: [] };
+    const priByBucket = { A: [], B: [], C: [] };
+
+    for (const r of waiting){
+      const b = bucketFromGroupCode(r?.groupCode);
+      if (!byBucket[b]) continue;
+      if (isPriorityGroupCode(r?.groupCode)) priByBucket[b].push(r);
+      else byBucket[b].push(r);
     }
-  }
 
-  function setGuestQr() {
-    const image = $("guestQr");
-    if (!image || image.dataset.ready === "1") return;
-    const query = new URLSearchParams(window.location.search);
-    const pathParts = window.location.pathname.split("/").filter(Boolean);
-    const branchIndex = pathParts.findIndex((part) => part.toLowerCase() === "b");
-    const branchCode = upper(query.get("branchCode") || (branchIndex >= 0 ? pathParts[branchIndex + 1] : ""));
-    const base = typeof window.appUrl === "function" ? window.appUrl("/qr/guest") : "/qr/guest";
-    image.src = branchCode ? `${base}?branchCode=${encodeURIComponent(branchCode)}` : base;
-    image.dataset.ready = "1";
-  }
-
-  function forceHeroPulse() {
-    const hero = $("globalServing");
-    if (!hero) return;
-    hero.classList.remove("pulse");
-    void hero.offsetWidth;
-    hero.classList.add("pulse");
-  }
-
-  function showRecalledCode(code, payload) {
-    const hero = $("globalServing");
-    if (!hero || !code) return;
-    const normalized = String(code).replace("-", "").toUpperCase();
-    recalledCode = normalized;
-    recalledAt = Number(payload?.at || Date.now());
-    hero.textContent = normalized;
-    hero.classList.toggle("priority", normalized.startsWith("P"));
-  }
-
-  function render(rows, state, helpers) {
-    setGuestQr();
-    const calledRows = (rows || []).filter((row) => upper(row.status) === "CALLED");
-    const recalledRow = calledRows.find((row) => codeFor(row, helpers) === recalledCode);
-    const newerCallExists = calledRows.some((row) => Number(row.calledAt || 0) > recalledAt);
-    if (!recalledRow || newerCallExists) {
-      recalledCode = "";
-      recalledAt = 0;
-    }
-    const called = recalledCode ? recalledRow : pickGlobalCalled(rows);
-    const hero = $("globalServing");
-    const code = recalledCode || (called ? codeFor(called, helpers) : "—");
-    if (hero) {
-      if (hero.textContent !== code && code !== "—") forceHeroPulse();
-      hero.textContent = code;
-      hero.classList.toggle("priority", !!called && helpers.isPriorityRow(called));
-    }
-
-    for (const group of GROUPS) {
-      const waiting = (rows || []).filter((row) =>
-        upper(row.status) === "WAITING" && helpers.paxToBucket(row) === group
+    for (const b of ['A','B','C']){
+      priByBucket[b].sort(sortByQueueNum);
+      byBucket[b].sort(sortByQueueNum);
+      const allocation = helpers.stableWaitingColumns(
+        b,
+        [...priByBucket[b], ...byBucket[b]],
+        {
+          layoutKey: 'portrait-columns-v2',
+          priorityCapacity: window.DisplayFit?.waitingCapacity($('priority-' + b), PRIORITY_CAPACITY) ?? PRIORITY_CAPACITY,
+          regularCapacity: window.DisplayFit?.waitingCapacity($('regular-' + b), REGULAR_CAPACITY) ?? REGULAR_CAPACITY
+        }
       );
-      const allocation = helpers.stableWaitingColumns(group, waiting, {
-        layoutKey: "portrait",
-        priorityCapacity: 10,
-        regularCapacity: 20,
-      });
-      renderCodes($(`priority-${group}`), allocation.visiblePriority, helpers);
-      renderCodes($(`regular-${group}`), allocation.visibleRegular, helpers);
-      const hidden = $(`hidden-${group}`);
-      if (hidden) hidden.textContent = `P: ${allocation.hiddenPriority} | R: ${allocation.hiddenRegular}`;
+      buildList(document.getElementById('priority-' + b), allocation.visiblePriority);
+      buildList(document.getElementById('regular-' + b), allocation.visibleRegular);
+      const c = document.getElementById('count-' + b);
+      if (c) {
+        c.innerHTML = `<span class="grpCountTitle">Waiting</span>`
+          + `<span class="grpCountBreakdown">P: ${allocation.hiddenPriority} | R: ${allocation.hiddenRegular}</span>`;
+      }
     }
   }
 
+  // Public API expected by display-core.js
   window.DisplayUI = {
-    render,
-    forceHeroPulse,
-    showRecalledCode,
-    getStatusEl: () => $("status"),
-    getAdPlayerEl: () => $("adPlayer"),
-    getChimeEl: () => $("chime"),
+    render(rows, state, helpers){
+      setBranchName(state);
+      setGlobalCalled(rows);
+      renderWaiting(rows, helpers);
+      window.DisplayFit?.watchWaiting(() => renderWaiting(rows || [], helpers));
+    },
+    getStatusEl(){ return $('status'); },
+    getAdPlayerEl(){ return $('adPlayer'); },
+    getChimeEl(){ return $('chime'); }
   };
+
+
+// === Recall support: force hero pulse (imperative, no state change) ===
+function forceHeroPulse(){
+  const el = document.getElementById("calledGlobal") || document.querySelector(".nowServing");
+  if (!el) return;
+
+  // Restart CSS animation reliably
+  el.classList.remove("qsysPulse");
+  void el.offsetWidth; // force reflow
+  el.classList.add("qsysPulse");
+}
+
+// expose to core
+window.DisplayUI = window.DisplayUI || {};
+window.DisplayUI.forceHeroPulse = forceHeroPulse;
 })();

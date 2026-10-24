@@ -1,5 +1,30 @@
 # Phase Test Instructions
 
+## Launcher Dashboard Organization
+
+Scope:
+- Visual organization and responsive layout in `server/static/launcher.html`.
+- Existing launcher behavior and JavaScript bindings remain unchanged.
+
+Validation flows:
+- Open the Electron launcher and confirm the status summary appears first.
+- Confirm Enabled at startup appears beside the top-right online status with Yes/No options.
+- Select Yes and No, restart the launcher, and confirm the saved option remains selected.
+- On Windows, confirm Yes enables and No disables the Electron login item.
+- Confirm Open Display is the primary action and Shutdown App is visually separated.
+- Confirm Display Setup is grouped into Branch, Display, Media, and Screen sections.
+- Change branch, experience, orientation, playback source, local file, and target monitor.
+- Save, reload, open, and shut down using the existing controls.
+- Resize the launcher from desktop width to a narrow window and confirm sections stack without clipping or horizontal scrolling.
+
+Expected results:
+- All existing launcher controls continue to work.
+- Status and primary actions are immediately visible.
+- Related configuration fields are visually grouped and consistently spaced.
+
+Known limitations:
+- Exact visual balance should be checked in the packaged Electron window.
+
 ## Online Queue Grouping Update
 
 Scope:
@@ -35,6 +60,7 @@ Validation flows:
 - Click each summary card and confirm the ticket list filters to the selected group without scrolling.
 - Confirm the toolbar shows local Lucide icons for all seven existing staff actions.
 - Search and change status filters, then confirm the current page resets to page 1.
+- Confirm the queue search field does not show browser autocomplete, saved-form, or password-manager suggestions.
 - Create 11 or more tickets in one group and confirm only 10 appear per page with previous, next, and numbered controls.
 - Expand a WAITING or CALLED row and confirm both row actions appear.
 - Remove a ticket and confirm it becomes SKIPPED, creates `QUEUE_REMOVE`, and offers a 30-second Undo.
@@ -198,3 +224,34 @@ Expected results:
 
 Known limitations:
 - Audit Logs remains CSV-only and does not show a preview in Generated View.
+
+## Offline UI parity on QSYS Online — 2026-10-24
+
+Required setup:
+- A running test instance with two active, licensed branches; Admin, supervisor (`AUDIT_VIEW`), and limited-permission Staff accounts; regular and priority test tickets; and a configured display video. Use test data and do not reset a live queue.
+
+Scope:
+- Ticket confirmation priority guidance; Guest keeps its existing online registration design and branch-aware protections.
+- Staff light tablet layout, Current Call panel, More actions, queue filters/reset, stale-data warning, duplicate-action guard, preferences, and branch-scoped recent activity for users with `AUDIT_VIEW`.
+- Admin light visual system, grouped navigation, dashboard charts, and filtering of the latest loaded audit events.
+- Landscape and portrait Display layouts from offline QSYS with a single branch-specific guest QR. Online display auth, media, sockets, and audio remain in the existing core.
+
+Validation flows:
+- On a phone, register a regular ticket and a priority ticket through the Guest page. Confirm branch code, status, and ticket confirmation; the priority ticket should show the eligibility note. Retry after a network interruption and confirm the existing recovery messages.
+- On a tablet, open Staff in at least two branches. Select each group; check Current Call, counts, queue search, status filters, Longest Wait, Reset filters, and ten-row paging. Confirm the search field does not trigger password-manager suggestions.
+- As Staff, call, recall, seat, skip, clear, and override tickets; confirm the existing permission and out-of-order reason checks still apply. Disconnect the server for more than 15 seconds and confirm a stale warning prevents ticket changes until a successful refresh. Try two quick clicks on one action and confirm only one request succeeds.
+- Set the long-wait threshold and refresh Staff. Confirm the preference persists for that user and branch, highlights only waiting rows, and leaves queue order unchanged. As a supervisor with `AUDIT_VIEW`, open Recent activity and verify it contains only the selected branch's queue actions. Check the limited-access staff message.
+- On Admin desktop and tablet, navigate every section, including Branches and Licensing. Open Dashboard charts; change dates and group, then switch branches and confirm the chart label and data change without showing the previous branch. Test an invalid range and an empty date range. Filter the latest loaded audit events by text and date.
+- Open both Display orientations with video on and off. Confirm the large Now Serving ticket, A/B/C waiting columns, hidden counts, resizing, video playback, recall animation/chime, and branch-specific guest QR. Confirm no Wi-Fi QR appears and guest scans open the intended branch.
+
+Expected results:
+- The five flows match the approved offline visual direction while retaining online branch routing, licensing, permissions, and queue rules.
+- Admin chart and Staff activity requests reveal data only for the signed-in user's selected branch.
+- No existing records or database schema are changed by this update.
+
+Known limitations:
+- Isolated local browser screenshots confirmed Admin Dashboard, Staff, and both Display orientations with video on and off. User screenshots from branch YL-MOA also confirmed Guest registration, Ticket confirmation, Staff, Admin, and landscape Display. Staff queue actions, multiple live branches, and kiosk audio still require predeployment acceptance testing.
+- The Wi-Fi QR remains protected and is intentionally absent from Display.
+
+Recovery:
+- Verify `.restore-points/online-ui-before-offline-parity-2026-10-24.tar.gz` with its `.sha256` file, then restore only affected source paths from that archive. Do not restore a production database for this UI change.

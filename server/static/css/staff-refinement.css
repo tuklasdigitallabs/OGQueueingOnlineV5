@@ -1,0 +1,98 @@
+/* Match Admin foundations while retaining Staff's tablet layout and queue columns. */
+:root{
+  --bg:#f5f4f0;--panel:#fff;--panel2:#f7f7f4;--card:#fff;
+  --line:#e2e3de;--text:#252b32;--muted:#626a74;--muted2:#626a74;
+  --accent:#983c40;--shadow:0 2px 8px rgba(24,32,40,.035);--radius:10px;
+}
+body{background:var(--bg);font-family:"Segoe UI Variable","Segoe UI",system-ui,-apple-system,Arial,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit}
+b,strong{font-weight:600}
+.topbar{background:rgba(255,255,255,.96);border-bottom:1px solid var(--line)}
+.brandMark{background:var(--accent);border-radius:9px;box-shadow:none;font-weight:600}
+.brand h1{font-weight:600}
+.card,.currentPanel,.modal,.displayPopover{background:var(--panel);border-color:var(--line);border-radius:10px;box-shadow:var(--shadow)}
+.card-h,.currentPanelHead{background:var(--panel);border-color:var(--line)}
+.card-h h2,.currentPanelHead,.listTitle,.displayPopoverTitle,.modal h3{font-weight:600}
+.gcard{background:#414b53;border-radius:8px;box-shadow:none}
+.gcard.active{background:#fff7f6;color:var(--text);border-color:#bd8588;box-shadow:inset 0 0 0 1px #bd8588}
+.gcard.active .gname,.gcard.active .mini{color:var(--muted)}
+.gcard.active .big{color:var(--accent)}
+.gname,.big{font-weight:600}
+.summaryAction,.listToolbar,.currentStat{background:var(--panel);border-color:var(--line);border-radius:8px;box-shadow:none}
+.summaryAction span{font-weight:500}
+.summaryAction:hover{transform:none;box-shadow:none;border-color:#aeb5b7;background:var(--panel2)}
+.summaryAction.primary{color:var(--accent);background:#fff7f6;border-color:#e2c7c7}
+.btn,.chip,.staffAccount summary,.staffMore summary{border-radius:7px;font-size:13px;font-weight:500;border-color:var(--line);background:var(--panel);color:var(--text)}
+.btn:hover,.chip:hover{transform:none;background:var(--panel2);border-color:#aeb5b7}
+.btn.primary,.currentSeatBtn{background:#303940;color:#fff;border-color:#303940}
+.btn.primary:hover,.currentSeatBtn:hover{background:#222b32;border-color:#222b32}
+.btn.danger{background:#fff7f6;color:#8b3439;border-color:#e2c7c7}
+.btn:disabled,.currentSeatBtn:disabled{background:#f6f7f4;color:var(--muted);border-color:var(--line);opacity:.5}
+.chip.active,.roleTag{color:var(--accent);border-color:#e2c7c7;background:#fff7f6}
+.search,.field input,.field select,.field textarea,.displayField select,.preferenceControls input{background:#fff;color:var(--text);border-color:var(--line);border-radius:7px;font-weight:400}
+.search:focus,.field input:focus,.field select:focus,.field textarea:focus{border-color:#8a9499;box-shadow:0 0 0 3px rgba(65,79,86,.09)}
+button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.ticketEntry .row:focus-visible{outline:3px solid #667d87;outline-offset:2px}
+.ticketEntry .row{background:#fff;border-color:var(--line);border-radius:8px;box-shadow:none}
+.ticketEntry .row:hover{border-color:#aeb5b7;box-shadow:none}
+.ticketEntry.open .row{border-radius:8px 8px 0 0}
+.ticketActions{background:var(--panel2);border-color:var(--line);border-radius:0 0 8px 8px}
+.code{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums}
+.ticketName,.ticketMetric{font-weight:600}
+.tag{border-radius:6px;font-weight:500}
+.tag.prio{color:var(--accent);border-color:#e2c7c7;background:#fff7f6}
+.tag.called,.right .tag.called{color:#3c684b;border-color:#d1e2d5;background:#edf5ef;font-weight:500}
+.tag.longWait{color:#856527;border-color:#eadcc0;background:#fbf4e7}
+.currentCall{background:#414b53;border-radius:8px}
+.currentLabel{font-weight:500;letter-spacing:.04em}
+.currentCode{font-weight:600;font-variant-numeric:tabular-nums}
+.currentStat strong{font-weight:600}
+.staffExtra>summary,.staffMore summary,.staffAccount summary,.field label,.displayField label{font-weight:500}
+.staffAccountMenu{background:var(--panel);border-color:var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(24,32,40,.09)}
+.statusPill,.pill{border-radius:8px}
+svg.lucide{stroke-width:1.7}
+@media(max-width:1100px){.staffWorkspace .currentPanel{box-shadow:0 3px 12px rgba(24,32,40,.07)}}
+
+.gcard.active .called{color:var(--muted);border-color:#e2c7c7}
+.gcard.active .called strong{color:var(--text)}
+.gcard:hover{transform:none;box-shadow:none}
+.gcard:focus-visible{outline:3px solid #667d87;outline-offset:2px}
+/* Online queue controls retain their existing endpoints and branch selection. */
+.actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:start}
+.actions .btn{min-height:54px;white-space:normal}
+.staffMore{position:relative;min-width:0}
+.staffMore>summary{list-style:none;min-height:54px;display:flex;justify-content:center;align-items:center;cursor:pointer}
+.staffMore>summary::-webkit-details-marker{display:none}
+.staffMoreActions{position:absolute;right:0;top:100%;z-index:8;display:grid;gap:7px;min-width:190px;padding:9px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(24,32,40,.13)}
+.staffMoreActions .btn{min-height:44px;justify-content:flex-start}
+.staffWorkspace{display:grid;grid-template-columns:minmax(210px,.38fr) minmax(0,1fr);gap:16px;align-items:start;margin-top:14px}
+.staffQueueArea{min-width:0}
+.currentPanel{position:sticky;top:88px;border:1px solid var(--line);overflow:hidden}
+.currentPanelHead{padding:12px 14px;border-bottom:1px solid var(--line)}
+.currentPanelBody{padding:12px;display:grid;gap:10px}
+.currentCall{padding:18px 12px;color:#fff;text-align:center}
+.currentLabel{font-size:12px;text-transform:uppercase}
+.currentCode{font-size:clamp(42px,5vw,76px);line-height:1.1;letter-spacing:.02em}
+.currentGuest{font-size:13px;overflow-wrap:anywhere}
+.currentStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.currentStat{display:grid;text-align:center;padding:7px 3px;font-size:11px;min-width:0}
+.currentStat strong{font-size:18px}
+.currentSeatBtn{width:100%;justify-content:center;min-height:48px}
+.row{background:#fff;border-color:var(--line);border-radius:8px}
+.row:hover{border-color:#aeb5b7}
+.row:focus-visible{outline:3px solid #667d87;outline-offset:2px}
+.row .code{color:var(--accent);font-weight:600}
+.rowActions{border-color:var(--line)}
+.searchInput{border-color:var(--line);background:#fff;border-radius:7px}
+.fPill{border-color:var(--line);background:var(--panel);border-radius:7px;font-weight:500}
+.fPill.active{border-color:#e2c7c7;background:#fff7f6}
+@media(max-width:1100px){.staffWorkspace{grid-template-columns:1fr}.currentPanel{top:78px;z-index:5}.currentPanelBody{grid-template-columns:minmax(0,1fr) minmax(210px,.6fr);align-items:center}.currentStats{grid-column:2}.currentSeatBtn{grid-column:2}.currentCall{grid-row:1/3}}
+@media(max-width:680px){.actions{grid-template-columns:repeat(2,minmax(0,1fr))}.staffWorkspace{gap:10px}.currentPanel{position:static}.currentPanelBody{display:grid;grid-template-columns:1fr}.currentCall,.currentStats,.currentSeatBtn{grid-column:1;grid-row:auto}.groups{grid-template-columns:repeat(3,minmax(0,1fr))}.gcard{padding:8px}.gname{font-size:11px}.big{font-size:22px}}
+.staffNotice{margin-top:12px;padding:8px 10px;border-radius:7px;background:#f2f5f2;color:#52616a;font-size:12px}
+.staffNotice.stale{background:#fff5da;color:#66491a;border:1px solid #d6ac69}
+.staffExtra{grid-column:1/-1}
+.staffExtra>summary{padding:14px 16px;cursor:pointer}
+.preferenceControls{display:flex;align-items:center;gap:8px;margin-top:8px}
+.preferenceControls input{width:90px;min-height:44px;padding:8px}
+.row.longWait{border-color:#d6ac69;background:#fffbf0}
+.activityList{display:grid;gap:8px;margin-top:10px}
+.activityList>div{padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}

@@ -706,6 +706,8 @@
 }
 
   </style>
+    <script src="./app-boot.js"></script>
+<script>document.write('<link rel="stylesheet" href="' + window.appUrl('/static/css/staff-refinement.css?v=20261024') + '" />');</script>
 </head>
 
 <body>
@@ -791,11 +793,31 @@
             <button class="btn primary" id="callNextBtn"><i data-lucide="rotate-ccw"></i><span>Call Again</span></button>
             <button class="btn" id="callPriorityBtn"><i data-lucide="badge-alert"></i><span>Priority Next</span></button>
             <button class="btn" id="callRegularBtn"><i data-lucide="user-round"></i><span>Regular Next</span></button>
-            <button class="btn" id="seatBtn"><i data-lucide="armchair"></i><span>Seat Called</span></button>
-            <button class="btn" id="skipBtn"><i data-lucide="skip-forward"></i><span>Skip</span></button>
-            <button class="btn" id="clearBtn"><i data-lucide="eraser"></i><span>Clear Called</span></button>
-            <button class="btn" id="overrideBtn"><i data-lucide="list-plus"></i><span>Override</span></button>
+            <details class="staffMore"><summary class="btn">More actions</summary><div class="staffMoreActions">
+              <button class="btn" id="skipBtn"><i data-lucide="skip-forward"></i><span>Skip</span></button>
+              <button class="btn" id="clearBtn"><i data-lucide="eraser"></i><span>Clear Called</span></button>
+              <button class="btn" id="overrideBtn"><i data-lucide="list-plus"></i><span>Override</span></button>
+            </div></details>
           </div>
+          <div class="staffNotice" id="queueStatus" role="status" aria-live="polite">Refreshing queue…</div>
+          <div class="staffWorkspace">
+            <aside class="currentPanel" aria-labelledby="currentCallHeading">
+              <div class="currentPanelHead" id="currentCallHeading">Current Call</div>
+              <div class="currentPanelBody">
+                <div class="currentCall">
+                  <div class="currentLabel" id="currentCallLabel">Selected group</div>
+                  <div class="currentCode" id="currentCallCode">—</div>
+                  <div class="currentGuest" id="currentCallGuest">No ticket is currently called.</div>
+                </div>
+                <div class="currentStats">
+                  <div class="currentStat"><span>Waiting</span><strong id="currentWaitingStat">0</strong></div>
+                  <div class="currentStat"><span>Priority</span><strong id="currentPriorityStat">0</strong></div>
+                  <div class="currentStat"><span>Regular</span><strong id="currentRegularStat">0</strong></div>
+                </div>
+                <button class="btn primary currentSeatBtn" id="seatBtn" type="button"><i data-lucide="armchair"></i><span>Seat Called Guest</span></button>
+              </div>
+            </aside>
+            <div class="staffQueueArea">
           <div class="hint" id="permHint">—</div>
           <div class="undoBar" id="undoBar">
             <span id="undoText">Undo available</span>
@@ -806,14 +828,17 @@
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
               <div style="color:var(--muted); font-size:12px;">Tickets (WAITING + CALLED)</div>
               <div class="filterBar">
-                <input id="queueSearch" class="searchInput" type="search" placeholder="Search code / name / pax"
-                  autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                <input id="queueSearch" class="searchInput" type="text" name="qsys_queue_filter"
+                  role="searchbox" placeholder="Search code / name / pax"
+                  autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false"
+                  data-lpignore="true" data-1p-ignore="true" readonly />
                 <div class="filterPills" id="ticketFilterPills">
                   <button type="button" class="fPill active" data-filter="ALL">All</button>
                   <button type="button" class="fPill" data-filter="WAITING">Waiting</button>
                   <button type="button" class="fPill" data-filter="CALLED">Called</button>
                   <button type="button" class="fPill" data-filter="LONGEST_WAIT">Longest Wait</button>
                 </div>
+                <button class="btn" id="resetQueueFilters" type="button">Reset filters</button>
                 <button class="btn" id="refreshBtn">Refresh</button>
               </div>
             </div>
@@ -823,8 +848,13 @@
               <div class="pageButtons" id="ticketPageButtons"></div>
             </div>
           </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      <details class="card staffExtra" id="staffPreferences"><summary>Tablet preferences</summary><div class="card-b"><label for="longWaitMinutes">Highlight waiting guests after (minutes)</label><div class="preferenceControls"><input id="longWaitMinutes" type="number" min="0" max="240" step="1" value="0" inputmode="numeric" /><button id="saveStaffPreferences" class="btn" type="button">Save</button></div><p class="hint">0 turns highlighting off. Queue order stays unchanged.</p></div></details>
+      <details class="card staffExtra" id="staffActivity"><summary>Recent activity</summary><div class="card-b"><button class="btn" id="auditRefreshBtn" type="button">Refresh activity</button><div id="auditList" class="activityList" role="status"></div></div></details>
 
       <!-- RIGHT: Actions + Audit -->
       <div class="card" style="display:none;">
@@ -850,13 +880,7 @@
             </div>
           </div>
 
-          <div style="margin-top:14px; border-top:1px solid rgba(0,0,0,.10); padding-top:14px; display:none">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <div style="font-weight:800; font-size:13px;">Audit Trail</div>
-              <button class="btn" id="auditRefreshBtn">Refresh</button>
-            </div>
-            <div id="auditList" style="margin-top:10px;"></div>
-          </div>
+
         </div>
       </div>
 
@@ -865,8 +889,8 @@
 
   <!-- Override Modal -->
   <div class="modalBack" id="overrideModal">
-    <div class="modal">
-      <h3>Override Call (Specific Ticket)</h3>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="overrideHeading">
+      <h3 id="overrideHeading">Override Call (Specific Ticket)</h3>
       <div class="body">
         <div class="field" style="margin-top:0;">
           <label>Ticket</label>
@@ -903,9 +927,11 @@
 
   <div class="toastWrap" id="toastWrap"></div>
 
-  <script src="./app-boot.js"></script>
-  <script src="./socket.io/socket.io.js"></script>
-  <script src="./static/js/lucide.min.js"></script>
+
+  <script>
+    document.write('<script src="' + window.appUrl('/socket.io/socket.io.js') + '"><\/script>');
+    document.write('<script src="' + window.appUrl('/static/js/lucide.min.js') + '"><\/script>');
+  </script>
   <script>
     function $(id){ return document.getElementById(id); }
 
@@ -1066,6 +1092,9 @@ function waitingMins(r){
       selectedGroup: "A",
       ticketFilter: "ALL",
       queueSearch: "",
+      longWaitMinutes: 0,
+      mutationPending: false,
+      lastQueueUpdateAt: 0,
       ticketPage: 1,
       expandedTicketId: "",
       displayTargets: [],
@@ -1270,6 +1299,10 @@ function getQueuedMs(item) {
       state.allowedBranches = Array.isArray(data.allowedBranches) ? data.allowedBranches : [];
       state.selectedBranchId = String(state.me?.selectedBranchId || data.branch?.branchId || "").trim();
       state.permissions = data.permissions || {};
+      try {
+        state.longWaitMinutes = Number(localStorage.getItem(`qsys_staff_long_wait:${state.me?.userId || "staff"}:${state.selectedBranchId}`) || 0);
+        $("longWaitMinutes").value = String(state.longWaitMinutes);
+      } catch {}
       $("meName").textContent = state.me?.fullName || state.me?.username || "—";
       $("meRole").textContent = String(state.me?.roleId || state.me?.role || "—").toUpperCase();
       renderBranchSwitcher();
@@ -1487,6 +1520,15 @@ function getQueuedMs(item) {
       fillOverrideTickets(rows.filter((r) => String(r.status || "").toUpperCase() === "WAITING"));
       const hasCalled = rows.some(r => String(r.status || "").toUpperCase() === "CALLED");
       $("callNextBtn").disabled = !hasCalled || !hasPerm("QUEUE_CALL_NEXT");
+      const called = rows.find(r => String(r.status || "").toUpperCase() === "CALLED");
+      const waiting = rows.filter(r => String(r.status || "").toUpperCase() === "WAITING");
+      $("currentCallLabel").textContent = `${{ A: "1–2 Pax", B: "3–5 Pax", C: "6++ Pax" }[groupPick()] || "Selected group"} · Group ${groupPick()}`;
+      $("currentCallCode").textContent = called ? codeFor(called) : "—";
+      $("currentCallGuest").textContent = called ? `${called.name || "Guest"} · ${Number(called.pax || 1)} pax` : "No ticket is currently called.";
+      $("currentWaitingStat").textContent = String(waiting.length);
+      $("currentPriorityStat").textContent = String(waiting.filter(r => String(r.priorityType || "NONE").toUpperCase() !== "NONE").length);
+      $("currentRegularStat").textContent = String(waiting.filter(r => String(r.priorityType || "NONE").toUpperCase() === "NONE").length);
+      $("seatBtn").disabled = !hasCalled || !hasPerm("QUEUE_SEAT");
     }
 
     function applyTicketFilterPills(){
@@ -1494,6 +1536,13 @@ function getQueuedMs(item) {
       const search = $("queueSearch");
       if (!box) return;
       const btns = Array.from(box.querySelectorAll(".fPill"));
+
+      if (search){
+        search.value = "";
+        const enableSearch = () => search.removeAttribute("readonly");
+        search.addEventListener("pointerdown", enableSearch, { once: true });
+        search.addEventListener("focus", enableSearch, { once: true });
+      }
 
       function setActive(filter){
         state.ticketFilter = filter;
@@ -1517,6 +1566,14 @@ function getQueuedMs(item) {
         state.queueSearch = search.value || "";
         state.ticketPage = 1;
         state.expandedTicketId = "";
+        renderGroupView();
+      });
+      $("resetQueueFilters")?.addEventListener("click", () => {
+        search.value = "";
+        state.queueSearch = "";
+        state.ticketPage = 1;
+        state.expandedTicketId = "";
+        setActive("ALL");
         renderGroupView();
       });
     }
@@ -1550,14 +1607,29 @@ function getQueuedMs(item) {
     }
 
     async function loadState(){
-      const { res, data } = await api("/api/staff/state", "GET");
+      let res, data;
+      try {
+        ({ res, data } = await api("/api/staff/state", "GET"));
+      } catch {
+        $("queueStatus").textContent = "Connection lost. Showing the last queue update; retrying…";
+        $("queueStatus").classList.add("stale");
+        return;
+      }
       if (!res.ok || !data || !data.ok){
-        toast("Not authenticated", "bad", "Please login again.");
-        window.location.href = staffLoginUrl();
+        if (res.status === 401) {
+          toast("Not authenticated", "bad", "Please login again.");
+          window.location.href = staffLoginUrl();
+        } else {
+          $("queueStatus").textContent = data?.error || "Queue update unavailable. Showing the last update; retrying…";
+          $("queueStatus").classList.add("stale");
+        }
         return;
       }
 
       state.snapshot = data;
+      state.lastQueueUpdateAt = Date.now();
+      $("queueStatus").textContent = "Queue is up to date";
+      $("queueStatus").classList.remove("stale");
       $("branchLine").textContent = `${data.branchName || data.branchCode || "—"} • ${data.branchCode || "—"}`;
       $("bizDate").textContent = data.businessDate || "—";
 
@@ -1591,7 +1663,7 @@ function getQueuedMs(item) {
 
         const node = document.createElement("div");
         node.className = "gcard" + (state.selectedGroup === g ? " active" : "");
-        node.setAttribute("role", "button");
+        node.setAttribute("role", "group");
         node.setAttribute("tabindex", "0");
         node.innerHTML = `
           <div class="ghead">
@@ -1636,7 +1708,7 @@ function getQueuedMs(item) {
       }
 
       // Within a group: show Priority first, then Regular, both oldest-first by their own counters.
-      const sorted = rows.slice().sort((a,b) => {
+      const sorted = state.ticketFilter === "LONGEST_WAIT" ? rows.slice() : rows.slice().sort((a,b) => {
         const ap = (String(a.priorityType || "NONE").toUpperCase() !== "NONE") ? 0 : 1;
         const bp = (String(b.priorityType || "NONE").toUpperCase() !== "NONE") ? 0 : 1;
         if (ap !== bp) return ap - bp;
@@ -1655,8 +1727,13 @@ function getQueuedMs(item) {
 
       for (const r of visibleRows){
         const node = document.createElement("div");
-        node.className = "row" + (state.expandedTicketId === r.id ? " expanded" : "");
+        node.className = "row" + (state.expandedTicketId === r.id ? " expanded" : "") + (state.longWaitMinutes > 0 && r.status === "WAITING" && (waitingMins(r) ?? -1) >= state.longWaitMinutes ? " longWait" : "");
+        node.setAttribute("role", "button");
+        node.setAttribute("tabindex", "0");
+        node.setAttribute("aria-expanded", state.expandedTicketId === r.id ? "true" : "false");
+        node.dataset.ticketId = String(r.id);
         const code = codeFor(r);
+        node.setAttribute("aria-label", `Ticket ${code}; press Enter to show actions`);
         const prio = String(r.priorityType || "NONE").toUpperCase();
         const isPrio = prio !== "NONE";
         const isCalled = r.status === "CALLED";
@@ -1693,6 +1770,12 @@ function getQueuedMs(item) {
         node.addEventListener("click", () => {
           state.expandedTicketId = state.expandedTicketId === r.id ? "" : r.id;
           renderList(rows);
+        });
+        node.addEventListener("keydown", (event) => {
+          if (event.target !== node || !["Enter", " "].includes(event.key)) return;
+          event.preventDefault();
+          node.click();
+          Array.from(wrap.children).find((item) => item.dataset.ticketId === String(r.id))?.focus();
         });
         node.querySelector("[data-remove-ticket]")?.addEventListener("click", async (event) => {
           event.stopPropagation();
@@ -1771,7 +1854,7 @@ function getQueuedMs(item) {
     }
 
     async function loadAudit(){
-      const { res, data } = await api("/api/admin/audit?limit=50&offset=0", "GET");
+      const { res, data } = await api("/api/staff/audit", "GET");
       const el = $("auditList");
       el.innerHTML = "";
 
@@ -1786,11 +1869,14 @@ function getQueuedMs(item) {
         return;
       }
 
+      const actionLabels = { QUEUE_CALL: "Called", QUEUE_CALL_AGAIN: "Recalled", QUEUE_CALL_OVERRIDE: "Specific ticket called", QUEUE_SEAT: "Seated", QUEUE_SEAT_OVERRIDE: "Seated out of order", QUEUE_SKIP: "Skipped", QUEUE_REMOVE: "Removed", QUEUE_CLEAR_CALLED: "Returned to waiting", QUEUE_REOPEN_COMPLETED: "Reopened" };
       for (const r of rows.slice(0, 18)){
         const when = new Date(Number(r.createdAt||0)).toLocaleString("en-PH", { timeZone:"Asia/Manila" });
         let summary = "";
+        let actor = "System";
         try{
           const p = JSON.parse(r.payload || "{}");
+          actor = String(p.actor?.fullName || p.actor?.userId || "System");
           if (p.groupCode && (p.queueNum || p.priorityNum)){
             const g = String(p.groupCode || '').toUpperCase();
             const isPriority = (String(p.priorityType || 'NONE').toUpperCase() !== 'NONE') || String(p.code || '').toUpperCase().startsWith('P');
@@ -1801,15 +1887,15 @@ function getQueuedMs(item) {
           if (p.businessDate) summary += ` • ${p.businessDate}`;
         }catch{}
         const node = document.createElement("div");
-        node.style.border = "1px solid rgba(0,0,0,.08)";
-        node.style.background = "rgba(60,40,20,.35)";
-        node.style.borderRadius = "14px";
+        node.style.border = "1px solid var(--line)";
+        node.style.background = "var(--panel2)";
+        node.style.borderRadius = "7px";
         node.style.padding = "10px 10px";
         node.style.marginBottom = "8px";
         node.innerHTML = `
           <div style="display:flex; justify-content:space-between; gap:10px;">
-            <div style="font-weight:850; font-size:12.5px;">${escapeHtml(r.action || "—")}${escapeHtml(summary)}</div>
-            <div style="color:var(--muted); font-size:11px; white-space:nowrap;">${escapeHtml(when)}</div>
+            <div style="font-weight:600; font-size:12.5px;">${escapeHtml(actionLabels[r.action] || r.action || "—")}${escapeHtml(summary)}</div>
+            <div style="color:var(--muted); font-size:11px; text-align:right; overflow-wrap:anywhere;">${escapeHtml(actor)} · ${escapeHtml(when)}</div>
           </div>
         `;
         el.appendChild(node);
@@ -1817,6 +1903,11 @@ function getQueuedMs(item) {
     }
 
     async function doAction(url, body, okMsg){
+      if (state.mutationPending) return;
+      if (!state.lastQueueUpdateAt || Date.now() - state.lastQueueUpdateAt > 15000) {
+        return toast("Queue data is stale", "bad", "Refresh the queue before changing tickets.");
+      }
+      state.mutationPending = true;
       try{
         const { res, data } = await api(url, "POST", body || {});
         if (!res.ok || !data || !data.ok){
@@ -1832,6 +1923,8 @@ function getQueuedMs(item) {
       }catch(e){
         console.error(e);
         toast("Network error", "bad");
+      }finally{
+        state.mutationPending = false;
       }
     }
 
@@ -1841,10 +1934,19 @@ function getQueuedMs(item) {
       $("supUser").value = "";
       $("supPin").value = "";
       $("supervisorBlock").style.display = hasPerm("QUEUE_CALL_OVERRIDE") ? "none" : "block";
+      $("overrideTicket").focus();
     }
-    function closeModal(){ $("overrideModal").style.display = "none"; }
+    function closeModal(){ $("overrideModal").style.display = "none"; $("overrideBtn").focus(); }
 
     $("refreshBtn").addEventListener("click", loadState);
+    $("saveStaffPreferences")?.addEventListener("click", () => {
+      const value = Number($("longWaitMinutes").value);
+      if (!Number.isInteger(value) || value < 0 || value > 240) return toast("Choose 0 to 240 minutes", "bad");
+      state.longWaitMinutes = value;
+      try { localStorage.setItem(`qsys_staff_long_wait:${state.me?.userId || "staff"}:${state.selectedBranchId}`, String(value)); } catch {}
+      renderGroupView();
+      toast("Tablet preference saved", "ok");
+    });
     $("auditRefreshBtn").addEventListener("click", loadAudit);
     $("queueToolsRefreshBtn")?.addEventListener("click", loadQueueTools);
     $("queueTabForecast")?.addEventListener("click", () => setQueueToolsTab("forecast"));
@@ -1893,6 +1995,9 @@ function getQueuedMs(item) {
     $("overrideCancel").addEventListener("click", closeModal);
     $("overrideModal").addEventListener("click", (e) => {
       if (e.target === $("overrideModal")) closeModal();
+    });
+    $("overrideModal").addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeModal();
     });
 
     $("overrideGo").addEventListener("click", async () => {

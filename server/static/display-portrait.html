@@ -6,68 +6,621 @@
   <meta name="robots" content="noindex,nofollow" />
   <title>QSys Portrait Display</title>
   <style>
-    :root{--gap:12px;--brand:#900000;--regular:#a40000;--priority:#008f4c;--panel:#f2e2e2;--ink:#050505}
-    *{box-sizing:border-box;user-select:none}
-    html,body{width:100%;height:100%;margin:0;overflow:hidden}
-    body{font-family:Arial,Helvetica,sans-serif;background:var(--brand);color:var(--ink)}
-    .shell{height:100%;padding:12px;display:grid;grid-template-rows:64px minmax(0,1fr);gap:var(--gap)}
-    .topbar{background:#c47f7f;border-radius:28px;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
-    #nowServingHeader{font-size:clamp(22px,3vw,38px);font-weight:950;letter-spacing:.08em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .kioskTools{display:flex;gap:8px}.kioskTools button{border:1px solid rgba(0,0,0,.14);border-radius:16px;background:rgba(255,255,255,.32);padding:9px 13px;font-weight:900}
-    .layout{min-height:0;display:grid;grid-template-columns:53% 47%;gap:var(--gap)}
-    .left{min-height:0;display:grid;grid-template-rows:30% 45% 25%;gap:var(--gap)}
-    .card{background:var(--panel);border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.45)}
-    .servingCard{padding:14px;display:flex;flex-direction:column}
-    .servingTitle{text-align:center;font-size:clamp(34px,5vw,64px);font-weight:950;letter-spacing:.08em}
-    #globalServing{flex:1;margin-top:12px;border-radius:14px;background:var(--regular);color:#fff;display:grid;place-items:center;font-size:clamp(90px,16vw,190px);font-weight:950}
-    #globalServing.priority{background:var(--priority)}
-    .pulse{animation:pulse .75s ease}@keyframes pulse{50%{transform:scale(1.025);filter:brightness(1.2)}}
-    .videoCard{position:relative;background:#130b08}.videoCard video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-    .qrCard{min-height:0;padding:10px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:6px}
-    .qrCopy{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 6px}
-    .step{font-size:clamp(24px,3.8vw,44px);font-weight:950}
-    .instruction{font-size:clamp(18px,2.8vw,34px);font-weight:950;line-height:1;white-space:nowrap}
-    #guestQr{display:block;width:100%;height:100%;min-height:0;object-fit:contain;background:#fff;border-radius:12px;padding:4px}
-    .groups{min-height:0;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:var(--gap)}
-    .groupCard{padding:12px;display:grid;grid-template-rows:auto minmax(0,1fr)}
-    .groupHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.groupName{font-size:clamp(22px,3.5vw,42px);font-weight:950}
-    .hidden{text-align:right;font-size:clamp(14px,2vw,24px);font-weight:900;line-height:1.05}.hidden:before{content:"WAITING";display:block;font-size:.7em}
-    .columns{min-height:0;margin-top:10px;display:grid;grid-template-columns:minmax(0,48fr) minmax(0,52fr);gap:8px}
-    .queueColumn{min-height:0;border-radius:14px;padding:7px;border:2px solid rgba(0,0,0,.15);overflow:hidden}
-    .queueColumn.priority{border-color:rgba(0,143,76,.55);background:rgba(0,143,76,.06)}.queueColumn.regular{border-color:rgba(164,0,0,.35);background:rgba(164,0,0,.06)}
-    .columnTitle{text-align:center;font-size:clamp(20px,3vw,34px);font-weight:950}
-    .queueCodes{display:grid;align-content:start;grid-auto-rows:min-content}.regular .queueCodes{grid-template-columns:1fr 1fr}
-    .queueCode{text-align:center;font-size:clamp(24px,3.7vw,46px);font-weight:950;line-height:1.08;color:var(--regular)}.priority .queueCode{color:var(--priority)}
-    body.mode-grid .left{grid-template-rows:70% 30%}body.mode-grid .videoCard{display:none}
-    #status{position:fixed;left:8px;bottom:3px;color:rgba(255,255,255,.55);font-size:10px}#settingsPanel{display:none}
-  </style>
-</head>
-<body class="mode-video orient-portrait">
-  <main class="shell">
-    <header class="topbar">
-      <div id="nowServingHeader">Branch</div>
-      <div class="kioskTools"><button id="btnMove" type="button">Move</button><button id="btnFull" type="button">Fullscreen</button><button id="btnClose" type="button">Close</button></div>
-    </header>
-    <section class="layout">
-      <div class="left">
-        <article class="card servingCard"><div class="servingTitle">NOW SERVING</div><div id="globalServing">—</div></article>
-        <article class="card videoCard"><video id="adPlayer" autoplay playsinline preload="auto"></video></article>
-        <article class="card qrCard"><div class="qrCopy"><span class="step">1</span><span class="instruction">SCAN TO JOIN QUEUE</span></div><img id="guestQr" alt="Guest queue QR code" /></article>
-      </div>
-      <section class="groups">
-        <article class="card groupCard"><div class="groupHeader"><div class="groupName">1–2 PAX</div><div class="hidden" id="hidden-A">P: 0 | R: 0</div></div><div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-A"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-A"></div></div></div></article>
-        <article class="card groupCard"><div class="groupHeader"><div class="groupName">3–5 PAX</div><div class="hidden" id="hidden-B">P: 0 | R: 0</div></div><div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-B"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-B"></div></div></div></article>
-        <article class="card groupCard"><div class="groupHeader"><div class="groupName">6++ PAX</div><div class="hidden" id="hidden-C">P: 0 | R: 0</div></div><div class="columns"><div class="queueColumn priority"><div class="columnTitle">PRIORITY</div><div class="queueCodes" id="priority-C"></div></div><div class="queueColumn regular"><div class="columnTitle">REGULAR</div><div class="queueCodes" id="regular-C"></div></div></div></article>
-      </section>
-    </section>
-  </main>
-  <div id="settingsPanel"></div><div id="status">Connecting…</div><audio id="chime" preload="auto"></audio>
+    :root{
+      --servePanelSoft: rgba(128, 0, 0, 0.22);
+
+      --textDark: #000;
+
+      /* single spacing token */
+      --gap: 12px;
+
+      --topbar-h: 64px;
+      --radius: 22px;
+
+      /* === LANDSCAPE TOKENS === */
+      --bg: #800000;
+      --panel: #ffffffd9;
+      --line: #333;
+      --text: #fff;
+
+      --servePanelBg: rgba(128, 0, 0, 0.75);
+      --servePanelBorder: rgba(240, 240, 240, 0.22);
+
+      --priorityTileBg: #007a3f;
+
+      /* Derived helpers */
+      --panelSoft: rgba(28,28,28,0.92);
+      --panelSoft2: rgba(28,28,28,0.72);
+      --tileEmptyBg: rgba(235, 235, 235, 0.993);
+      --tileBorder: rgba(255,255,255,0.22);
+      --tileDashed: rgba(70, 70, 70, 0.35);
+
+      --screenH: 100vh; /* overwritten by JS to exact px height */
+      --tileH: 160px;
+
+    }
+
+    *{ box-sizing:border-box; }
+    html, body{ height:100%; }
+    body{
+      margin:0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      overflow:hidden;
+      user-select:none;
+      -webkit-user-select:none;
+      -webkit-touch-callout:none;
+    }
+
+    body,
+    body *{
+      user-select:none !important;
+      -webkit-user-select:none !important;
+      -webkit-touch-callout:none !important;
+    }
+
+    body.display-locked,
+    body.display-locked *{
+      user-select:none !important;
+      -webkit-user-select:none !important;
+      -webkit-touch-callout:none !important;
+    }
+
+    body.display-locked *{
+      pointer-events:none !important;
+    }
+
+    body.display-locked [data-display-interactive],
+    body.display-locked [data-display-interactive] *{
+      pointer-events:auto !important;
+    }
+
+    /* FULL UTILIZATION: no global scaling, minimal outer padding */
+    .app{
+      height:100vh;
+      width:100vw;
+      display:grid;
+      grid-template-rows: var(--topbar-h) 1fr;
+      gap: var(--gap);
+      padding: var(--gap);
+    }
+
+    /* Top bar */
+    .topbar{
+      display:grid;
+      grid-template-columns: 4fr 1fr;
+      align-items:center;
+      gap: var(--gap);
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.45);
+      border: 1px solid rgba(0,0,0,0.18);
+    }
+    .tbLeft,.tbRight{ display:flex; align-items:center; gap: calc(var(--gap) * 0.6); }
+    .tbLeft{ justify-content:flex-start; display: none !important}
+    .tbRight{ justify-content:flex-end; }
+    .tbCenter{
+      text-align:center;
+      font-weight: 1000;
+      letter-spacing: 0.05em;
+      font-size: clamp(20px, 3vmin, 40px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: clip;
+      text-transform: uppercase;
+      color: var(--textDark);
+      padding: 0 8px;
+    }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      height: 38px;
+      padding: 0 10px;
+      border-radius: 50px;
+      border: 1px solid rgba(0,0,0,0.25);
+      background: rgba(255,255,255,0.55);
+      color: var(--textDark);
+      font-weight: 900;
+      cursor:pointer;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.icon{ width: 40px; padding:0; font-weight: 900; }
+    .btn.danger{ background: rgba(225,6,0,0.22); border-color: rgba(255,255,255,0.40); }
+
+    /* Electron window drag region (portrait) */
+.dragHandle{
+  width: 44px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.18);
+  background: rgba(255,255,255,0.35);
+
+  -webkit-app-region: drag;   /* THIS is the magic */
+}
+
+/* Anything clickable must be no-drag or it won’t click properly */
+.btn,
+.tbRight,
+.tbCenter{
+  -webkit-app-region: no-drag;
+}
+
+    /* Main layout */
+    .main{
+      display:grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: var(--gap);
+      height: 100%;
+      min-height:0;
+    }
+    .leftCol,.rightCol{ display:grid; gap: var(--gap); min-height:0; }
+    .leftCol{ grid-template-rows: 0.40fr 0.43fr 0.17fr; }
+    .rightCol{ grid-template-rows: repeat(3, 1fr); }
+    body.mode-grid .videoWrap{ display:none !important; }
+    body.mode-grid .leftCol{ grid-template-rows:0.58fr 0.42fr; }
+    body.mode-grid .leftCol .nowServing{ grid-row:1; }
+    body.mode-grid .leftCol .qrStrip{ grid-row:2; }
+
+    .card{
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      overflow:hidden;
+      min-height:0;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.12) inset;
+    }
+
+    /* Now Serving */
+    .nowServing{
+      display:grid;
+      grid-template-rows: auto 1fr;
+      padding: var(--gap);
+      gap: calc(var(--gap) * 0.8);
+    }
+    .nowHdr{color: var(--textDark);
+
+      text-align:center;
+      font-weight: 1000;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      font-size: clamp(30px, 6vmin, 60px);
+
+      background: transparent;
+    }
+    .nowTicket{
+  border-radius: calc(var(--radius) - 6px);
+  background: rgb(141, 6, 1) !important;  /* darker than panel, lighter than root */
+  border: none;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: clamp(10px, 1.2vh, 18px);
+  gap: clamp(6px, 1.0vh, 12px);
+  color: #000000;
+
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.808),
+    0 10px 26px rgb(255, 255, 255);
+}
+
+/* Now Serving background changes ONLY when called queue is priority */
+#calledGlobal.isPriorityCalled{
+  background: var(--priorityTileBg) !important; /* same as waiting priority tiles */
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.45);
+}
+
+
+.heroLetter{
+  flex: 0.4;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  font-weight: 1000;
+  letter-spacing: 0.06em;
+
+  font-size: clamp(140px, calc(var(--screenH) * 0.14), 420px);
+line-height: 0.92;
+padding-bottom: clamp(2px, 0.6vh, 8px);
+
+
+  color: #ffffff;
+}
+
+.heroNum{
+  flex: 0.6;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+  font-size: clamp(170px, calc(var(--screenH) * 0.17), 520px);
+line-height: 0.86;
+
+
+  color: #ffffff;
+  outline: #000000;
+}
+
+    /* give the nowServing card a subtle maroon header strip like landscape */
+    .nowServing{ background: var(--panel); }
+    .nowServing .nowTicket{
+      background: var(--maroon);
+    }
+
+    /* Video */
+    .videoWrap{
+      padding: 0;
+      gap: 0;
+      display:block;
+      background: transparent;
+    }
+    .videoHdr{ display:none; }
+    video#adPlayer{
+      width: 100%;
+      height: 100%;
+      display:block;
+      object-fit: cover;
+      background: #000;
+      border: none;
+      border-radius: var(--radius);
+    }
+
+    .qrStrip{
+      min-height:0;
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:var(--gap);
+    }
+    .qrCard{
+      min-width:0;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:2px;
+      padding:3px;
+      border-radius:var(--radius);
+      border:1px solid var(--line);
+      background:var(--panel);
+      color:var(--textDark);
+      overflow:hidden;
+    }
+    .qrCard img{
+      width:min(92%, calc(100% - 4px));
+      height:calc(100% - clamp(20px, 2.2vmin, 30px));
+      min-height:0;
+      padding:2px;
+      border-radius:5px;
+      background:#fff;
+      object-fit:contain;
+    }
+    .qrHeading{
+      display:flex;
+      align-items:baseline;
+      justify-content:center;
+      gap:4px;
+      white-space:nowrap;
+    }
+    .qrStep{
+      font-size:clamp(15px, 1.7vmin, 24px);
+      font-weight:1000;
+      line-height:1;
+    }
+    .qrHint{
+      font-size:clamp(8px, 0.85vmin, 12px);
+      font-weight:1000;
+      line-height:1;
+      text-transform:uppercase;
+    }
+
+    /* Groups */
+    .grp{
+      display:grid;
+      grid-template-rows: auto 1fr;
+      padding: var(--gap);
+      gap: var(--gap);
+    }
+    .grpHdr{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: var(--gap);
+    }
+    .grpName{
+      font-weight: 1000;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: clamp(22px, 3vmin, 30px);
+      color: var(--textDark);
+    }
+    .grpCount{
+      font-weight: 1000;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.60);
+      color: var(--textDark);
+      letter-spacing: 0.04em;
+      border: 2px solid rgba(0,0,0,0.22);
+      text-align:center;
+      line-height:1.05;
+      white-space:nowrap;
+    }
+    .grpCountTitle{
+      display:block;
+      font-size:clamp(12px, 1.5vmin, 17px);
+      text-transform:uppercase;
+    }
+    .grpCountBreakdown{
+      display:block;
+      margin-top:4px;
+      font-size:clamp(18px, 2.4vmin, 26px);
+    }
+
+    .waitingColumns{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:calc(var(--gap) * 0.5);
+      min-height:0;
+    }
+    .waitingColumn{
+      container-type:size;
+      min-width:0;
+      min-height:0;
+      display:grid;
+      grid-template-rows:auto 1fr;
+      gap:calc(var(--gap) * 0.25);
+      padding:calc(var(--gap) * 0.35);
+      border-radius:14px;
+      border:2px solid var(--line);
+      overflow:hidden;
+    }
+    .waitingColumn.priority{
+      background:rgba(0,122,63,0.12);
+      border-color:rgba(0,122,63,0.5);
+    }
+    .waitingColumn.regular{
+      background:rgba(141,6,1,0.10);
+      border-color:rgba(141,6,1,0.42);
+    }
+    .waitingColumnTitle{
+      text-align:center;
+      font-size:clamp(22px, 2.8vmin, 38px);
+      font-weight:1000;
+      letter-spacing:0.06em;
+      text-transform:uppercase;
+      color:var(--textDark);
+    }
+    .waitingList{
+      min-height:0;
+      display:grid;
+      grid-template-rows:repeat(10, minmax(0, 1fr));
+      grid-auto-flow:column;
+      column-gap:calc(var(--gap) * 0.5);
+      row-gap:0;
+      overflow:hidden;
+    }
+    .waitingColumn.priority .waitingList{
+      grid-template-columns:minmax(0, 1fr);
+    }
+    .waitingColumn.regular .waitingList{
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+    }
+    .waitingItem{
+      min-height:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--textDark);
+      font-size:clamp(30px, 3.8vmin, 54px);
+      font-weight:1000;
+      letter-spacing:0.02em;
+    }
+    .waitingColumn.priority .waitingItem{ color:var(--priorityTileBg); }
+    .waitingColumn.regular .waitingItem{ color:rgb(141,6,1); }
+
+    /* Status */
+    #status{
+      position: fixed;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      font-size: 12px;
+      opacity: 0.65;
+      text-align:center;
+      pointer-events:none;
+      color: rgba(255,255,255,0.55);
+    }
+
+
+/* Settings panel (overlay) */
+#settingsPanel{
+  position: fixed;
+  inset: 0;
+  display: none;           /* toggled via .open */
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--gap) * 1.5);
+  z-index: 99999;          /* ALWAYS on top */
+  pointer-events: none;    /* enabled when open */
+}
+#settingsPanel.open{
+  display: flex;
+  pointer-events: auto;
+}
+#settingsPanel .settingsBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+}
+#settingsPanel .settingsCard{
+  position: relative;
+  width: min(720px, 94vw);
+  max-height: min(900px, 92vh);
+  overflow: auto;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.20);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.45);
+  padding: calc(var(--gap) * 1.2);
+  color: #111;
+}
+#settingsPanel .settingsTitle{
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 18px;
+  margin: 0 0 var(--gap) 0;
+}
+#settingsPanel .settingsGrid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+}
+#settingsPanel .row{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+#settingsPanel label{
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+#settingsPanel input[type="text"],
+#settingsPanel input[type="number"]{
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.22);
+  background: rgba(255,255,255,0.95);
+  font-weight: 800;
+  font-size: 14px;
+  outline: none;
+}
+#settingsPanel input[type="range"]{
+  width: 100%;
+}
+#settingsPanel .hint{
+  font-size: 12px;
+  opacity: 0.70;
+  line-height: 1.3;
+}
+#settingsPanel .actions{
+  display: flex;
+  gap: calc(var(--gap) * 0.7);
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: calc(var(--gap) * 0.5);
+  flex-wrap: wrap;
+}
+#settingsPanel .btn.small{
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+
+/* Imperative recall pulse (Call Again) */
+@keyframes qsysPulse {
+  0%   { transform: scale(1); box-shadow: none; }
+  35%  { transform: scale(1.06); box-shadow: 0 0 0 3px rgba(255,255,255,0.55), 0 0 24px rgba(255,255,255,0.25); }
+  70%  { transform: scale(0.99); box-shadow: 0 0 0 2px rgba(255,255,255,0.35), 0 0 18px rgba(255,255,255,0.18); }
+  100% { transform: scale(1); box-shadow: none; }
+}
+/* Apply on the called ticket box (preferred) */
+#calledGlobal.qsysPulse {
+  animation: qsysPulse 650ms ease-in-out 1;
+  will-change: transform, box-shadow;
+}
+
+</style>
   <script src="./app-boot.js"></script>
-  <script>
-    document.getElementById("chime").src = window.appUrl("/static/chime.mp3");
-    document.write('<script src="' + window.appUrl('/socket.io/socket.io.js') + '"><\/script>');
-    document.write('<script src="' + window.appUrl('/static/js/display-ui-portrait.js?v=20260623') + '"><\/script>');
-    document.write('<script src="' + window.appUrl('/static/js/display-core.js?v=20260623') + '"><\/script>');
-  </script>
+  <script>document.write('<link rel="stylesheet" href="' + window.appUrl('/static/css/display-fit.css?v=20261024') + '" />');</script>
+</head>
+<body class="orient-portrait mode-video">
+<div class="app">
+    <div class="topbar" data-display-interactive="1">
+      <div class="tbLeft">
+        <button class="btn icon" id="btnSettings" title="Settings">⚙</button>
+      </div>
+      <div class="tbCenter" id="branchName">BRANCH NAME</div>
+      <div class="tbRight">
+  <div class="dragHandle" title="Drag window"></div>
+
+  <button class="btn" id="btnMove" title="Move">MOVE</button>
+  <button class="btn" id="btnFull" title="Fullscreen">FULLSCREEN</button>
+  <button class="btn danger" id="btnClose" title="Close">CLOSE</button>
+</div>
+
+    </div>
+
+    <div class="main">
+      <div class="leftCol">
+        <div class="card nowServing">
+  <div class="nowHdr">NOW SERVING</div>
+  <div class="nowTicket" id="calledGlobal">
+    <div class="heroLetter" id="heroLetter">—</div>
+    <div class="heroNum" id="heroNum">—</div>
+  </div>
+</div>
+
+
+        <div class="card videoWrap">
+<!-- IMPORTANT: core expects id="adPlayer" -->
+          <video id="adPlayer" autoplay muted playsinline></video>
+        </div>
+        <div class="qrStrip">
+
+          <div class="qrCard">
+            <div class="qrHeading"><span class="qrStep">1</span><span class="qrHint">Scan to Join Queue</span></div>
+            <img id="guestQr" src="" alt="Guest queue QR code" />
+          </div>
+        </div>
+      </div>
+
+      <div class="rightCol">
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">1–2 Pax</div><div class="grpCount" id="count-A"><span class="grpCountTitle">Waiting</span><span class="grpCountBreakdown">P: 0 | R: 0</span></div></div>
+          <div class="waitingColumns"><div class="waitingColumn priority"><div class="waitingColumnTitle">Priority</div><div class="waitingList" id="priority-A"></div></div><div class="waitingColumn regular"><div class="waitingColumnTitle">Regular</div><div class="waitingList" id="regular-A"></div></div></div>
+        </div>
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">3–5 Pax</div><div class="grpCount" id="count-B"><span class="grpCountTitle">Waiting</span><span class="grpCountBreakdown">P: 0 | R: 0</span></div></div>
+          <div class="waitingColumns"><div class="waitingColumn priority"><div class="waitingColumnTitle">Priority</div><div class="waitingList" id="priority-B"></div></div><div class="waitingColumn regular"><div class="waitingColumnTitle">Regular</div><div class="waitingList" id="regular-B"></div></div></div>
+        </div>
+        <div class="card grp">
+          <div class="grpHdr"><div class="grpName">6++ Pax</div><div class="grpCount" id="count-C"><span class="grpCountTitle">Waiting</span><span class="grpCountBreakdown">P: 0 | R: 0</span></div></div>
+          <div class="waitingColumns"><div class="waitingColumn priority"><div class="waitingColumnTitle">Priority</div><div class="waitingList" id="priority-C"></div></div><div class="waitingColumn regular"><div class="waitingColumnTitle">Regular</div><div class="waitingList" id="regular-C"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+<div id="settingsPanel"></div>
+<div id="status" role="status">Connecting…</div>
+<audio id="chime" preload="auto"></audio>
+
+<script>
+  document.getElementById("chime").src = window.appUrl("/static/chime.mp3");
+  document.write('<script src="' + window.appUrl('/socket.io/socket.io.js') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-ui-portrait.js?v=20261024') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-fit.js?v=20261024') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-online-bridge.js?v=20261024') + '"><\/script>');
+  document.write('<script src="' + window.appUrl('/static/js/display-core.js?v=20260623') + '"><\/script>');
+</script>
 </body>
 </html>

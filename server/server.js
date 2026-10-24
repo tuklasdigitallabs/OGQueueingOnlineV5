@@ -6547,6 +6547,25 @@ app.get("/api/admin/gdrive/oauth/callback", requirePerm("SETTINGS_MANAGE"), asyn
     }
   });
 
+  /* ---------- Staff: branch queue activity ---------- */
+  app.get("/api/staff/audit", requirePerm("AUDIT_VIEW"), (req, res) => {
+    try {
+      const user = getScopedSessionUser(req, "staff");
+      if (!user) return res.status(401).json({ ok: false, error: "Staff sign-in required." });
+      const branch = getBranchById(getSelectedBranchIdForUser(req, user));
+      if (!branch || !listAccessibleBranchesForUser(user.userId, user.roleId).some((row) => row.branchId === branch.branchId)) {
+        return res.status(403).json({ ok: false, error: "Branch access unavailable." });
+      }
+      const rows = db.prepare(`SELECT id, action, payload, createdAt FROM audit_logs
+        WHERE action LIKE 'QUEUE_%' AND CASE WHEN json_valid(payload) THEN json_extract(payload, '$.branchCode') END = ?
+        ORDER BY createdAt DESC LIMIT 50`).all(branch.branchCode);
+      res.json({ ok: true, rows });
+    } catch (e) {
+      console.error("[staff/audit]", e);
+      res.status(500).json({ ok: false, error: "Unable to load activity." });
+    }
+  });
+
   /* ---------- Admin: Audit list ---------- */
 
   app.get("/api/admin/audit", requirePerm("AUDIT_VIEW"), (req, res) => {
@@ -8025,6 +8044,52 @@ app.get("/api/display/state", requireDisplayAuth, (req, res) => {
 });
 
 
+
+  /* ---------- Admin: Branch queue charts (aggregates only) ---------- */
+  app.get("/api/admin/stats/charts", requireAuth, (req, res) => {
+    try {
+      const user = getScopedSessionUser(req, "admin");
+      if (!user || !["ADMIN", "SUPER_ADMIN"].includes(String(user.roleId || "").toUpperCase())) {
+        return res.status(403).json({ ok: false, error: "Admin access required." });
+      }
+      const branch = getBranchById(getSelectedBranchIdForUser(req, user));
+      if (!branch || !listAccessibleBranchesForUser(user.userId, user.roleId).some((row) => row.branchId === branch.branchId)) {
+        return res.status(403).json({ ok: false, error: "Branch access unavailable." });
+      }
+      const today = ensureBusinessDate(db);
+      const from = String(req.query.from || today);
+      const to = String(req.query.to || today);
+      const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+      if (!validDate(from) || !validDate(to) || from > to || (Date.parse(to) - Date.parse(from)) / 86400000 > 365) {
+        return res.status(400).json({ ok: false, error: "Choose a valid date range of at most 366 days." });
+      }
+      const group = String(req.query.group || "ALL").toUpperCase();
+      if (!["ALL", "A", "B", "C"].includes(group)) return res.status(400).json({ ok: false, error: "Invalid group." });
+      const where = "branchCode = ? AND businessDate BETWEEN ? AND ?" + (group === "ALL" ? "" : " AND groupCode = ?");
+      const args = [branch.branchCode, from, to];
+      if (group !== "ALL") args.push(group);
+      const groups = db.prepare(`SELECT groupCode,
+        SUM(CASE WHEN UPPER(status)='SEATED' THEN 1 ELSE 0 END) AS seated,
+        SUM(CASE WHEN UPPER(status)='SKIPPED' THEN 1 ELSE 0 END) AS skipped,
+        SUM(CASE WHEN UPPER(status) IN ('WAITING','CALLED') THEN 1 ELSE 0 END) AS queued,
+        AVG(CASE WHEN UPPER(status)='SEATED' AND seatedAt>=createdAtLocal THEN (seatedAt-createdAtLocal)/60000.0 END) AS avgWait,
+        SUM(CASE WHEN UPPER(status)='SEATED' AND seatedAt>=createdAtLocal THEN 1 ELSE 0 END) AS sampleSize
+        FROM queue_items WHERE ${where} GROUP BY groupCode ORDER BY groupCode`).all(...args);
+      const timezone = String(branch.timezone || "Asia/Manila");
+      const clock = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" });
+      const arrivals = Array(24).fill(0);
+      const buckets = db.prepare(`SELECT CAST(createdAtLocal/3600000 AS INTEGER)*3600000 AS hour, COUNT(*) AS count
+        FROM queue_items WHERE ${where} AND createdAtLocal IS NOT NULL GROUP BY hour`).all(...args);
+      for (const bucket of buckets) {
+        const hour = Number(clock.format(new Date(bucket.hour)));
+        if (Number.isInteger(hour) && hour >= 0 && hour < 24) arrivals[hour] += bucket.count;
+      }
+      res.json({ ok: true, branchCode: branch.branchCode, branchName: branch.branchName, from, to, timezone, groups, arrivals });
+    } catch (e) {
+      console.error("[admin/stats/charts]", e);
+      res.status(500).json({ ok: false, error: "Unable to load chart data." });
+    }
+  });
 
   /* ---------- Admin: Today stats (all statuses) ---------- */
   app.get("/api/admin/stats/today", requireAuth, (req, res) => {

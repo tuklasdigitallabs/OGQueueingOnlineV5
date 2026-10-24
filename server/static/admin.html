@@ -938,13 +938,16 @@ tr.is-collapsed + tr.subrow + tr.subrow{
     display:none;
   }
 </style>
+      <script src="./app-boot.js"></script>
+<script>document.write('<link rel="stylesheet" href="' + window.appUrl('/static/css/admin-ux.css?v=20261024') + '" />');</script>
+    <script>document.write('<link rel="stylesheet" href="' + window.appUrl('/static/css/admin-charts.css?v=20261024') + '" />');</script>
   </head>
 
   <body>
     <div class="drawerOverlay" id="drawerOverlay" aria-hidden="true"></div>
     <div class="layout">
       <aside class="sidebar" id="sidebar">
-        <div class="brand">Qsys Online - Admin</div>
+        <div class="brand"><div class="brandMark" aria-hidden="true">Q</div><div class="brandText"><strong>QSys Admin</strong><small>Control Center</small></div></div>
         <div class="sub" id="sideMeta">Loading...</div>
         <div class="userBadge" id="sideLoggedInUserBadge" title="Logged in user" style="display:none;">
           <span>Logged in as</span>
@@ -953,17 +956,20 @@ tr.is-collapsed + tr.subrow + tr.subrow{
         </div>
 
         <div class="nav">
-          <button class="active" data-page="dashboard">Dashboard</button>
-          <button data-page="setup">Setup</button>
-          <button data-page="media">Media</button>
-          <button data-page="branches">Branches</button>
-          <button data-page="users">Users</button>
-          <button data-page="permissions">Permissions</button>
-          <button data-page="reports">Reports</button>
-          <button data-page="audit">Audit Logs</button>
-          <button data-page="system">System</button>
-          <button data-page="licensing">Licensing</button>
-          <button class="danger" id="btnLogout">Logout</button>
+          <div class="adminNavLabel">Operations</div>
+          <button class="active" data-page="dashboard"><span class="navIcon" aria-hidden="true">⌂</span>Dashboard</button>
+          <button data-page="setup"><span class="navIcon" aria-hidden="true">⚙</span>Setup</button>
+          <button data-page="media"><span class="navIcon" aria-hidden="true">▣</span>Media</button>
+          <button data-page="branches"><span class="navIcon" aria-hidden="true">◇</span>Branches</button>
+          <div class="adminNavLabel">People and access</div>
+          <button data-page="users"><span class="navIcon" aria-hidden="true">♙</span>Users</button>
+          <button data-page="permissions"><span class="navIcon" aria-hidden="true">⌾</span>Permissions</button>
+          <div class="adminNavLabel">Insights and system</div>
+          <button data-page="reports"><span class="navIcon" aria-hidden="true">▥</span>Reports</button>
+          <button data-page="audit"><span class="navIcon" aria-hidden="true">≡</span>Audit Logs</button>
+          <button data-page="system"><span class="navIcon" aria-hidden="true">◈</span>System</button>
+          <button data-page="licensing"><span class="navIcon" aria-hidden="true">◉</span>Licensing</button>
+          <button class="danger" id="btnLogout"><span class="navIcon" aria-hidden="true">↪</span>Logout</button>
         </div>
       </aside>
 
@@ -984,6 +990,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
 
           <div class="crumb">
             <h1 id="pageTitle">LIVE OPS OVERVIEW</h1>
+            <p class="adminPageDescription" id="adminPageDescription">Today’s queue and branch activity.</p>
           </div>
           <div class="actions">
             <select id="adminBranchSwitch" class="topSelect" style="display:none;" title="Switch branch"></select>
@@ -1879,8 +1886,9 @@ tr.is-collapsed + tr.subrow + tr.subrow{
               <h3>Audit Logs</h3>
               <div class="row" style="margin-bottom:10px;">
                 <button class="btn" id="btnLoadAudit">Load Latest</button>
-                <span class="muted2">Paged via /api/admin/audit?limit=100&offset=0</span>
+                <span class="muted2">Showing the latest 100 events. Filters apply to loaded events.</span>
               </div>
+              <div class="adminFilters"><label for="adminAuditSearch">User or action<input id="adminAuditSearch" type="search" placeholder="Filter loaded events" /></label><label for="adminAuditDate">Event date<input id="adminAuditDate" type="date" /></label></div>
               <div style="overflow:auto;">
                 <table>
                   <thead>
@@ -2123,7 +2131,7 @@ tr.is-collapsed + tr.subrow + tr.subrow{
 
     <div id="toastWrap"></div>
 
-    <script src="./app-boot.js"></script>
+
     <script>
       // ---------- helpers ----------
       const $ = (id) => document.getElementById(id);
@@ -2260,6 +2268,18 @@ async function jpost(url, body) {
         let title = target.charAt(0).toUpperCase() + target.slice(1).replaceAll("_"," ");
         if (target === "dashboard") title = "LIVE OPS OVERVIEW";
         $("pageTitle").textContent = title;
+        $("adminPageDescription").textContent = ({
+          dashboard: "Today’s queue and branch activity.",
+          setup: "Manage queue and display settings.",
+          media: "Manage branch media and playback.",
+          branches: "Manage branch records and guest links.",
+          users: "Manage staff accounts and roles.",
+          permissions: "Review access for each role.",
+          reports: "Review branch performance and exports.",
+          audit: "Review queue and administrative changes.",
+          system: "Manage backups and system health.",
+          licensing: "Review branch licenses and renewal status."
+        })[target] || "";
 
 
         // page loaders
@@ -4176,6 +4196,14 @@ async function clearGdriveOAuth() {
       }
 
       // ---------- audit ----------
+      function applyAuditFilters() {
+        const query = String($("adminAuditSearch")?.value || "").trim().toLowerCase();
+        const date = String($("adminAuditDate")?.value || "");
+        $("auditTable")?.querySelectorAll("tr[data-audit-date]").forEach((row) => {
+          row.hidden = !!((query && !row.textContent.toLowerCase().includes(query)) || (date && row.dataset.auditDate !== date));
+        });
+      }
+
       async function loadAudit() {
         try {
           const j = await jget("/api/admin/audit?limit=100&offset=0");
@@ -4201,6 +4229,11 @@ async function clearGdriveOAuth() {
             } catch {}
 
             const tr = document.createElement("tr");
+            try {
+              const parts = new Intl.DateTimeFormat("en-GB", { timeZone: BRANCH_CACHE?.timezone || "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(Number(r.createdAt)));
+              const part = (type) => parts.find((item) => item.type === type)?.value || "";
+              tr.dataset.auditDate = `${part("year")}-${part("month")}-${part("day")}`;
+            } catch { tr.dataset.auditDate = ""; }
             tr.innerHTML = `
               <td>${escapeHtml(fmtTime(r.createdAt))}</td>
               <td><b>${escapeHtml(r.action)}</b></td>
@@ -4209,6 +4242,7 @@ async function clearGdriveOAuth() {
             `;
             tb.appendChild(tr);
           }
+          applyAuditFilters();
         } catch {
           toast("Audit", "Failed to load audit logs.", "err");
         }
@@ -5708,6 +5742,7 @@ function renderDailySummaryPage(){
             async () => {
               await loadBasic();
               setActive(targetPage);
+              document.dispatchEvent(new Event("qsys:admin-branch-changed"));
             }
           );
           toast("Branch", `Switched to ${j.branch?.branchName || j.branch?.branchCode || "branch"}.`, "ok");
@@ -5838,6 +5873,8 @@ function renderDailySummaryPage(){
       $("btnSavePerms").addEventListener("click", savePerms);
 
       $("btnLoadAudit").addEventListener("click", loadAudit);
+      $("adminAuditSearch").addEventListener("input", applyAuditFilters);
+      $("adminAuditDate").addEventListener("change", applyAuditFilters);
       $("btnReportInsights")?.addEventListener("click", loadReportInsights);
       $("reportInsightsDays")?.addEventListener("change", loadReportInsights);
       $("btnReportScheduleSave")?.addEventListener("click", saveReportSchedule);
@@ -5888,6 +5925,11 @@ function renderDailySummaryPage(){
         renderMetaWithTime();
         renderSystemInfoWithTime();
       }, 1000);
+    </script>
+    <script>
+      const adminChartsScript = document.createElement("script");
+      adminChartsScript.src = window.appUrl("/static/js/admin-charts.js?v=20261024");
+      document.body.append(adminChartsScript);
     </script>
   </body>
 </html>
